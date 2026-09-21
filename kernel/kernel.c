@@ -2,36 +2,24 @@
  * DreyzeOS — Kernel Main
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
- * PHASE 4 — Step 2: Safe RAM Boot & Hardware Bring-up Preparation
+ * PHASE 4 — Step 2.1: Pre-Hardware Boot Audit & Safety Hardening
  *
  * This is the C entry point for the DreyzeOS kernel.
  * Called from boot/entry.S after:
- *   - Stack initialization
- *   - BSS clear
- *   - Minimal CPU setup (VBAR_EL1 set, IRQs disabled via DAIF)
+ *   - CurrentEL validated at entry (EL1 confirmed)
+ *   - Stack initialization (__stack_top, AAPCS64 16-byte aligned)
+ *   - BSS cleared (__bss_start to __bss_end, with stack placed outside)
+ *   - VBAR_EL1 explicitly installed pointing to _exception_vectors_base
+ *   - DAIF interrupts masked
+ *   - FP/SIMD enabled via CPACR_EL1
  *
- * Boot Stage Progression (monotonic, each stage failsafe-gated):
- *   STAGE 0 — Entry reached, CurrentEL verified
- *   STAGE 1 — UART0 & early HAL initialized
- *   STAGE 2 — boot_args / DeviceTree validated
- *   STAGE 3 — Memory map validated (DRAM base & size non-zero)
- *   STAGE 4 — AIC initialized & masked
- *   STAGE 5 — Framebuffer validated (writes DISABLED)
- *   STAGE 6 — Safe idle (WFI loop)
- *
- * SAFETY RULES (enforced in code):
+ * Hard Safety Invariants:
  *   - No flash/NAND writes. RAM-only execution.
- *   - Framebuffer writes DISABLED by default (DREYZE_FB_TEST_PATTERN=0).
- *   - MMU state is LIKELY identity mapping — NOT confirmed.
- *     Physical framebuffer address MUST NOT be blindly dereferenced as virtual.
- *     framebuffer_enable_writes(true) is NOT called here.
- *   - IRQs remain DISABLED throughout boot (entry.S sets DAIF).
- *   - If any validation fails, boot_stage_failsafe() is called.
- *     boot_stage_failsafe() NEVER returns.
- *
- * Recovery note:
- *   Crown + Side Button hard reset is the expected hardware reset path.
- *   Actual recovery capability will be confirmed only after controlled hardware test.
+ *   - Framebuffer writes HARD-LOCKED by mapping_verified == false.
+ *   - MMU state captured read-only without assuming identity mapping.
+ *   - virt_base logged ONLY if real (from boot_args), otherwise marked UNKNOWN.
+ *   - Pre-UART and post-UART failsafe paths clearly separated.
+ *   - Stage progression is strictly monotonic.
  */
 
 #include "../include/types.h"
@@ -39,126 +27,97 @@
 #include "../include/panic.h"
 #include "../include/boot_info.h"
 #include "../include/boot_stage.h"
+#include "../include/cpu_state.h"
+#include "../include/build_info.h"
 #include "../hal/t8006/platform.h"
 #include "../hal/t8006/framebuffer.h"
 
-/* Version information */
-#define DREYZEOS_VERSION_MAJOR  0
-#define DREYZEOS_VERSION_MINOR  1
-#define DREYZEOS_VERSION_PATCH  0
-#define DREYZEOS_VERSION_STRING "DreyzeOS 0.1.0-research"
-
-/* Build target information */
-#define DREYZEOS_TARGET         "Apple Watch Series 4 / T8006"
-#define DREYZEOS_ARCH           "AArch64"
-
 /*
- * Read current exception level from CurrentEL system register.
- * Returns 0, 1, 2, or 3.
- *
- * CurrentEL[3:2] = EL field. Bits [1:0] are RES0.
- * Expected on entry: EL1 (CONFIRMED — ARM64 kernel convention,
- *                    consistent with XNU kernelcache disassembly).
+ * Expose build provenance metadata
  */
-static inline uint32_t read_current_el(void)
+static const build_provenance_t g_build_provenance = {
+    .version_string          = DREYZEOS_VERSION_STRING,
+    .target                  = DREYZEOS_TARGET,
+    .arch                    = DREYZEOS_ARCH,
+    .git_commit_sha          = GIT_COMMIT_SHA,
+    .canonical_branch        = DREYZEOS_CANONICAL_BRANCH,
+    .fb_test_pattern_enabled = DREYZE_FB_TEST_PATTERN
+};
+
+const build_provenance_t *build_get_provenance(void)
 {
-    uint64_t current_el;
-    __asm__ volatile("mrs %0, CurrentEL" : "=r"(current_el));
-    return (uint32_t)((current_el >> 2) & 0x3u);
+    return &g_build_provenance;
 }
 
 /*
  * kernel_main — primary kernel entry point.
  *
  * Parameters:
- *   dtree_ptr   — x0: pointer to xnu_arm64_boot_args_t or raw DeviceTree
- *                 passed by the bootloader.
- *                 Auto-detected and validated by platform_boot_info_init.
- *                 ABI: CONFIRMED (from kernelcache disassembly, XNU entry 0xfffffff007b2c070)
- *
- *   arg1        — x1: second bootloader argument (size or unused).
- *                 ABI: LIKELY (consistent with iBoot convention, not directly confirmed)
+ *   dtree_ptr — x0: pointer to xnu_arm64_boot_args_t or raw DeviceTree
+ *   arg1      — x1: secondary argument (size or unused)
+ *   boot_el   — x2: confirmed entry Exception Level from entry.S
  *
  * This function must never return.
- * If it returns, entry.S will halt the CPU safely via _halt.
  */
-void kernel_main(uint64_t dtree_ptr, uint64_t arg1)
+void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
 {
     /* ================================================================
-     * STAGE 0 — Entry Reached
+     * STAGE 0 — Entry Reached & CPU State Capture
      * ================================================================
-     * We are in C code. Stack is up, BSS is zeroed, VBAR_EL1 is set.
-     * IRQs are DISABLED (DAIF set by entry.S — CONFIRMED).
-     * We do NOT touch framebuffer or any MMIO yet.
+     * Capture hardware state snapshot IMMEDIATELY at early entry.
+     * READ-ONLY: Never modifies SCTLR, TCR, TTBR, or MMU.
      */
     boot_stage_set(BOOT_STAGE_ENTRY);
+    boot_cpu_state_capture();
 
-    /* ================================================================
-     * STAGE 0: CurrentEL Diagnostics
-     * ================================================================
-     * Read CurrentEL before UART is available.
-     * We can only store the result; logging happens after UART init.
-     *
-     * Expected: EL1 (CONFIRMED — ARM64 kernel convention).
-     * If EL != 1, something is seriously wrong with the handover.
-     */
-    uint32_t boot_el = read_current_el();
+    if (boot_el != 1) {
+        /* Entry EL was not EL1 — failsafe before any EL1 subsystem usage */
+        boot_stage_failsafe("Hardware entered at unsupported Exception Level (expected EL1)");
+    }
 
     /* ================================================================
      * STAGE 1 — UART0 & Early HAL Initialized
      * ================================================================
-     * platform_early_init() sets up UART0 at 0x2e500000 (CONFIRMED).
-     * After this call, klog_* output is available via UART.
+     * platform_early_init sets up UART0 at 0x2E500000.
+     * After this point, klog output is active and post-UART failsafe is safe.
      */
     platform_early_init();
     boot_stage_set(BOOT_STAGE_UART);
     log_init();
 
-    /* Now we can print — UART is up */
+    /* Banner & Provenance */
     klog_info("========================================");
     klog_info(DREYZEOS_VERSION_STRING);
-    klog_info("Target: " DREYZEOS_TARGET);
-    klog_info("Arch:   " DREYZEOS_ARCH);
-    klog_info("Phase:  PHASE 4 - Step 2: Safe RAM Boot & Hardware Bring-up Preparation");
+    klog_info("Target:   " DREYZEOS_TARGET);
+    klog_info("Arch:     " DREYZEOS_ARCH);
+    klog_info("Phase:    PHASE 4 - Step 2.1: Pre-Hardware Safety Audit");
+    klog_info("Branch:   " DREYZEOS_CANONICAL_BRANCH);
+    klog_info("Git SHA:  " GIT_COMMIT_SHA);
     klog_info("========================================");
 
-    /* ================================================================
-     * EARLY BOOT CHECKLIST (logged before any hardware interaction)
-     * ================================================================
-     */
-    klog_info("[BOOT] Early Boot Checklist:");
-    klog_info("  [OK] Stack initialized                    (entry.S)");
-    klog_info("  [OK] BSS zeroed                           (entry.S)");
-    klog_info("  [OK] VBAR_EL1 set to DreyzeOS vectors     (entry.S - CONFIRMED)");
-    klog_info("  [OK] DAIF: IRQs disabled on entry         (entry.S - CONFIRMED)");
-    klog_info("  [OK] x0 = boot_args pointer               (CONFIRMED, kernelcache disasm)");
-    klog_info("  [??] x1 = size or unused                  (LIKELY, not confirmed)");
-    klog_info("  [??] MMU: identity mapping                (LIKELY - NOT CONFIRMED)");
-    klog_info("  [??] Caches: enabled                      (LIKELY - NOT CONFIRMED)");
-    klog_info("  [!!] Physical FB dereference: BLOCKED     (MMU state unverified)");
-    klog_info("  [!!] Framebuffer writes: DISABLED         (DREYZE_FB_TEST_PATTERN=0)");
+    /* Log captured CPU state */
+    boot_cpu_state_diag();
 
-    /* Log boot arguments */
-    klog_info("[BOOT] Boot arguments (ABI):");
-    klog_hex("  x0 dtree_ptr / boot_args (CONFIRMED)", dtree_ptr);
-    klog_hex("  x1 arg1 / size           (LIKELY)   ", arg1);
+    /* Early Boot Checklist */
+    klog_info("[BOOT] Early Boot Checklist (Evidence-Based):");
+    klog_info("  [OK] Stack initialized outside BSS       (CONFIRMED, DreyzeOS.ld)");
+    klog_info("  [OK] BSS zeroed without stack overlap    (CONFIRMED, entry.S)");
+    klog_info("  [OK] VBAR_EL1 installed & verified       (CONFIRMED, entry.S + diag)");
+    klog_info("  [OK] DAIF: IRQs disabled on entry        (CONFIRMED, entry.S)");
+    klog_info("  [OK] x0 = boot_args / dtree pointer      (CONFIRMED, kernelcache ABI)");
+    klog_info("  [??] x1 = size or unused                 (LIKELY, not confirmed)");
+    klog_info("  [??] MMU: identity mapping               (LIKELY - NOT CONFIRMED)");
+    klog_info("  [??] Caches: enabled by loader           (LIKELY - check SCTLR above)");
+    klog_info("  [!!] Physical FB dereference: BLOCKED    (MMU mapping unverified)");
+    klog_info("  [!!] Framebuffer writes: HARD-LOCKED     (mapping_verified=false)");
 
-    /* CurrentEL result */
-    klog_hex("[BOOT] CurrentEL (raw, bits[3:2]=EL) =", (uint64_t)boot_el);
-    if (boot_el == 1) {
-        klog_info("[BOOT] Exception level: EL1 (CONFIRMED — expected)");
-    } else if (boot_el == 2) {
-        klog_info("[BOOT] Exception level: EL2 (UNEXPECTED — hypervisor mode)");
-        boot_stage_failsafe("Unexpected EL2 on kernel entry");
-    } else if (boot_el == 3) {
-        klog_info("[BOOT] Exception level: EL3 (UNEXPECTED — secure monitor mode)");
-        boot_stage_failsafe("Unexpected EL3 on kernel entry");
-    } else {
-        klog_info("[BOOT] Exception level: EL0 (UNEXPECTED — user mode)");
-        boot_stage_failsafe("Unexpected EL0 on kernel entry");
-    }
+    /* Log raw bootloader arguments */
+    klog_info("[BOOT] Raw Handover Arguments:");
+    klog_hex("  x0 (boot_args / dtree)", dtree_ptr);
+    klog_hex("  x1 (arg1 / size)      ", arg1);
+    klog_hex("  x2 (confirmed EL)     ", boot_el);
 
-    /* Memory layout (from linker script) */
+    /* Linker layout */
     extern uint8_t __kernel_start[];
     extern uint8_t __kernel_end[];
     extern uint8_t __bss_start[];
@@ -166,43 +125,36 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1)
     extern uint8_t __stack_bottom[];
     extern uint8_t __stack_top[];
 
-    klog_info("[BOOT] Memory layout (from linker script):");
-    klog_hex("  kernel_start", (uint64_t)(uintptr_t)__kernel_start);
-    klog_hex("  kernel_end  ", (uint64_t)(uintptr_t)__kernel_end);
-    klog_hex("  bss_start   ", (uint64_t)(uintptr_t)__bss_start);
-    klog_hex("  bss_end     ", (uint64_t)(uintptr_t)__bss_end);
-    klog_hex("  stack_bottom", (uint64_t)(uintptr_t)__stack_bottom);
-    klog_hex("  stack_top   ", (uint64_t)(uintptr_t)__stack_top);
+    klog_info("[BOOT] Linker Image Boundaries:");
+    klog_hex("  __kernel_start ", (uint64_t)(uintptr_t)__kernel_start);
+    klog_hex("  __kernel_end   ", (uint64_t)(uintptr_t)__kernel_end);
+    klog_hex("  __bss_start    ", (uint64_t)(uintptr_t)__bss_start);
+    klog_hex("  __bss_end      ", (uint64_t)(uintptr_t)__bss_end);
+    klog_hex("  __stack_bottom ", (uint64_t)(uintptr_t)__stack_bottom);
+    klog_hex("  __stack_top    ", (uint64_t)(uintptr_t)__stack_top);
 
     /* ================================================================
      * STAGE 2 — Boot Args & DeviceTree Validated
      * ================================================================
-     * platform_boot_info_init detects iBoot boot_args struct vs. raw ADT.
-     * After this call, platform_get_boot_info() returns valid data.
-     *
-     * boot_args ABI (CONFIRMED from kernelcache 0xfffffff007b2c070):
-     *   +0x08: virt_base
-     *   +0x10: phys_base
-     *   +0x18: mem_size
-     *   +0x28: video (6 x uint64: baseAddr, display, rowBytes, width, height, depth)
-     *   +0x60: devicetree_p
-     *   +0x68: devicetree_length
      */
     platform_boot_info_init(dtree_ptr, arg1);
-
-    /* Validate boot info */
     const platform_boot_info_t *binfo = platform_get_boot_info();
     if (!binfo) {
-        boot_stage_failsafe("platform_boot_info_init returned NULL — boot_args invalid");
+        boot_stage_failsafe("platform_boot_info_init returned NULL");
     }
 
-    /* Log all boot_args fields */
-    klog_info("[BOOT] Discovered boot info:");
-    klog_hex("  DeviceTree ptr   ", (uint64_t)binfo->devtree_base);
-    klog_hex("  DeviceTree length", (uint64_t)binfo->devtree_size);
-    klog_hex("  DRAM phys base   ", binfo->dram_phys_base);
-    klog_hex("  DRAM size        ", binfo->dram_size);
-    klog_hex("  virt_base        ", binfo->dram_phys_base); /* Note: virt_base not in platform_boot_info_t; using phys_base as proxy */
+    klog_info("[BOOT] Discovered Platform Parameters:");
+    klog_hex("  DeviceTree Base    ", (uint64_t)binfo->devtree_base);
+    klog_hex("  DeviceTree Size    ", (uint64_t)binfo->devtree_size);
+    klog_hex("  DRAM Phys Base     ", binfo->dram_phys_base);
+    klog_hex("  DRAM Total Size    ", binfo->dram_size);
+
+    /* Output real virt_base or explicit UNKNOWN — NEVER proxy from phys_base! */
+    if (binfo->virt_base_valid) {
+        klog_hex("  DRAM Virt Base     ", binfo->dram_virt_base);
+    } else {
+        klog_info("  DRAM Virt Base     : UNKNOWN (not provided by bootloader)");
+    }
 
     platform_boot_info_diag();
     boot_stage_set(BOOT_STAGE_BOOT_ARGS);
@@ -210,110 +162,88 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1)
     /* ================================================================
      * STAGE 3 — Memory Map Validated
      * ================================================================
-     * Verify that DRAM base and size are non-zero.
-     * We do NOT map, write, or dereference physical framebuffer here.
-     * MMU state is LIKELY identity mapping, but NOT confirmed.
      */
-    if (binfo->dram_phys_base == 0) {
-        boot_stage_failsafe("Stage 3: DRAM physical base is 0 — memory map invalid");
-    }
-    if (binfo->dram_size == 0) {
-        boot_stage_failsafe("Stage 3: DRAM size is 0 — memory map invalid");
+    if (binfo->dram_phys_base == 0 || binfo->dram_size == 0) {
+        boot_stage_failsafe("Stage 3: DRAM physical base or size is 0");
     }
 
     klog_info("[BOOT] Stage 3: Memory map validation:");
-    klog_info("  DRAM base: non-zero (PASS)");
-    klog_info("  DRAM size: non-zero (PASS)");
-    klog_info("  MMU state: LIKELY identity mapping — physical dereference BLOCKED until confirmed");
+    if (binfo->is_fallback_data) {
+        klog_warn("  [MEM] DRAM parameters are STATIC FALLBACK (research build) - NOT verified hardware!");
+    } else {
+        klog_info("  [MEM] DRAM parameters are RUNTIME DISCOVERED from bootloader");
+    }
+    klog_info("  [MEM] Physical memory dereference BLOCKED until MMU verified");
     boot_stage_set(BOOT_STAGE_MEM_MAP);
 
     /* ================================================================
      * STAGE 4 — AIC Initialized & Masked
      * ================================================================
-     * platform_init() drives AIC initialization and masks all interrupts.
-     * IRQs remain disabled (DAIF untouched).
      */
-    klog_info("[BOOT] Stage 4: HAL & AIC initialization:");
+    klog_info("[BOOT] Stage 4: Interrupt controller setup:");
     platform_init();
-    klog_info("  platform_init(): done");
-    klog_info("  AIC: initialized and masked (CONFIRMED design)");
+    klog_info("  [AIC] Initialized and all 1024 IRQ lines MASKED");
+    klog_info("  [AIC] CPU IRQ delivery globally DISABLED (DAIF=0xF)");
     boot_stage_set(BOOT_STAGE_AIC);
 
     /* ================================================================
-     * STAGE 5 — Framebuffer Validated (Writes DISABLED)
+     * STAGE 5 — Framebuffer Evaluated (Hard Safety Interlock)
      * ================================================================
-     * Initialize framebuffer abstraction from discovered boot parameters.
-     * We validate fb_info fields but DO NOT write to hardware.
+     * We evaluate discovered video parameters.
+     * We distinguish:
+     *   - HEADLESS (no video console discovered)
+     *   - FB_INVALID (malformed metadata)
+     *   - VALIDATED_NOMAP (metadata valid, but mapping UNVERIFIED)
      *
-     * SAFETY: framebuffer_enable_writes(true) is NOT called here.
-     *         Physical framebuffer address cannot be safely dereferenced
-     *         until MMU/cache state is verified on real hardware.
-     *
-     * Pixel format (CONFIRMED): BGRA32 LE — byte0=B, byte1=G, byte2=R, byte3=X
-     * (from kernelcache string at 0xfffffff00823ea2c: "BBBBBBBBGGGGGGGGRRRRRRRR")
+     * In all cases:
+     *   mapping_verified = false
+     *   is_write_allowed = false
+     *   Physical FB address is NEVER dereferenced as a virtual pointer!
      */
     const boot_framebuffer_info_t *fb_info = platform_get_framebuffer();
-    if (fb_info && fb_info->is_valid) {
+    if (!fb_info || !fb_info->is_valid) {
+        klog_info("[BOOT] Stage 5: No boot video console detected -> Running in HEADLESS mode");
+    } else {
         int fb_rc = framebuffer_init(fb_info);
         if (fb_rc == 0) {
-            klog_info("[BOOT] Stage 5: Framebuffer validated:");
+            klog_info("[BOOT] Stage 5: Framebuffer METADATA VALIDATED (Mapping UNVERIFIED, writes HARD-LOCKED)");
             framebuffer_diag();
 
 #if DREYZE_FB_TEST_PATTERN
-            /*
-             * Test pattern: ONLY for explicit controlled hardware test.
-             * Compile with -DDREYZE_FB_TEST_PATTERN=1 to enable.
-             * This path MUST NOT be reached in normal boot.
-             */
-            klog_info("  [FB] DREYZE_FB_TEST_PATTERN=1: Enabling writes & drawing test pattern...");
-            framebuffer_enable_writes(true);
-            framebuffer_draw_test_pattern();
+            klog_info("  [FB] DREYZE_FB_TEST_PATTERN=1, BUT mapping_verified=0: writes remain HARD-LOCKED");
+            framebuffer_enable_writes(true); /* Blocked by mapping_verified == false! */
 #else
             klog_info("  [FB] Normal boot: Framebuffer writes DISABLED (DREYZE_FB_TEST_PATTERN=0)");
-            klog_info("  [FB] Physical FB address NOT dereferenced (MMU state unverified)");
 #endif
         } else {
-            klog_hex("  [FB] framebuffer_init failed, error code", (uint64_t)(int64_t)fb_rc);
-            /*
-             * Framebuffer init failure is non-fatal for Stage 5.
-             * Log and continue — DreyzeOS can operate headless.
-             */
-            klog_info("  [FB] Continuing in headless mode (framebuffer unavailable)");
+            klog_hex("  [FB] Framebuffer initialization rejected, rc", (uint64_t)(int64_t)fb_rc);
+            klog_info("  [FB] Continuing in HEADLESS mode (metadata invalid)");
         }
-    } else {
-        klog_info("[BOOT] Stage 5: No boot framebuffer discovered (headless / standalone mode)");
     }
     boot_stage_set(BOOT_STAGE_FB);
 
     /* ================================================================
      * STAGE 6 — Safe Idle (WFI Loop)
      * ================================================================
-     * All bring-up checks passed. System enters safe low-power idle.
-     * DAIF remains set: IRQs disabled, system will wake only on reset.
-     *
-     * Recovery:
-     *   Crown + Side Button hard reset is the expected hardware reset path.
-     *   Actual recovery capability confirmed only after controlled hardware test.
      */
     boot_stage_set(BOOT_STAGE_IDLE);
 
     klog_info("");
     klog_info("========================================");
-    klog_info("PHASE 4 Step 2 COMPLETE: Safe RAM Boot & Bring-up Preparation.");
-    klog_info("All bring-up stages passed. System entering safe idle (WFI).");
-    klog_info("No flash writes. No framebuffer writes. No IRQs enabled.");
+    klog_info("PHASE 4 Step 2.1 COMPLETE: Pre-Hardware Safety Audit Passed.");
+    klog_info("All early boot invariants verified.");
+    klog_info("NO NAND writes. NO FB writes. NO unmasked interrupts.");
+    klog_info("System entering low-power safe halt (WFI).");
     klog_info("========================================");
     klog_info("");
-    klog_info("[HALT] DreyzeOS in safe WFI halt. Crown+Side Button to reset.");
+    klog_info("[HALT] Safe WFI halt active. Crown + Side Button to reset.");
 
     log_flush();
 
-    /* Safe halt: WFI reduces power, CPU wakes only on interrupt/reset.
-     * DAIF prevents interrupts from actually executing handlers — safe. */
     for (;;) {
         __asm__ volatile("wfi");
     }
 
-    /* UNREACHABLE — entry.S _halt handles if kernel_main somehow returns */
+    /* UNREACHABLE */
     panic("kernel_main returned unexpectedly");
 }

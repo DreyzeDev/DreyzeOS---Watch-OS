@@ -5,6 +5,12 @@
 
 #pragma once
 
+#if defined(HOST_TEST) || (defined(__STDC_HOSTED__) && __STDC_HOSTED__ == 1 && !defined(BAREMETAL))
+#include <stdint.h>
+#include <stddef.h>
+#include <stdbool.h>
+#include <sys/types.h>
+#else
 /* Standard integer types — manually defined, no <stdint.h> from libc */
 typedef unsigned char       uint8_t;
 typedef unsigned short      uint16_t;
@@ -23,6 +29,7 @@ typedef uint64_t            size_t;
 typedef int64_t             ssize_t;
 typedef uint64_t            uintmax_t;
 typedef int64_t             intmax_t;
+#endif
 
 /* Boolean — compatible with C11, C17, and C23 (where bool is a keyword) */
 #if !defined(__bool_true_false_are_defined) && __STDC_VERSION__ < 202311L

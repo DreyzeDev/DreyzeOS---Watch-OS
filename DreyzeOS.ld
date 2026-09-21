@@ -3,26 +3,25 @@
  * Target: Apple Watch Series 4 / Apple S4 (T8006) — AArch64
  *
  * ============================================================
- * CRITICAL NOTES ON ADDRESSES:
+ * CRITICAL NOTES ON ADDRESSES & HARDWARE BLOCKER:
  * ============================================================
  *
  * The load address 0x100000000 is a PLACEHOLDER.
- * Real T8006 load address: UNKNOWN_T8006_LOAD_ADDRESS
+ * Real T8006 load address: UNKNOWN_T8006_LOAD_ADDRESS.
  *
- * This placeholder is chosen to:
- *   1. Be a valid AArch64 address (not 32-bit truncated)
- *   2. Be obviously wrong (4GB boundary — unusual, detectable)
- *   3. Allow us to build and inspect the binary before we know real addresses
+ * HARDWARE BLOCKER:
+ * This image CANNOT be executed on real hardware until the true
+ * RAM delivery load address, entry MMU mapping, and relocation
+ * requirements are confirmed by evidence.
  *
- * When T8006 DRAM base and kernel load offset are confirmed (Phase 3/4),
- * update LOAD_ADDRESS to the real value.
- *
- * Similar Apple SoC convention (NOT confirmed for T8006):
- *   A10 (T8010): DRAM at 0x800000000, kernel loads at +some_offset
- *   A11 (T8015): DRAM at 0x800000000
- *   S4  (T8006): DRAM base = UNKNOWN
- *
- * For PongoOS reference: Pongo.bin loads at checkm8's payload deposit point.
+ * Safety & Layout Guarantees:
+ *   - .text.boot is strictly first at DREYZEOS_LOAD_BASE.
+ *   - Exception vectors are 2048-byte aligned per ARMv8-A architecture.
+ *   - .stack is strictly placed AFTER and OUTSIDE the .bss section
+ *     to ensure that BSS zeroing never overwrites the active stack!
+ *   - Stack is 16-byte aligned per AArch64 AAPCS-64 standard.
+ *   - Program headers (PHDRS) are explicitly partitioned (R_E, R__, RW_)
+ *     preventing RWX segment warnings.
  */
 
 OUTPUT_FORMAT("elf64-littleaarch64")
@@ -30,126 +29,116 @@ OUTPUT_ARCH(aarch64)
 
 /*
  * UNKNOWN_T8006_LOAD_ADDRESS placeholder.
- * Replace with real address when confirmed.
- * Using 0x100000000 (4GB) as placeholder — obviously non-default.
+ * Replace with real address only when confirmed.
  */
 DREYZEOS_LOAD_BASE = 0x0000000100000000;
 
 ENTRY(_start)
 
+/*
+ * Explicit ELF Program Headers:
+ * Partition into distinct permission segments to avoid RWX warnings
+ * and prepare for proper MMU page table attributes.
+ */
+PHDRS
+{
+    text   PT_LOAD FLAGS(5);  /* Read + Execute (1 | 4) */
+    rodata PT_LOAD FLAGS(4);  /* Read-Only (4) */
+    data   PT_LOAD FLAGS(6);  /* Read + Write (2 | 4) */
+}
+
 SECTIONS
 {
-    /*
-     * Kernel load base.
-     * .  = current location counter
-     * All sections placed relative to DREYZEOS_LOAD_BASE.
-     */
     . = DREYZEOS_LOAD_BASE;
 
     /*
-     * Export kernel start for use in kernel_main memory logging.
+     * Export kernel start for memory accounting.
      */
     __kernel_start = .;
 
     /*
      * .text.boot — Must be FIRST in the binary.
-     * Contains _start entry point (from boot/entry.S).
-     * The boot ROM / iBoot / PongoOS jumps to the very first byte of our image.
+     * Contains _start entry point and 2048-byte aligned exception vectors.
      */
     .text.boot : {
         KEEP(*(.text.boot))
-    }
+    } :text
 
     /*
-     * .text — Main code section.
-     * All compiled C and assembly code.
+     * .text — Main executable code.
      */
     .text : {
         *(.text)
         *(.text.*)
-    }
+    } :text
 
     /*
-     * Align to 8 bytes before read-only data.
+     * Align to page boundary (4KB) before read-only data.
      */
-    . = ALIGN(8);
+    . = ALIGN(4096);
 
     /*
-     * .rodata — Read-only data (string literals, const arrays, etc.)
+     * .rodata — Read-only data (strings, constants).
      */
     .rodata : {
         *(.rodata)
         *(.rodata.*)
-    }
-
-    . = ALIGN(8);
+    } :rodata
 
     /*
-     * .data — Initialized read-write data (initialized globals).
+     * Align to page boundary (4KB) before writable data.
+     */
+    . = ALIGN(4096);
+
+    /*
+     * .data — Initialized read-write data.
      */
     .data : {
         *(.data)
         *(.data.*)
-    }
-
-    . = ALIGN(8);
+    } :data
 
     /*
-     * NOTE: Exception vector table is defined in boot/entry.S
-     * within the .text.boot section, 2KB-aligned using .balign 2048.
-     * The linker symbol _exception_vectors_base is set by the assembler.
-     * No separate .vectors section is needed.
-     */
-
-    . = ALIGN(8);
-
-    /*
-     * Kernel log buffer — placed in named section for easy identification
-     * in memory dumps. Magic value 0x4C474F44 ("DLOG") marks the start.
+     * Kernel log buffer — placed in named section for dump identification.
      */
     .klog_buffer : {
         *(.klog_buffer)
-    }
+    } :data
 
     . = ALIGN(8);
 
     /*
      * __bss_start and __bss_end — used by entry.S BSS clear loop.
+     * CRITICAL: .stack is NOT inside this range!
      */
     __bss_start = .;
-
-    /*
-     * .bss — Zero-initialized globals.
-     * Entry.S clears this region before calling kernel_main().
-     */
     .bss : {
         *(.bss)
         *(.bss.*)
         *(COMMON)
-    }
-
-    . = ALIGN(8);
-
-    /*
-     * Stack section.
-     * entry.S defines __stack_bottom and __stack_top symbols here.
-     * Stack grows DOWN from __stack_top.
-     */
-    .stack : {
-        *(.stack)
-    }
-
+    } :data
     . = ALIGN(8);
     __bss_end = .;
 
     /*
-     * __kernel_end — total kernel image extent including BSS.
+     * Stack section: 16 KiB, 16-byte aligned.
+     * Stack grows DOWN from __stack_top to __stack_bottom.
+     * Placed strictly AFTER __bss_end to guarantee BSS clear loop
+     * never touches active stack frames!
      */
+    . = ALIGN(16);
+    .stack : {
+        __stack_bottom = .;
+        *(.stack)
+        . = ALIGN(16);
+        __stack_top = .;
+    } :data
+
+    . = ALIGN(16);
     __kernel_end = .;
 
     /*
-     * Discard DWARF debug, ARM exception tables, and other ELF overhead
-     * that should not be present in the final binary image.
+     * Discard unwanted metadata from binary.
      */
     /DISCARD/ : {
         *(.comment)
@@ -162,11 +151,25 @@ SECTIONS
 }
 
 /*
- * Linker assertions — verify critical requirements.
+ * Linker assertions — verify hardware and safety invariants.
  */
 
-/* Exception vectors are in .text.boot section (_exception_vectors_base symbol). */
+/* Entry point must be placed at the very first byte of load base */
+ASSERT(_start == DREYZEOS_LOAD_BASE,
+       "ERROR: _start entry point must match DREYZEOS_LOAD_BASE")
 
-/* Binary must not exceed 64MB (sanity check for Phase 1 research build) */
+/* Exception vector table must be 2048-byte aligned (ARMv8 requirement) */
+ASSERT((_exception_vectors_base & 0x7FF) == 0,
+       "ERROR: _exception_vectors_base must be 2048-byte aligned")
+
+/* Stack top must be 16-byte aligned (AAPCS64 requirement) */
+ASSERT((__stack_top & 0xF) == 0,
+       "ERROR: __stack_top must be 16-byte aligned")
+
+/* Stack must be strictly outside and after BSS region */
+ASSERT(__stack_bottom >= __bss_end,
+       "ERROR: .stack must be placed strictly after __bss_end")
+
+/* Binary must not exceed 64MB */
 ASSERT((__kernel_end - __kernel_start) < 0x4000000,
-       "ERROR: Kernel image exceeds 64MB — something is wrong")
+       "ERROR: Kernel image exceeds 64MB")

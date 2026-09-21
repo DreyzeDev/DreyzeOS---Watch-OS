@@ -84,6 +84,7 @@ int framebuffer_init(const boot_framebuffer_info_t *info)
     g_fb.depth            = depth;
     g_fb.bytes_per_pixel  = bpp;
     g_fb.is_configured    = true;
+    g_fb.mapping_verified = false; /* Hard safety interlock: unverified by default */
     g_fb.is_write_allowed = false; /* Safety interlock: writes disabled by default */
 
     return 0;
@@ -99,9 +100,38 @@ const framebuffer_t *framebuffer_get_info(void)
     return g_fb.is_configured ? &g_fb : NULL;
 }
 
+void framebuffer_set_mapping_verified(bool verified)
+{
+    g_fb.mapping_verified = verified;
+    if (!verified) {
+        /* Automatically revoke write permission if mapping verification is lost */
+        g_fb.is_write_allowed = false;
+    }
+}
+
+bool framebuffer_is_mapping_verified(void)
+{
+    return g_fb.mapping_verified;
+}
+
 void framebuffer_enable_writes(bool enable)
 {
-    g_fb.is_write_allowed = enable;
+    if (enable) {
+        /*
+         * Hard Safety Interlock:
+         * Writes can ONLY be enabled if:
+         * 1. Framebuffer is configured
+         * 2. Framebuffer mapping is explicitly VERIFIED (mapping_verified == true)
+         */
+        if (!g_fb.is_configured || !g_fb.mapping_verified) {
+            g_fb.is_write_allowed = false;
+            klog_warn("[FB-INTERLOCK] BLOCKED: Cannot enable writes - mapping UNVERIFIED!");
+            return;
+        }
+        g_fb.is_write_allowed = true;
+    } else {
+        g_fb.is_write_allowed = false;
+    }
 }
 
 /* ============================================================
@@ -110,8 +140,8 @@ void framebuffer_enable_writes(bool enable)
 
 void framebuffer_put_pixel(uint32_t x, uint32_t y, uint32_t color)
 {
-    /* Safety interlock & configuration check */
-    if (!g_fb.is_configured || !g_fb.is_write_allowed) {
+    /* Hard safety interlock: must be configured AND mapping verified AND write allowed */
+    if (!g_fb.is_configured || !g_fb.mapping_verified || !g_fb.is_write_allowed) {
         return;
     }
 
@@ -149,7 +179,7 @@ void framebuffer_put_pixel(uint32_t x, uint32_t y, uint32_t color)
 
 void framebuffer_fill(uint32_t color)
 {
-    if (!g_fb.is_configured || !g_fb.is_write_allowed) {
+    if (!g_fb.is_configured || !g_fb.mapping_verified || !g_fb.is_write_allowed) {
         return;
     }
 
@@ -174,7 +204,11 @@ void framebuffer_fill(uint32_t color)
         }
     }
 
+#ifdef __aarch64__
     __asm__ volatile("dsb sy" ::: "memory");
+#else
+    __asm__ volatile("" ::: "memory");
+#endif
 }
 
 void framebuffer_clear(void)
@@ -184,7 +218,7 @@ void framebuffer_clear(void)
 
 void framebuffer_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color)
 {
-    if (!g_fb.is_configured || !g_fb.is_write_allowed) {
+    if (!g_fb.is_configured || !g_fb.mapping_verified || !g_fb.is_write_allowed) {
         return;
     }
 
@@ -223,7 +257,11 @@ void framebuffer_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint3
         }
     }
 
+#ifdef __aarch64__
     __asm__ volatile("dsb sy" ::: "memory");
+#else
+    __asm__ volatile("" ::: "memory");
+#endif
 }
 
 /* ============================================================
@@ -232,7 +270,7 @@ void framebuffer_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint3
 
 void framebuffer_draw_test_pattern(void)
 {
-    if (!g_fb.is_configured || !g_fb.is_write_allowed) {
+    if (!g_fb.is_configured || !g_fb.mapping_verified || !g_fb.is_write_allowed) {
         return;
     }
 
@@ -315,8 +353,14 @@ void framebuffer_diag(void)
     klog_hex("  [FB] Bytes Per Pixel   ", g_fb.bytes_per_pixel);
 
     /* Pixel format details from kernelcache */
-    klog_info("  [FB] Pixel Format: BBBBBBBBGGGGGGGGRRRRRRRR (BGRA32) [CONFIRMED]");
-    klog_info("  [FB] MMU Mapping: Identity mapping UNVERIFIED (Direct dereference blocked)");
+    klog_info("  [FB] Pixel Format: BBBBBBBBGGGGGGGGRRRRRRRR (BGRA32) [CONFIRMED in XNU]");
+    klog_info("  [FB] Scanout Visual Status: NOT YET RUNTIME CONFIRMED on hardware");
+
+    if (g_fb.mapping_verified) {
+        klog_info("  [FB] Mapping Verified : YES (Hardware mapping confirmed)");
+    } else {
+        klog_info("  [FB] Mapping Verified : NO (UNVERIFIED - Hardware writes HARD-LOCKED)");
+    }
 
     if (g_fb.is_write_allowed) {
         klog_info("  [FB] Write Status: Hardware writes ALLOWED");

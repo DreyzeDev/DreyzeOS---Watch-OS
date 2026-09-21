@@ -109,19 +109,26 @@ const uint8_t *devtree_find_prop(uintptr_t node_ptr, uintptr_t tree_limit,
     return NULL;
 }
 
+#define MAX_ADT_DEPTH 32
+
 /*
- * devtree_get_node_size — calculate total byte size of a node and all its children.
- * Returns 0 if truncated or invalid.
+ * devtree_get_node_size_depth — calculate total byte size of a node with depth tracking.
+ * Returns 0 if truncated, cyclic, or depth exceeded.
  */
-static uintptr_t devtree_get_node_size(uintptr_t node_ptr, uintptr_t tree_limit)
+static uintptr_t devtree_get_node_size_depth(uintptr_t node_ptr, uintptr_t tree_limit, uint32_t depth)
 {
-    if (node_ptr + sizeof(adt_node_hdr_t) > tree_limit) {
+    if (depth > MAX_ADT_DEPTH || node_ptr + sizeof(adt_node_hdr_t) > tree_limit) {
         return 0;
     }
 
     const adt_node_hdr_t *hdr = (const adt_node_hdr_t *)node_ptr;
     uint32_t prop_count = hdr->prop_count;
     uint32_t child_count = hdr->child_count;
+
+    /* Sanity limits on prop and child counts */
+    if (prop_count > 1024 || child_count > 1024) {
+        return 0;
+    }
 
     uintptr_t offset = node_ptr + sizeof(adt_node_hdr_t);
 
@@ -141,7 +148,7 @@ static uintptr_t devtree_get_node_size(uintptr_t node_ptr, uintptr_t tree_limit)
 
     /* Skip all child subtrees recursively */
     for (uint32_t c = 0; c < child_count; c++) {
-        uintptr_t child_size = devtree_get_node_size(offset, tree_limit);
+        uintptr_t child_size = devtree_get_node_size_depth(offset, tree_limit, depth + 1);
         if (child_size == 0) {
             return 0;
         }
@@ -149,6 +156,11 @@ static uintptr_t devtree_get_node_size(uintptr_t node_ptr, uintptr_t tree_limit)
     }
 
     return offset - node_ptr;
+}
+
+static uintptr_t devtree_get_node_size(uintptr_t node_ptr, uintptr_t tree_limit)
+{
+    return devtree_get_node_size_depth(node_ptr, tree_limit, 0);
 }
 
 /*
@@ -358,13 +370,16 @@ void platform_boot_info_init(uint64_t arg0, uint64_t arg1)
 {
     /* Initialize defaults with confirmed static baseline */
     memset(&g_boot_info, 0, sizeof(g_boot_info));
-    g_boot_info.dram_phys_base = T8006_DRAM_BASE;
-    g_boot_info.dram_size      = T8006_DRAM_SIZE;
-    g_boot_info.chip_id        = 0x8006;
+    g_boot_info.dram_phys_base   = T8006_DRAM_BASE;
+    g_boot_info.dram_size        = T8006_DRAM_SIZE;
+    g_boot_info.dram_virt_base   = 0;
+    g_boot_info.virt_base_valid  = false;
+    g_boot_info.is_fallback_data = true;
+    g_boot_info.chip_id          = 0x8006;
     strncpy(g_boot_info.model, "Watch4,2", sizeof(g_boot_info.model) - 1);
 
     if (arg0 == 0) {
-        /* No boot arguments passed; running standalone or simulator */
+        /* No boot arguments passed; running standalone or simulator with fallback data */
         g_boot_info_initialized = true;
         return;
     }
@@ -379,30 +394,47 @@ void platform_boot_info_init(uint64_t arg0, uint64_t arg1)
         uint32_t dt_size = arg1 ? (uint32_t)arg1 : (uint32_t)devtree_get_node_size((uintptr_t)arg0, (uintptr_t)arg0 + 0x200000);
         if (dt_size < 64) dt_size = 0x80000; /* 512 KB fallback estimate */
         devtree_parse_dynamic((uintptr_t)arg0, dt_size, &g_boot_info);
+        g_boot_info.is_fallback_data = false;
+        /* Note: raw ADT does NOT supply virt_base; remains virt_base_valid = false */
     } else {
         /* Check if arg0 is struct xnu_arm64_boot_args */
         const xnu_arm64_boot_args_t *ba = (const xnu_arm64_boot_args_t *)(uintptr_t)arg0;
 
-        /* Validate boot_args sanity */
+        /* Validate boot_args sanity: physical base non-zero and size reasonable */
         if (ba->phys_base >= 0x100000000ULL && ba->mem_size >= 0x1000000ULL && ba->mem_size <= 0x80000000ULL) {
             g_boot_info.boot_args_present = true;
+            g_boot_info.is_fallback_data  = false;
             g_boot_info.dram_phys_base    = ba->phys_base;
             g_boot_info.dram_size         = ba->mem_size;
 
+            /* REAL virt_base from confirmed boot_args */
+            if (ba->virt_base != 0) {
+                g_boot_info.dram_virt_base  = ba->virt_base;
+                g_boot_info.virt_base_valid = true;
+            }
+
             /* Extract Video/Framebuffer from boot_args */
             if (ba->video.v_baseAddr != 0) {
+                uint64_t v_row_bytes = ba->video.v_rowBytes;
+                uint64_t v_height = ba->video.v_height;
+                uint64_t v_size = 0;
+                /* Integer overflow check on row_bytes * height */
+                if (v_height == 0 || (0xFFFFFFFFFFFFFFFFULL / v_height) >= v_row_bytes) {
+                    v_size = v_row_bytes * v_height;
+                }
+
                 g_boot_info.fb_info.base_paddr = ba->video.v_baseAddr;
                 g_boot_info.fb_info.width      = (uint32_t)ba->video.v_width;
                 g_boot_info.fb_info.height     = (uint32_t)ba->video.v_height;
-                g_boot_info.fb_info.row_bytes  = (uint32_t)ba->video.v_rowBytes;
+                g_boot_info.fb_info.row_bytes  = (uint32_t)v_row_bytes;
                 g_boot_info.fb_info.depth      = (uint32_t)ba->video.v_depth;
-                g_boot_info.fb_info.size       = (uint64_t)ba->video.v_rowBytes * (uint64_t)ba->video.v_height;
+                g_boot_info.fb_info.size       = v_size;
                 g_boot_info.fb_info.is_valid   = true;
                 g_boot_info.fb_info.source     = "boot_args";
             }
 
             /* Extract DeviceTree pointed to by boot_args */
-            if (ba->devicetree_p != 0 && ba->devicetree_length >= 64) {
+            if (ba->devicetree_p != 0 && ba->devicetree_length >= 64 && ba->devicetree_length <= 0x2000000) {
                 if (devtree_validate_header((uintptr_t)ba->devicetree_p, ba->devicetree_length)) {
                     devtree_parse_dynamic((uintptr_t)ba->devicetree_p, ba->devicetree_length, &g_boot_info);
                 }
@@ -446,8 +478,18 @@ void platform_boot_info_diag(void)
     }
 
     /* Memory Layout */
+    if (g_boot_info.is_fallback_data) {
+        klog_info("  [MEM] DRAM Data Source: STATIC FALLBACK (research placeholder - unverified)");
+    } else {
+        klog_info("  [MEM] DRAM Data Source: RUNTIME DISCOVERED (hardware handoff)");
+    }
     klog_hex("  [MEM] DRAM Physical Base", g_boot_info.dram_phys_base);
     klog_hex("  [MEM] DRAM Total Size   ", g_boot_info.dram_size);
+    if (g_boot_info.virt_base_valid) {
+        klog_hex("  [MEM] DRAM Virtual Base ", g_boot_info.dram_virt_base);
+    } else {
+        klog_info("  [MEM] DRAM Virtual Base : UNKNOWN (not supplied by bootloader)");
+    }
 
     /* Reserved Memory Ranges from /chosen/memory-map */
     klog_hex("  [MEM] Memory-Map Ranges ", g_boot_info.num_memory_ranges);

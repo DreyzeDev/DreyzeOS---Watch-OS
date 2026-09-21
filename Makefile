@@ -24,6 +24,10 @@ BUILDDIR := build
 # Framebuffer test pattern compile-time switch (default 0: disabled)
 DREYZE_FB_TEST_PATTERN ?= 0
 
+# Build Provenance (Git Commit SHA and canonical branch)
+GIT_COMMIT ?= $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "4138087")
+CANONICAL_BRANCH ?= master
+
 # Compiler flags — freestanding AArch64 bare-metal (GCC)
 CFLAGS := \
 	-march=armv8-a \
@@ -40,6 +44,8 @@ CFLAGS := \
 	-O2 \
 	-g \
 	-DDREYZE_FB_TEST_PATTERN=$(DREYZE_FB_TEST_PATTERN) \
+	-DGIT_COMMIT_SHA=\"$(GIT_COMMIT)\" \
+	-DDREYZEOS_CANONICAL_BRANCH=\"$(CANONICAL_BRANCH)\" \
 	-I. \
 	-Iinclude \
 	-Ilib
@@ -67,7 +73,8 @@ KERNEL_SRCS := \
 	kernel/kernel.c \
 	kernel/panic.c \
 	kernel/log.c \
-	kernel/boot_stage.c
+	kernel/boot_stage.c \
+	kernel/cpu_state.c
 
 HAL_SRCS := \
 	hal/t8006/platform.c \

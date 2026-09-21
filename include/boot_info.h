@@ -86,9 +86,12 @@ typedef struct {
     uintptr_t devtree_base;          /* Address of DeviceTree in memory */
     uint32_t devtree_size;           /* Size of DeviceTree in bytes */
 
-    /* Physical DRAM configuration */
+    /* Physical and Virtual DRAM configuration */
     uint64_t dram_phys_base;         /* Base physical address of DRAM */
     uint64_t dram_size;              /* Total DRAM size in bytes */
+    uint64_t dram_virt_base;         /* Base virtual address of DRAM from boot_args (+0x08) */
+    bool     virt_base_valid;        /* True ONLY if obtained from confirmed boot_args */
+    bool     is_fallback_data;       /* True if static fallback used (NOT validated hardware) */
 
     /* Memory regions from /chosen/memory-map */
     memory_range_t memory_ranges[MAX_BOOT_MEMORY_RANGES];

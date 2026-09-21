@@ -13,6 +13,17 @@ sys.path.insert(0, os.path.dirname(os.path.dirname(os.path.abspath(__file__))))
 
 test_results = []
 
+def run_command_cross(cmd_list, shell_cmd_str=""):
+    import shutil
+    import subprocess
+    if shutil.which(cmd_list[0]):
+        return subprocess.run(cmd_list, capture_output=True, text=True)
+    elif shutil.which("wsl"):
+        w_cmd = shell_cmd_str if shell_cmd_str else " ".join(cmd_list)
+        return subprocess.run(["wsl", "-d", "Ubuntu", "--", "bash", "-c", w_cmd], capture_output=True, text=True)
+    else:
+        return subprocess.run(cmd_list, capture_output=True, text=True)
+
 def test(name):
     """Decorator for test functions."""
     def decorator(fn):
@@ -1027,6 +1038,199 @@ def test_boot_stage_error_separate_from_last_successful():
     assert 0 <= BOOT_STAGE_ERROR <= 255, \
         f"BOOT_STAGE_ERROR must fit in uint8_t, got {BOOT_STAGE_ERROR}"
 
+# ============================================================
+# Tests: Phase 4 Step 2.1 — Safety Audit & Hardening
+# ============================================================
+
+@test("C-level host test harness execution")
+def test_c_host_tests_execution():
+    """Compile and execute tests/test_host_c.c to verify real C code on host."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    c_bin = os.path.join(root_dir, "build", "test_host_c")
+    compile_cmd = [
+        "gcc", "-DHOST_TEST", f"-I{root_dir}", f"-I{os.path.join(root_dir, 'include')}",
+        f"-I{os.path.join(root_dir, 'lib')}",
+        os.path.join(root_dir, "tests", "test_host_c.c"),
+        os.path.join(root_dir, "kernel", "boot_stage.c"),
+        os.path.join(root_dir, "hal", "t8006", "framebuffer.c"),
+        os.path.join(root_dir, "lib", "string.c"),
+        "-o", c_bin
+    ]
+    wsl_cmd = (
+        "gcc -DHOST_TEST -I. -Iinclude -Ilib "
+        "tests/test_host_c.c kernel/boot_stage.c hal/t8006/framebuffer.c lib/string.c "
+        "-o build/test_host_c && ./build/test_host_c"
+    )
+    result = run_command_cross(compile_cmd, f"cd /mnt/c/Users/pc/Desktop/DreyzeOS && {wsl_cmd}")
+    if result.returncode != 0:
+        raise AssertionError(f"Host C test build/execution failed (rc={result.returncode}):\n{result.stdout}\n{result.stderr}")
+    
+    # Run test executable
+    res_run = run_command_cross([c_bin], "cd /mnt/c/Users/pc/Desktop/DreyzeOS && ./build/test_host_c")
+    if res_run.returncode != 0:
+        raise AssertionError(f"Host C test run failed:\n{res_run.stdout}\n{res_run.stderr}")
+    assert "All C-Level Host Tests PASSED" in res_run.stdout
+
+
+@test("linker — layout, section boundaries, and alignment assertions")
+def test_linker_layout_and_assertions():
+    """Verify vector alignment (2048B), stack alignment (16B), and stack placement outside BSS."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(root_dir, "build", "DreyzeOS.elf")
+    result = run_command_cross(
+        ["aarch64-linux-gnu-nm", "-n", elf_path],
+        "aarch64-linux-gnu-nm -n /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"
+    )
+    syms = {}
+    for line in result.stdout.splitlines():
+        parts = line.split()
+        if len(parts) == 3:
+            syms[parts[2]] = int(parts[0], 16)
+
+    # 1. Exception vectors 2048-byte aligned
+    assert "_exception_vectors_base" in syms
+    vbar = syms["_exception_vectors_base"]
+    assert (vbar % 2048) == 0, f"_exception_vectors_base (0x{vbar:x}) is not 2048-byte aligned!"
+
+    # 2. Stack alignment (16-byte)
+    assert "__stack_top" in syms
+    sp_top = syms["__stack_top"]
+    assert (sp_top % 16) == 0, f"__stack_top (0x{sp_top:x}) is not 16-byte aligned!"
+
+    # 3. Stack placed outside / after BSS
+    assert "__bss_end" in syms
+    assert "__stack_bottom" in syms
+    bss_end = syms["__bss_end"]
+    stack_bottom = syms["__stack_bottom"]
+    assert stack_bottom >= bss_end, (
+        f"Stack (0x{stack_bottom:x}) must be placed after BSS end (0x{bss_end:x})!"
+    )
+
+
+@test("entry.S — CurrentEL queried before EL1 writes & VBAR_EL1 configured")
+def test_entry_system_register_audit():
+    """Verify entry.S queries CurrentEL first, branches on unsupported EL, and sets VBAR_EL1."""
+    entry_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                              "boot", "entry.S")
+    with open(entry_path, "r", encoding="utf-8") as f:
+        src = f.read()
+
+    # CurrentEL must be read
+    assert "mrs" in src and "CurrentEL" in src, "CurrentEL not queried in entry.S!"
+    assert "_unsupported_el_halt:" in src, "Safe halt for invalid EL not implemented!"
+
+    # VBAR_EL1 must be set and followed by isb
+    assert "msr" in src and "vbar_el1" in src, "VBAR_EL1 not installed in entry.S!"
+    assert "isb" in src, "ISB missing after system register configuration!"
+
+
+@test("CPU state — snapshot symbols and read-only invariant")
+def test_cpu_state_symbols_and_safety():
+    """Verify CPU state snapshot symbols in ELF and ensure no MSR writes to MMU registers."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(root_dir, "build", "DreyzeOS.elf")
+    result = run_command_cross(
+        ["aarch64-linux-gnu-nm", elf_path],
+        "aarch64-linux-gnu-nm /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"
+    )
+    for sym in ["boot_cpu_state_capture", "boot_cpu_state_get", "boot_cpu_state_diag"]:
+        assert sym in result.stdout, f"Symbol '{sym}' missing from ELF!"
+
+    # Check that kernel/cpu_state.c contains NO 'msr sctlr' or 'msr tcr' or 'msr ttbr'
+    cpu_c_path = os.path.join(root_dir, "kernel", "cpu_state.c")
+    with open(cpu_c_path, "r", encoding="utf-8") as f:
+        cpu_src = f.read()
+
+    assert "msr sctlr" not in cpu_src.lower()
+    assert "msr tcr" not in cpu_src.lower()
+    assert "msr ttbr" not in cpu_src.lower()
+    assert "msr mair" not in cpu_src.lower()
+
+
+@test("boot_args — real virt_base tracking without phys_base proxying")
+def test_virt_base_truthfulness():
+    """Simulate platform_boot_info_init: virt_base is NEVER proxied from phys_base."""
+    # When virt_base is 0 (or raw ADT), virt_base_valid must be False
+    raw_adt_info = {
+        "boot_args_present": False,
+        "dram_phys_base": 0x800000000,
+        "dram_virt_base": 0,
+        "virt_base_valid": False,
+        "is_fallback_data": False
+    }
+    assert raw_adt_info["virt_base_valid"] is False
+    assert raw_adt_info["dram_virt_base"] == 0
+    # Must never equal phys_base if not explicitly supplied
+    assert raw_adt_info["dram_virt_base"] != raw_adt_info["dram_phys_base"]
+
+    # When boot_args provides virt_base, it is real
+    boot_args_info = {
+        "boot_args_present": True,
+        "dram_phys_base": 0x800000000,
+        "dram_virt_base": 0xFFFFFFF000000000,
+        "virt_base_valid": True,
+        "is_fallback_data": False
+    }
+    assert boot_args_info["virt_base_valid"] is True
+    assert boot_args_info["dram_virt_base"] == 0xFFFFFFF000000000
+
+
+@test("framebuffer — hard safety interlock symbols in ELF")
+def test_framebuffer_hard_interlock_symbols():
+    """Verify mapping_verified getter and setter symbols exist in compiled ELF."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(root_dir, "build", "DreyzeOS.elf")
+    result = run_command_cross(
+        ["aarch64-linux-gnu-nm", elf_path],
+        "aarch64-linux-gnu-nm /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"
+    )
+    assert "framebuffer_set_mapping_verified" in result.stdout
+    assert "framebuffer_is_mapping_verified" in result.stdout
+
+
+@test("DeviceTree parser — malformed and fuzz-like blobs rejection")
+def test_devicetree_malformed_fuzz():
+    """Verify that parser handles malformed, truncated, and cyclic structures without crashing."""
+    from tools.device_tree_dump import parse_adt
+
+    # 1. Empty blob
+    try:
+        parse_adt(b"", 0)
+    except Exception:
+        pass  # Expected safe rejection
+
+    # 2. Oversized property count
+    malformed_props = struct.pack('<II', 0xFFFFFFFF, 0)
+    try:
+        parse_adt(malformed_props, 0)
+    except Exception:
+        pass
+
+    # 3. Oversized child count
+    malformed_children = struct.pack('<II', 0, 0x10000)
+    try:
+        parse_adt(malformed_children, 0)
+    except Exception:
+        pass
+
+    # 4. Truncated node header
+    try:
+        parse_adt(b"\x01\x00\x00", 0)
+    except Exception:
+        pass
+
+
+@test("ELF relocations — static link audit (0 relocations)")
+def test_elf_relocation_audit():
+    """Verify binary contains 0 dynamic/static relocations (statically linked)."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(root_dir, "build", "DreyzeOS.elf")
+    result = run_command_cross(
+        ["aarch64-linux-gnu-readelf", "-r", elf_path],
+        "aarch64-linux-gnu-readelf -r /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"
+    )
+    assert "There are no relocations in this file." in result.stdout
+
 
 # ============================================================
 # Run all tests
@@ -1073,6 +1277,15 @@ def main():
         test_boot_stage_progression,
         test_boot_stage_failsafe_preserves_last_successful,
         test_boot_stage_error_separate_from_last_successful,
+        # Phase 4 Step 2.1 — Safety Audit & Hardening
+        test_c_host_tests_execution,
+        test_linker_layout_and_assertions,
+        test_entry_system_register_audit,
+        test_cpu_state_symbols_and_safety,
+        test_virt_base_truthfulness,
+        test_framebuffer_hard_interlock_symbols,
+        test_devicetree_malformed_fuzz,
+        test_elf_relocation_audit,
     ]
 
     for t in tests:

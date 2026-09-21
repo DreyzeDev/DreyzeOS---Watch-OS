@@ -55,6 +55,7 @@ typedef struct {
     uint32_t  depth;             /* Color depth in bits per pixel (e.g. 32) */
     uint32_t  bytes_per_pixel;   /* Bytes per pixel (depth / 8) */
     bool      is_configured;     /* True if initialized and validated */
+    bool      mapping_verified;  /* Hard safety interlock: false by default */
     bool      is_write_allowed;  /* Safety interlock: false by default */
 } framebuffer_t;
 
@@ -71,6 +72,13 @@ bool framebuffer_is_available(void);
 
 /* Returns pointer to active framebuffer descriptor (NULL if not configured) */
 const framebuffer_t *framebuffer_get_info(void);
+
+/*
+ * Hard safety interlock control:
+ * Framebuffer writes CANNOT be enabled unless mapping is explicitly verified.
+ */
+void framebuffer_set_mapping_verified(bool verified);
+bool framebuffer_is_mapping_verified(void);
 
 /* Explicitly enable or disable hardware writes to the framebuffer */
 void framebuffer_enable_writes(bool enable);

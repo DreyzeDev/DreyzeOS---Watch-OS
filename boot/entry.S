@@ -1,148 +1,161 @@
 /*
- * DreyzeOS — AArch64 Entry Point
+ * DreyzeOS — AArch64 Entry Point & Exception Vectors
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
- * Architecture notes:
- *   - Apple S4 (T8006) kernel executes in AArch64 (64-bit mode)
- *   - watchOS userspace uses ARM64_32 (ILP32 ABI, 32-bit pointers in 64-bit mode)
- *   - This entry point targets bare-metal AArch64 kernel execution
- *   - Load address: UNKNOWN_T8006_LOAD_ADDRESS (placeholder 0x800000)
- *
- * SAFETY: This is designed for RAM-only execution. No flash writes.
+ * Safety Invariants:
+ *   - CurrentEL is queried IMMEDIATELY before any EL1-specific system register writes!
+ *   - If entry EL is unsupported (e.g. EL0), CPU branches to a minimal safe halt
+ *     without modifying system registers or touching the stack.
+ *   - Interrupts are disabled via DAIF.
+ *   - Stack is set up pointing to __stack_top (16-byte aligned).
+ *   - BSS is cleared (__bss_start to __bss_end, with .stack placed outside).
+ *   - VBAR_EL1 is explicitly configured to point to _exception_vectors_base (2048-byte aligned)
+ *     and followed by an ISB.
+ *   - No flash/NAND writes. RAM-only execution.
  */
 
 .section .text.boot, "ax"
 .global _start
 .global _exception_vectors_base
+.global _halt
+.global _panic_halt
+.global arch_irq_enable
+.global arch_irq_disable
 
 /*
  * _start — very first instruction executed by the CPU.
  *
- * At entry:
- *   - CPU is in EL1 or EL3 depending on entry path (UNKNOWN for T8006)
- *   - MMU is off (or minimally configured by iBoot/PongoOS shim)
- *   - Caches may or may not be enabled
- *   - x0 may contain a pointer to Apple DeviceTree (LIKELY, based on XNU convention)
- *   - x1 may contain kernel size or unused (UNKNOWN)
- *
- * This code:
- *   1. Saves x0 (potential DeviceTree pointer) before we trash registers
- *   2. Sets up stack pointer
- *   3. Clears BSS
- *   4. Jumps to kernel_main(dtree_ptr)
+ * Parameters passed by bootloader (iBoot / Pongo / shim):
+ *   x0: Pointer to struct xnu_arm64_boot_args or Apple DeviceTree (ADT)
+ *   x1: Secondary argument (size or unused)
  */
 _start:
-    /* Step 1: Save potential DeviceTree pointer from x0 */
-    mov     x20, x0             /* x20 = possible DeviceTree pointer (callee-saved) */
-    mov     x21, x1             /* x21 = possible kernel size / unused */
+    /*
+     * Step 1: Preserve bootloader arguments in callee-saved registers.
+     * Do NOT touch any other system state yet.
+     */
+    mov     x20, x0             /* x20 = boot_args / dtree pointer */
+    mov     x21, x1             /* x21 = arg1 (size or unused) */
 
-    /* Step 2: Disable interrupts at current EL (safe regardless of EL level) */
-    msr     daifset, #0xf       /* Mask Debug, Abort, IRQ, FIQ */
+    /*
+     * Step 2: Query CurrentEL immediately BEFORE any EL1-specific operations.
+     * CurrentEL bits [3:2] contain the Exception Level (0, 1, 2, or 3).
+     * Reading CurrentEL is architecturally permitted at all Exception Levels.
+     */
+    mrs     x22, CurrentEL
+    lsr     x22, x22, #2
+    and     x22, x22, #3        /* x22 = Current Exception Level */
 
-    /* Step 3: Set up stack pointer
-     * Stack grows downward. Stack top is defined in linker script as __stack_top.
-     * We use 16-byte aligned stack as required by AArch64 ABI.
+    /*
+     * Step 3: Validate Exception Level.
+     * DreyzeOS expects to be entered at EL1 (kernel mode).
+     * If the loader drops in at an unsupported EL (e.g. EL0 user mode),
+     * we CANNOT access EL1 registers (MSR to CPACR_EL1/VBAR_EL1 would trap).
+     * In that case, branch immediately to a minimal safe halt loop!
+     */
+    cmp     x22, #1
+    b.ne    _unsupported_el_halt
+
+    /*
+     * Step 4: Mask all asynchronous interrupts at EL1 (safe at EL1).
+     * D (Debug), A (SError), I (IRQ), F (FIQ).
+     */
+    msr     daifset, #0xf
+
+    /*
+     * Step 5: Initialize Stack Pointer.
+     * Stack grows downwards from __stack_top.
+     * AAPCS64 requires 16-byte alignment.
      */
     adr     x0, __stack_top
     mov     sp, x0
 
-    /* Step 4: Clear BSS section
-     * BSS contains zero-initialized globals.
-     * We must clear it because we are freestanding (no OS loader to do it).
+    /*
+     * Step 6: Clear BSS section.
+     * Zero-fill memory from __bss_start to __bss_end.
+     * Note: .stack is located strictly AFTER __bss_end, so this loop
+     * never overwrites the active stack area!
      */
     adr     x0, __bss_start
     adr     x1, __bss_end
     cmp     x0, x1
     b.ge    .bss_clear_done
 .bss_clear_loop:
-    str     xzr, [x0], #8      /* Write zero, advance pointer by 8 bytes */
+    str     xzr, [x0], #8
     cmp     x0, x1
     b.lt    .bss_clear_loop
 .bss_clear_done:
 
-    /* Step 5: Set up minimal system registers for AArch64 */
+    /*
+     * Step 7: Configure Exception Vector Base (VBAR_EL1).
+     * Only executed after EL1 is confirmed!
+     * _exception_vectors_base is guaranteed 2048-byte aligned by linker assertion.
+     */
+    adr     x0, _exception_vectors_base
+    msr     vbar_el1, x0
+    isb
+
+    /*
+     * Step 8: Early CPU feature setup (enable FP/SIMD).
+     */
     bl      _early_cpu_setup
 
-    /* Step 6: Call kernel_main with DeviceTree pointer */
-    mov     x0, x20             /* Restore DeviceTree pointer as first arg */
-    mov     x1, x21             /* Second arg */
+    /*
+     * Step 9: Transfer control to kernel_main(boot_args, arg1, boot_el).
+     */
+    mov     x0, x20             /* arg0: boot_args or dtree pointer */
+    mov     x1, x21             /* arg1: size or unused */
+    mov     x2, x22             /* arg2: confirmed entry EL */
     bl      kernel_main
 
-    /* Step 7: kernel_main should never return.
-     * If it does, spin forever (safe — no side effects).
+    /*
+     * Step 10: kernel_main must never return.
+     * If it returns unexpectedly, spin in safe halt.
      */
     b       _halt
 
 /*
- * _early_cpu_setup — minimal CPU register initialization before kernel_main.
- *
- * Sets up:
- *   - SCTLR_EL1: minimal safe configuration
- *   - CPACR_EL1: enable FP/SIMD access
- *
- * NOTE: MMU setup is done in kernel_main/mmu.c AFTER we know memory layout.
- *       We do NOT enable MMU here because load address is UNKNOWN for T8006.
+ * _unsupported_el_halt — safe minimal halt for invalid entry EL (e.g. EL0).
+ * Does not execute any privileged system register instructions.
+ * Does not touch memory or stack.
+ */
+_unsupported_el_halt:
+    wfi
+    b       _unsupported_el_halt
+
+/*
+ * _early_cpu_setup — minimal CPU configuration at confirmed EL1.
+ * Enables FP/SIMD access (CPACR_EL1.FPEN = 0b11).
+ * Does NOT enable or modify MMU or caches (preserves loader state).
  */
 _early_cpu_setup:
-    /* Enable FP/SIMD (CPACR_EL1.FPEN = 0b11 = no trap) */
+    /* Enable FP/SIMD: CPACR_EL1[21:20] = 0b11 (no trap for FP/SIMD) */
     mov     x0, #(3 << 20)
     msr     cpacr_el1, x0
     isb
-
-    /*
-     * SCTLR_EL1: System Control Register
-     * We set a minimal safe value:
-     *   - Bit 2  (C): Data cache DISABLED (safe, we don't know cache topology yet)
-     *   - Bit 12 (I): Instruction cache DISABLED (safe)
-     *   - Bit 0  (M): MMU DISABLED
-     * We only ensure the register has a known state.
-     *
-     * IMPORTANT: On T8006 the reset value of SCTLR_EL1 is UNKNOWN.
-     * If entered via PongoOS/iBoot, it may already have MMU on.
-     * For now: just preserve current value, don't break existing mapping.
-     */
-    /* mrs x0, sctlr_el1   <- We intentionally do NOT modify SCTLR here */
-    /* Future: configure based on confirmed entry path */
-
-    isb
     dsb     sy
-
     ret
 
 /*
  * _halt — safe infinite halt loop.
- * Uses WFI (Wait For Interrupt) to reduce power consumption.
- * Can be recovered from via hardware reset.
+ * Low-power WFI state. Recovers only on hardware reset or interrupt.
  */
-.global _halt
 _halt:
     wfi
     b       _halt
 
 /*
- * _panic_halt — called from panic(). Same as halt but symbolically distinct.
+ * _panic_halt — identical to _halt, symbolically distinguished for crash analysis.
  */
-.global _panic_halt
 _panic_halt:
     wfi
     b       _panic_halt
 
-/*
- * Exception Vector Table — required for AArch64.
- * Must be 2KB-aligned. Each entry is 128 bytes (32 instructions).
- *
- * Layout (per AArch64 spec):
- *   Offset 0x000: Current EL, SP0  — Synchronous
- *   Offset 0x080: Current EL, SP0  — IRQ/vIRQ
- *   Offset 0x100: Current EL, SP0  — FIQ/vFIQ
- *   Offset 0x180: Current EL, SP0  — SError/vSError
- *   Offset 0x200: Current EL, SPx  — Synchronous
- *   Offset 0x280: Current EL, SPx  — IRQ/vIRQ
- *   Offset 0x300: Current EL, SPx  — FIQ/vFIQ
- *   Offset 0x380: Current EL, SPx  — SError/vSError
- *   Offset 0x400: Lower EL, AArch64 — Synchronous
- *   ... etc
- */
+/* ============================================================
+ * Exception Vector Table (ARMv8-A Standard Layout)
+ * Must be aligned to a 2048-byte (2KB) boundary.
+ * Each of the 16 slots is exactly 128 bytes (32 instructions).
+ * ============================================================ */
 .balign 2048
 _exception_vectors_base:
     /* Current EL with SP0 */
@@ -185,7 +198,7 @@ _exception_vectors_base:
     .balign 128
     b       _exc_serror_lower32
 
-/* Exception stubs — call into C handler */
+/* Exception vector stubs */
 _exc_sync_sp0:     bl _exception_handler; b _halt
 _exc_irq_sp0:      bl _exception_handler; b _halt
 _exc_fiq_sp0:      bl _exception_handler; b _halt
@@ -194,7 +207,8 @@ _exc_sync_spx:     bl _exception_handler; b _halt
 
 /*
  * _exc_irq_spx — IRQ handler for Current EL with SP_EL1.
- * Saves interrupted context, calls C dispatcher aic_handle_irq(), restores context, and eret.
+ * Frame size: 272 bytes (16-byte aligned).
+ * Saves x0-x29, x30, ELR_EL1, SPSR_EL1.
  */
 _exc_irq_spx:
     /* Allocate stack frame (272 bytes, 16-byte aligned) */
@@ -223,7 +237,7 @@ _exc_irq_spx:
     mrs     x1, spsr_el1
     stp     x0, x1, [sp, #248]
 
-    /* Call C interrupt handler */
+    /* Call C interrupt dispatcher */
     bl      aic_handle_irq
 
     /* Restore ELR_EL1 and SPSR_EL1 */
@@ -269,23 +283,20 @@ _exc_serror_lower32: bl _exception_handler; b _halt
 /*
  * CPU interrupt control helpers
  */
-.global arch_irq_enable
 arch_irq_enable:
     msr     daifclr, #2
     isb
     ret
 
-.global arch_irq_disable
 arch_irq_disable:
     msr     daifset, #2
     isb
     ret
 
-/* Stack area — placed in BSS by linker script, but we need the symbol here */
+/*
+ * Stack section: 16 KiB reserved memory.
+ * Placed in .stack section, mapped by linker script strictly after BSS.
+ */
 .section .stack, "aw", @nobits
 .align 4
-.global __stack_bottom
-__stack_bottom:
     .space 0x4000           /* 16 KiB stack */
-.global __stack_top
-__stack_top:
