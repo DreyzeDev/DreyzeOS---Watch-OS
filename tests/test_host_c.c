@@ -15,6 +15,8 @@
 #include <assert.h>
 
 #include "../include/boot_stage.h"
+#include "../include/boot_info.h"
+#include "../hal/t8006/device_tree.h"
 #include "../hal/t8006/framebuffer.h"
 
 /* ============================================================
@@ -30,6 +32,18 @@ void klog_warn(const char *msg) { (void)msg; }
 void klog_hex(const char *msg, unsigned long long val) { (void)msg; (void)val; }
 void log_flush(void) {}
 void arch_irq_disable(void) {}
+void uart_diag(void) {}
+void aic_init(void) {}
+void aic_diag(void) {}
+
+static void make_prop(unsigned char *dst, const char *name,
+                      const unsigned char *value, unsigned int size)
+{
+    memset(dst, 0, sizeof(adt_prop_hdr_t) + ((size + 3U) & ~3U));
+    memcpy(dst, name, strlen(name) < 32 ? strlen(name) : 32);
+    memcpy(dst + 32 + 4, value, size);
+    *(unsigned int *)(void *)(dst + 32) = size;
+}
 
 /* Override boot_stage_failsafe loop for host test interception */
 void __attribute__((noinline)) host_test_halt_intercept(void)
@@ -214,6 +228,44 @@ static void test_framebuffer_mapping_interlock(void)
     printf("PASS\n");
 }
 
+static void test_devtree_bounds_and_boot_args(void)
+{
+    printf("[C-TEST] Running: test_devtree_bounds_and_boot_args... ");
+
+    unsigned char tree[96];
+    memset(tree, 0, sizeof(tree));
+    *(unsigned int *)(void *)(tree + 0) = 1; /* properties */
+    *(unsigned int *)(void *)(tree + 4) = 0; /* children */
+    {
+        const unsigned char name[] = "root";
+        make_prop(tree + 8, "name", name, sizeof(name));
+    }
+
+    assert(devtree_validate_header((uintptr_t)tree, sizeof(tree)) == true);
+    assert(devtree_validate_header((uintptr_t)tree, 8 + sizeof(adt_prop_hdr_t)) == false);
+
+    /* Truncated property value and excessive child count must be rejected. */
+    *(unsigned int *)(void *)(tree + 32 + 8) = 0x7FFFFFFFU;
+    assert(devtree_validate_header((uintptr_t)tree, sizeof(tree)) == false);
+    memset(tree, 0, sizeof(tree));
+    *(unsigned int *)(void *)(tree + 4) = 0xFFFFFFFFU;
+    assert(devtree_find_node_by_path((uintptr_t)tree, sizeof(tree), "/missing") == 0);
+
+    xnu_arm64_boot_args_t ba;
+    memset(&ba, 0, sizeof(ba));
+    ba.phys_base = 0x800000000ULL;
+    ba.mem_size = 0x40000000ULL;
+    ba.virt_base = 0xFFFF000080000000ULL;
+    platform_boot_info_init((uint64_t)(uintptr_t)&ba, 0);
+    const platform_boot_info_t *info = platform_get_boot_info();
+    assert(info->boot_args_present == true);
+    assert(info->virt_base_valid == true);
+    assert(info->dram_virt_base == ba.virt_base);
+    assert(info->dram_virt_base != info->dram_phys_base);
+
+    printf("PASS\n");
+}
+
 int main(void)
 {
     printf("\n==================================================\n");
@@ -224,9 +276,10 @@ int main(void)
     test_stage_invalid_backward_transition();
     test_stage_failsafe_preserves_last_successful();
     test_framebuffer_mapping_interlock();
+    test_devtree_bounds_and_boot_args();
 
     printf("==================================================\n");
-    printf("All C-Level Host Tests PASSED (4/4) ✓\n");
+    printf("All C-Level Host Tests PASSED (5/5) ✓\n");
     printf("==================================================\n\n");
 
     return 0;

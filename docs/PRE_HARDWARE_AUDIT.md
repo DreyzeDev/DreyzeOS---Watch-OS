@@ -46,7 +46,7 @@
 | **Primary DRAM Size** | `0x40000000` (1 GiB) | Static ADT node `/memory` `reg` property |
 | **UART0 Physical Base** | `0x2E500000` | Static ADT node `/arm-io/uart0` `reg` property |
 | **UART0 Interrupt ID** | 262 (`0x106`) | Static ADT node `/arm-io/uart0` `interrupts` property |
-| **AIC Physical Base** | `0x2E300000` | Static ADT node `/arm-io/aic` `reg` property |
+| **AIC Physical Base** | `0x2D180000` | Exact Watch4,2/n131bap ADT `/arm-io/aic` `reg`; `0x2E300000` was a stale report error |
 | **AIC Version** | AIC2 (1024 IRQ lines, 32 banks) | Kernelcache disasm + DeviceTree `aic-version` = 2 |
 | **boot_args ABI Layout** | `virt_base` (+0x08), `phys_base` (+0x10), `video` (+0x28), `devicetree_p` (+0x60) | XNU kernelcache entry point `0xfffffff007b2c070` |
 | **Pixel Color Format** | `"BBBBBBBBGGGGGGGGRRRRRRRR"` (BGRA32) | Kernelcache read-only string at `0xfffffff00823ea2c` |
@@ -128,7 +128,7 @@ DreyzeOS implements the following strict startup sequence:
 [boot/entry.S: _start]
   1. Save x0 -> x20, x1 -> x21
   2. Read CurrentEL immediately
-     ├── If CurrentEL != 1 (e.g. EL0) ──► _unsupported_el_halt (safe WFI, no EL1 writes)
+     ├── If CurrentEL != 1 (e.g. EL0) ──► _unsupported_el_halt (branch loop, no EL1 writes)
      └── If CurrentEL == 1 (EL1) ────────► Proceed safely
   3. Mask interrupts (msr daifset, #0xf)
   4. Setup stack: sp = __stack_top (16-byte aligned)
@@ -199,7 +199,9 @@ typedef struct {
 
 ## 13. AIC (Apple Interrupt Controller) Status
 
-- **Physical Base**: `0x2E300000` (CONFIRMED from DeviceTree).
+- **Physical Base**: `0x2D180000` (CONFIRMED from exact ADT artifact `research/ipsw/21U580/nodes_dump.txt`, `/arm-io/aic`, size `0x8000`).
+- **AIC timebase**: separate `/arm-io/aic-timebase` node at `0x2D188000`, size `0x1000`.
+- **Discrepancy resolution**: `0x2E300000` does not occur in the exact ADT artifacts and is rejected as a stale report value; the HAL remains at `0x2D180000`.
 - **Driver Architecture**: Apple AIC2, 1024 IRQ lines, 32 banks.
 - **Safety Status**: `aic_init()` masks all 1024 interrupt lines across all 32 banks.
 - **Global IRQ State**: CPU IRQ delivery is globally **DISABLED** (`DAIF=0xF`).
@@ -248,7 +250,11 @@ Execution on real hardware may only proceed once **ALL** of the following condit
 | Requirement | Status | Verification / Evidence |
 |:---|:---:|:---|
 | **Exact RAM load address confirmed** | **BLOCKED** | Placeholder `0x100000000` in linker script |
-| **Entry point model verified** | **CONFIRMED** | `_start` at image offset 0 |
+| **Execution VA/PA mapping** | **BLOCKED** | Loader MMU/translation regime is not identified |
+| **Entry point model verified** | **CONFIRMED** | `_start` at image offset 0; delivery entry contract remains UNKNOWN |
+| **Loader selected and handoff ABI** | **BLOCKED** | No loader/shim is selected or evidenced; XNU `x0=boot_args` is not a DreyzeOS contract |
+| **boot_args / DeviceTree availability** | **UNKNOWN** | Supported parser paths exist, but future loader register/pointer delivery is unproven |
+| **MMU/cache state at handoff** | **BLOCKED** | Snapshot is read-only; no loader mapping evidence |
 | **Relocation requirements verified** | **BLOCKED** | Non-PIC binary with 0 relocations |
 | **CurrentEL validation before EL1 writes** | **CONFIRMED** | `entry.S` queries `CurrentEL` before MSR |
 | **Stack isolated from BSS clear** | **CONFIRMED** | `.stack` placed strictly after `__bss_end` |

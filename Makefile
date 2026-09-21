@@ -25,7 +25,7 @@ BUILDDIR := build
 DREYZE_FB_TEST_PATTERN ?= 0
 
 # Build Provenance (Git Commit SHA and canonical branch)
-GIT_COMMIT ?= $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "4138087")
+GIT_COMMIT ?= $(shell git rev-parse --short=8 HEAD 2>/dev/null || echo "UNKNOWN")
 CANONICAL_BRANCH ?= master
 
 # Compiler flags — freestanding AArch64 bare-metal (GCC)

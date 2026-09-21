@@ -199,7 +199,8 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 | Stack valid & isolated | **CONFIRMED** | 16-byte aligned, placed outside BSS |
 | VBAR_EL1 installed | **CONFIRMED** | 2048-byte aligned, set in entry.S |
 | MMU state safely handled | **CONFIRMED** | Read-only capture, physical deref blocked |
-| boot_args handoff known | **CONFIRMED** | Kernelcache ABI confirmed, virt_base real |
+| Loader -> DreyzeOS handoff ABI | **BLOCKED** | No loader/shim selected; XNU `x0=boot_args` is not sufficient evidence |
+| boot_args / DeviceTree availability | **UNKNOWN** | Parser supports both forms, but future loader delivery is unproven |
 | DeviceTree bounds-checked | **CONFIRMED** | Recursion limit 32, fuzz tested |
 | UART timeout safe | **CONFIRMED** | Non-blocking loop with cycle limit |
 | IRQs disabled | **CONFIRMED** | DAIF=0xF, AIC all masked |

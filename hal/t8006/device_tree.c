@@ -52,9 +52,45 @@ static bool str_contains_nocase(const char *haystack, const char *needle)
  * Low-level ADT Parsing Primitives (Bounds-Checked)
  * ============================================================ */
 
+/* Check ranges by subtraction so attacker-controlled additions cannot wrap. */
+static bool adt_range_valid(uintptr_t start, uintptr_t length, uintptr_t limit)
+{
+    return start <= limit && length <= (limit - start);
+}
+
+static bool adt_advance(uintptr_t current, uintptr_t length,
+                        uintptr_t limit, uintptr_t *next)
+{
+    if (!adt_range_valid(current, length, limit)) {
+        return false;
+    }
+    if (next) {
+        *next = current + length;
+    }
+    return true;
+}
+
+static bool adt_padded_size(uint32_t size, uintptr_t *out)
+{
+    uintptr_t padded = (uintptr_t)size;
+    if (padded > (uintptr_t)-1 - 3) {
+        return false;
+    }
+    padded = (padded + 3) & ~(uintptr_t)3;
+    if (out) {
+        *out = padded;
+    }
+    return true;
+}
+
 bool devtree_validate_header(uintptr_t base, uint32_t max_size)
 {
     if (base == 0 || max_size < (sizeof(adt_node_hdr_t) + sizeof(adt_prop_hdr_t))) {
+        return false;
+    }
+
+    uintptr_t limit;
+    if (!adt_advance(base, max_size, (uintptr_t)-1, &limit)) {
         return false;
     }
 
@@ -64,18 +100,26 @@ bool devtree_validate_header(uintptr_t base, uint32_t max_size)
     }
 
     /* First property in an ADT node must be "name" */
-    const adt_prop_hdr_t *first_prop = (const adt_prop_hdr_t *)(base + sizeof(adt_node_hdr_t));
+    uintptr_t first_prop_addr;
+    if (!adt_advance(base, sizeof(adt_node_hdr_t), limit, &first_prop_addr)) {
+        return false;
+    }
+    const adt_prop_hdr_t *first_prop = (const adt_prop_hdr_t *)first_prop_addr;
     if (strncmp(first_prop->name, "name", 4) != 0) {
         return false;
     }
 
-    return true;
+    uintptr_t padded;
+    return adt_padded_size(first_prop->size & ADT_PROP_SIZE_MASK, &padded) &&
+           adt_advance(first_prop_addr, sizeof(adt_prop_hdr_t), limit, NULL) &&
+           adt_advance(first_prop_addr + sizeof(adt_prop_hdr_t), padded, limit, NULL);
 }
 
 const uint8_t *devtree_find_prop(uintptr_t node_ptr, uintptr_t tree_limit,
                                  const char *prop_name, uint32_t *out_size)
 {
-    if (!node_ptr || !prop_name || (node_ptr + sizeof(adt_node_hdr_t) > tree_limit)) {
+    if (!node_ptr || !prop_name ||
+        !adt_range_valid(node_ptr, sizeof(adt_node_hdr_t), tree_limit)) {
         return NULL;
     }
 
@@ -84,15 +128,18 @@ const uint8_t *devtree_find_prop(uintptr_t node_ptr, uintptr_t tree_limit,
     uintptr_t offset = node_ptr + sizeof(adt_node_hdr_t);
 
     for (uint32_t i = 0; i < prop_count; i++) {
-        if (offset + sizeof(adt_prop_hdr_t) > tree_limit) {
+        if (!adt_range_valid(offset, sizeof(adt_prop_hdr_t), tree_limit)) {
             return NULL;
         }
 
         const adt_prop_hdr_t *prop = (const adt_prop_hdr_t *)offset;
         uint32_t size = prop->size & ADT_PROP_SIZE_MASK;
-        uint32_t padded = (size + 3) & ~3u;
+        uintptr_t padded;
+        if (!adt_padded_size(size, &padded)) {
+            return NULL;
+        }
 
-        if (offset + sizeof(adt_prop_hdr_t) + padded > tree_limit) {
+        if (!adt_advance(offset + sizeof(adt_prop_hdr_t), padded, tree_limit, NULL)) {
             return NULL;
         }
 
@@ -117,7 +164,8 @@ const uint8_t *devtree_find_prop(uintptr_t node_ptr, uintptr_t tree_limit,
  */
 static uintptr_t devtree_get_node_size_depth(uintptr_t node_ptr, uintptr_t tree_limit, uint32_t depth)
 {
-    if (depth > MAX_ADT_DEPTH || node_ptr + sizeof(adt_node_hdr_t) > tree_limit) {
+    if (depth > MAX_ADT_DEPTH ||
+        !adt_range_valid(node_ptr, sizeof(adt_node_hdr_t), tree_limit)) {
         return 0;
     }
 
@@ -134,13 +182,14 @@ static uintptr_t devtree_get_node_size_depth(uintptr_t node_ptr, uintptr_t tree_
 
     /* Skip all properties */
     for (uint32_t i = 0; i < prop_count; i++) {
-        if (offset + sizeof(adt_prop_hdr_t) > tree_limit) {
+        if (!adt_range_valid(offset, sizeof(adt_prop_hdr_t), tree_limit)) {
             return 0;
         }
         const adt_prop_hdr_t *prop = (const adt_prop_hdr_t *)offset;
         uint32_t size = prop->size & ADT_PROP_SIZE_MASK;
-        uint32_t padded = (size + 3) & ~3u;
-        if (offset + sizeof(adt_prop_hdr_t) + padded > tree_limit) {
+        uintptr_t padded;
+        if (!adt_padded_size(size, &padded) ||
+            !adt_advance(offset + sizeof(adt_prop_hdr_t), padded, tree_limit, NULL)) {
             return 0;
         }
         offset += sizeof(adt_prop_hdr_t) + padded;
@@ -152,7 +201,9 @@ static uintptr_t devtree_get_node_size_depth(uintptr_t node_ptr, uintptr_t tree_
         if (child_size == 0) {
             return 0;
         }
-        offset += child_size;
+        if (!adt_advance(offset, child_size, tree_limit, &offset)) {
+            return 0;
+        }
     }
 
     return offset - node_ptr;
@@ -168,7 +219,7 @@ static uintptr_t devtree_get_node_size(uintptr_t node_ptr, uintptr_t tree_limit)
  */
 static uintptr_t devtree_find_child_node(uintptr_t node_ptr, uintptr_t tree_limit, const char *child_name)
 {
-    if (node_ptr + sizeof(adt_node_hdr_t) > tree_limit || !child_name) {
+    if (!adt_range_valid(node_ptr, sizeof(adt_node_hdr_t), tree_limit) || !child_name) {
         return 0;
     }
 
@@ -180,18 +231,21 @@ static uintptr_t devtree_find_child_node(uintptr_t node_ptr, uintptr_t tree_limi
 
     /* Advance past properties */
     for (uint32_t i = 0; i < prop_count; i++) {
-        if (offset + sizeof(adt_prop_hdr_t) > tree_limit) {
+        if (!adt_range_valid(offset, sizeof(adt_prop_hdr_t), tree_limit)) {
             return 0;
         }
         const adt_prop_hdr_t *prop = (const adt_prop_hdr_t *)offset;
         uint32_t size = prop->size & ADT_PROP_SIZE_MASK;
-        uint32_t padded = (size + 3) & ~3u;
-        offset += sizeof(adt_prop_hdr_t) + padded;
+        uintptr_t padded;
+        if (!adt_padded_size(size, &padded) ||
+            !adt_advance(offset + sizeof(adt_prop_hdr_t), padded, tree_limit, &offset)) {
+            return 0;
+        }
     }
 
     /* Search direct children */
     for (uint32_t c = 0; c < child_count; c++) {
-        if (offset + sizeof(adt_node_hdr_t) > tree_limit) {
+        if (!adt_range_valid(offset, sizeof(adt_node_hdr_t), tree_limit)) {
             return 0;
         }
 
@@ -205,7 +259,9 @@ static uintptr_t devtree_find_child_node(uintptr_t node_ptr, uintptr_t tree_limi
         if (child_size == 0) {
             return 0;
         }
-        offset += child_size;
+        if (!adt_advance(offset, child_size, tree_limit, &offset)) {
+            return 0;
+        }
     }
 
     return 0;
@@ -217,7 +273,10 @@ uintptr_t devtree_find_node_by_path(uintptr_t root, uint32_t tree_size, const ch
         return 0;
     }
 
-    uintptr_t tree_limit = root + tree_size;
+    uintptr_t tree_limit;
+    if (!adt_advance(root, tree_size, (uintptr_t)-1, &tree_limit)) {
+        return 0;
+    }
     if (strcmp(path, "/") == 0) {
         return root;
     }
@@ -255,7 +314,10 @@ int devtree_parse_dynamic(uintptr_t base, uint32_t size, platform_boot_info_t *i
         return -1;
     }
 
-    uintptr_t tree_limit = base + size;
+    uintptr_t tree_limit;
+    if (!adt_advance(base, size, (uintptr_t)-1, &tree_limit)) {
+        return -1;
+    }
     info->devtree_present = true;
     info->devtree_base = base;
     info->devtree_size = size;
@@ -312,15 +374,18 @@ int devtree_parse_dynamic(uintptr_t base, uint32_t size, platform_boot_info_t *i
         uintptr_t prop_off = mmap_node + sizeof(adt_node_hdr_t);
 
         for (uint32_t i = 0; i < mmap_hdr->prop_count && info->num_memory_ranges < MAX_BOOT_MEMORY_RANGES; i++) {
-            if (prop_off + sizeof(adt_prop_hdr_t) > tree_limit) {
+            if (!adt_range_valid(prop_off, sizeof(adt_prop_hdr_t), tree_limit)) {
                 break;
             }
 
             const adt_prop_hdr_t *prop = (const adt_prop_hdr_t *)prop_off;
             uint32_t val_sz = prop->size & ADT_PROP_SIZE_MASK;
-            uint32_t padded = (val_sz + 3) & ~3u;
+            uintptr_t padded;
+            if (!adt_padded_size(val_sz, &padded)) {
+                break;
+            }
 
-            if (prop_off + sizeof(adt_prop_hdr_t) + padded > tree_limit) {
+            if (!adt_advance(prop_off + sizeof(adt_prop_hdr_t), padded, tree_limit, NULL)) {
                 break;
             }
 

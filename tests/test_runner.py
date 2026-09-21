@@ -1052,13 +1052,16 @@ def test_c_host_tests_execution():
         f"-I{os.path.join(root_dir, 'lib')}",
         os.path.join(root_dir, "tests", "test_host_c.c"),
         os.path.join(root_dir, "kernel", "boot_stage.c"),
+        os.path.join(root_dir, "hal", "t8006", "device_tree.c"),
+        os.path.join(root_dir, "hal", "t8006", "platform.c"),
         os.path.join(root_dir, "hal", "t8006", "framebuffer.c"),
         os.path.join(root_dir, "lib", "string.c"),
         "-o", c_bin
     ]
     wsl_cmd = (
         "gcc -DHOST_TEST -I. -Iinclude -Ilib "
-        "tests/test_host_c.c kernel/boot_stage.c hal/t8006/framebuffer.c lib/string.c "
+        "tests/test_host_c.c kernel/boot_stage.c hal/t8006/device_tree.c "
+        "hal/t8006/platform.c hal/t8006/framebuffer.c lib/string.c "
         "-o build/test_host_c && ./build/test_host_c"
     )
     result = run_command_cross(compile_cmd, f"cd /mnt/c/Users/pc/Desktop/DreyzeOS && {wsl_cmd}")
@@ -1122,6 +1125,32 @@ def test_entry_system_register_audit():
     # VBAR_EL1 must be set and followed by isb
     assert "msr" in src and "vbar_el1" in src, "VBAR_EL1 not installed in entry.S!"
     assert "isb" in src, "ISB missing after system register configuration!"
+
+    # Validate the actual linked instruction order, not only source strings.
+    elf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "build", "DreyzeOS.elf")
+    dis = run_command_cross(
+        ["aarch64-linux-gnu-objdump", "-d", elf_path],
+        "aarch64-linux-gnu-objdump -d /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"
+    )
+    text = dis.stdout
+    start = text.find("<__kernel_start>:")
+    if start < 0:
+        start = text.find("<_start>:")
+    unsupported = text.find("<_unsupported_el_halt>:")
+    assert start >= 0 and unsupported > start, "Cannot locate _start disassembly"
+    block = text[start:unsupported]
+    currentel = block.find("mrs\t")
+    compare = block.find("cmp\t")
+    reject = block.find("b.ne")
+    vbar = block.find("msr\tvbar_el1")
+    assert 0 <= currentel < compare < reject < vbar, \
+        "CurrentEL validation must precede VBAR_EL1 write"
+
+    halt_end = text.find("\n", unsupported)
+    halt_block = text[unsupported: text.find("\n\n", unsupported)]
+    assert "wfi" not in halt_block.lower(), \
+        "Unsupported-EL fallback must not depend on WFI"
 
 
 @test("CPU state — snapshot symbols and read-only invariant")

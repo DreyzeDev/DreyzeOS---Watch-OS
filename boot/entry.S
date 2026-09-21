@@ -117,10 +117,10 @@ _start:
 /*
  * _unsupported_el_halt — safe minimal halt for invalid entry EL (e.g. EL0).
  * Does not execute any privileged system register instructions.
- * Does not touch memory or stack.
+ * Does not touch memory or stack. A plain branch loop is used instead of
+ * WFI because WFI may be trapped by an unknown higher-EL environment.
  */
 _unsupported_el_halt:
-    wfi
     b       _unsupported_el_halt
 
 /*

@@ -33,8 +33,10 @@ void platform_early_init(void)
      */
 
     /* Data sync barrier — ensure any prior writes are complete */
+#ifndef HOST_TEST
     __asm__ volatile ("dsb sy" ::: "memory");
     __asm__ volatile ("isb" ::: "memory");
+#endif
 }
 
 #include "uart.h"
@@ -74,8 +76,10 @@ void timer_init(void)
      *   CNTPCT_EL0 — physical counter
      * These are available regardless of T8006 MMIO mapping.
      */
-    uint64_t cntfrq;
+    uint64_t cntfrq = 0;
+#ifndef HOST_TEST
     __asm__ volatile ("mrs %0, cntfrq_el0" : "=r"(cntfrq));
+#endif
     klog_hex("  [TIMER] CNTFRQ_EL0 (ARM generic timer freq)", cntfrq);
 }
 
