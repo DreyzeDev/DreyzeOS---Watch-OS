@@ -19,6 +19,7 @@
 
 #include "uart.h"
 #include "memory_map.h"
+#include "mmio_gate.h"
 #include "../../include/log.h"
 
 #define UART_TX_TIMEOUT_CYCLES  1000000U
@@ -37,6 +38,19 @@
 #endif
 
 static bool g_uart_ready = false;
+static uint32_t g_uart_mmio_access_count = 0;
+
+static uint32_t uart_mmio_read32(uint64_t address)
+{
+    g_uart_mmio_access_count++;
+    return MMIO_READ32(address);
+}
+
+static void uart_mmio_write32(uint64_t address, uint32_t value)
+{
+    g_uart_mmio_access_count++;
+    MMIO_WRITE32(address, value);
+}
 
 /*
  * uart_init — Initialize UART0.
@@ -45,7 +59,8 @@ static bool g_uart_ready = false;
 void uart_init(void)
 {
     /* Verify MMIO address is configured and not placeholder */
-    if (MMIO_ADDR_IS_UNKNOWN(T8006_UART0_BASE) || T8006_UART0_BASE == 0) {
+    if (!mmio_mapping_is_verified() ||
+        MMIO_ADDR_IS_UNKNOWN(T8006_UART0_BASE) || T8006_UART0_BASE == 0) {
         g_uart_ready = false;
         return;
     }
@@ -55,9 +70,9 @@ void uart_init(void)
      * We enable TX and RX modes in UCON (bits [3:0] = 0x5: Rx interrupt/polling, Tx interrupt/polling)
      * if not already enabled.
      */
-    uint32_t ucon = MMIO_READ32(T8006_UART0_BASE + UART_UCON_OFFSET);
+    uint32_t ucon = uart_mmio_read32(T8006_UART0_BASE + UART_UCON_OFFSET);
     if ((ucon & 0x0F) == 0) {
-        MMIO_WRITE32(T8006_UART0_BASE + UART_UCON_OFFSET, ucon | 0x05);
+        uart_mmio_write32(T8006_UART0_BASE + UART_UCON_OFFSET, ucon | 0x05);
     }
 
     g_uart_ready = true;
@@ -75,13 +90,23 @@ bool uart_is_ready(void)
     return g_uart_ready;
 }
 
+uint32_t uart_mmio_access_count_for_test(void)
+{
+    return g_uart_mmio_access_count;
+}
+
+void uart_reset_mmio_access_count_for_test(void)
+{
+    g_uart_mmio_access_count = 0;
+}
+
 /*
  * uart_putc — Transmit single character over UART0 with timeout protection.
  * Automatically translates '\n' to '\r\n'.
  */
 void uart_putc(char c)
 {
-    if (!g_uart_ready) {
+    if (!g_uart_ready || !mmio_mapping_is_verified()) {
         return;
     }
 
@@ -92,7 +117,7 @@ void uart_putc(char c)
 
     /* Wait until TX buffer/FIFO is empty (or has space) with timeout */
     uint32_t timeout = UART_TX_TIMEOUT_CYCLES;
-    while ((MMIO_READ32(T8006_UART0_BASE + UART_UTRSTAT_OFFSET) & UART_UTRSTAT_TX_EMPTY_BUFFER) == 0) {
+    while ((uart_mmio_read32(T8006_UART0_BASE + UART_UTRSTAT_OFFSET) & UART_UTRSTAT_TX_EMPTY_BUFFER) == 0) {
         if (--timeout == 0) {
             /* Hardware not responding (possibly clock-gated or halted) */
             return;
@@ -100,7 +125,7 @@ void uart_putc(char c)
     }
 
     /* Write byte to transmit holding register */
-    MMIO_WRITE32(T8006_UART0_BASE + UART_UTXH_OFFSET, (uint32_t)(uint8_t)c);
+    uart_mmio_write32(T8006_UART0_BASE + UART_UTXH_OFFSET, (uint32_t)(uint8_t)c);
 }
 
 /*
@@ -122,13 +147,13 @@ void uart_puts(const char *str)
  */
 bool uart_getc_nonblocking(char *out_c)
 {
-    if (!g_uart_ready || !out_c) {
+    if (!g_uart_ready || !mmio_mapping_is_verified() || !out_c) {
         return false;
     }
 
-    uint32_t stat = MMIO_READ32(T8006_UART0_BASE + UART_UTRSTAT_OFFSET);
+    uint32_t stat = uart_mmio_read32(T8006_UART0_BASE + UART_UTRSTAT_OFFSET);
     if (stat & UART_UTRSTAT_RX_READY) {
-        uint32_t val = MMIO_READ32(T8006_UART0_BASE + UART_URXH_OFFSET);
+        uint32_t val = uart_mmio_read32(T8006_UART0_BASE + UART_URXH_OFFSET);
         *out_c = (char)(val & 0xFF);
         return true;
     }
@@ -155,15 +180,15 @@ static void hex32_to_str(uint32_t val, char *buf)
  */
 void uart_diag(void)
 {
-    if (!g_uart_ready) {
+    if (!g_uart_ready || !mmio_mapping_is_verified()) {
         klog_warn("[UART0] uart_diag: UART0 not initialized");
         return;
     }
 
-    uint32_t ulcon   = MMIO_READ32(T8006_UART0_BASE + UART_ULCON_OFFSET);
-    uint32_t ucon    = MMIO_READ32(T8006_UART0_BASE + UART_UCON_OFFSET);
-    uint32_t ufcon   = MMIO_READ32(T8006_UART0_BASE + UART_UFCON_OFFSET);
-    uint32_t utrstat = MMIO_READ32(T8006_UART0_BASE + UART_UTRSTAT_OFFSET);
+    uint32_t ulcon   = uart_mmio_read32(T8006_UART0_BASE + UART_ULCON_OFFSET);
+    uint32_t ucon    = uart_mmio_read32(T8006_UART0_BASE + UART_UCON_OFFSET);
+    uint32_t ufcon   = uart_mmio_read32(T8006_UART0_BASE + UART_UFCON_OFFSET);
+    uint32_t utrstat = uart_mmio_read32(T8006_UART0_BASE + UART_UTRSTAT_OFFSET);
 
     char hex_buf[16];
 

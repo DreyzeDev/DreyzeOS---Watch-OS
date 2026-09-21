@@ -927,7 +927,7 @@ def test_boot_stage_progression():
     """
     # Mirror the enum values from boot_stage.h
     BOOT_STAGE_ENTRY     = 0
-    BOOT_STAGE_UART      = 1
+    BOOT_STAGE_RAM_LOG   = 1
     BOOT_STAGE_BOOT_ARGS = 2
     BOOT_STAGE_MEM_MAP   = 3
     BOOT_STAGE_AIC       = 4
@@ -937,7 +937,7 @@ def test_boot_stage_progression():
 
     stages = [
         BOOT_STAGE_ENTRY,
-        BOOT_STAGE_UART,
+        BOOT_STAGE_RAM_LOG,
         BOOT_STAGE_BOOT_ARGS,
         BOOT_STAGE_MEM_MAP,
         BOOT_STAGE_AIC,
@@ -969,7 +969,7 @@ def test_boot_stage_failsafe_preserves_last_successful():
     Verifies the two-variable design (g_current_stage vs g_last_successful_stage).
     """
     BOOT_STAGE_ENTRY     = 0
-    BOOT_STAGE_UART      = 1
+    BOOT_STAGE_RAM_LOG   = 1
     BOOT_STAGE_BOOT_ARGS = 2
     BOOT_STAGE_MEM_MAP   = 3
     BOOT_STAGE_AIC       = 4
@@ -994,7 +994,7 @@ def test_boot_stage_failsafe_preserves_last_successful():
 
     # Simulate progression to stage 3
     boot_stage_set(BOOT_STAGE_ENTRY)
-    boot_stage_set(BOOT_STAGE_UART)
+    boot_stage_set(BOOT_STAGE_RAM_LOG)
     boot_stage_set(BOOT_STAGE_BOOT_ARGS)
     boot_stage_set(BOOT_STAGE_MEM_MAP)
 
@@ -1052,16 +1052,21 @@ def test_c_host_tests_execution():
         f"-I{os.path.join(root_dir, 'lib')}",
         os.path.join(root_dir, "tests", "test_host_c.c"),
         os.path.join(root_dir, "kernel", "boot_stage.c"),
+        os.path.join(root_dir, "kernel", "log.c"),
         os.path.join(root_dir, "hal", "t8006", "device_tree.c"),
+        os.path.join(root_dir, "hal", "t8006", "mmio_gate.c"),
         os.path.join(root_dir, "hal", "t8006", "platform.c"),
+        os.path.join(root_dir, "hal", "t8006", "uart.c"),
+        os.path.join(root_dir, "hal", "t8006", "aic.c"),
         os.path.join(root_dir, "hal", "t8006", "framebuffer.c"),
         os.path.join(root_dir, "lib", "string.c"),
         "-o", c_bin
     ]
     wsl_cmd = (
         "gcc -DHOST_TEST -I. -Iinclude -Ilib "
-        "tests/test_host_c.c kernel/boot_stage.c hal/t8006/device_tree.c "
-        "hal/t8006/platform.c hal/t8006/framebuffer.c lib/string.c "
+        "tests/test_host_c.c kernel/boot_stage.c kernel/log.c hal/t8006/device_tree.c "
+        "hal/t8006/mmio_gate.c hal/t8006/platform.c hal/t8006/uart.c hal/t8006/aic.c "
+        "hal/t8006/framebuffer.c lib/string.c "
         "-o build/test_host_c && ./build/test_host_c"
     )
     result = run_command_cross(compile_cmd, f"cd /mnt/c/Users/pc/Desktop/DreyzeOS && {wsl_cmd}")
@@ -1110,9 +1115,9 @@ def test_linker_layout_and_assertions():
     )
 
 
-@test("entry.S — CurrentEL queried before EL1 writes & VBAR_EL1 configured")
+@test("entry.S — EL1 contract, CurrentEL ordering, and VBAR_EL1")
 def test_entry_system_register_audit():
-    """Verify entry.S queries CurrentEL first, branches on unsupported EL, and sets VBAR_EL1."""
+    """Verify EL1-only CurrentEL use, EL2/EL3 rejection, and VBAR_EL1 setup."""
     entry_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
                               "boot", "entry.S")
     with open(entry_path, "r", encoding="utf-8") as f:
@@ -1120,6 +1125,8 @@ def test_entry_system_register_audit():
 
     # CurrentEL must be read
     assert "mrs" in src and "CurrentEL" in src, "CurrentEL not queried in entry.S!"
+    assert "UNDEFINED at EL0" in src, "EL0 CurrentEL constraint is undocumented"
+    assert "permitted at all Exception Levels" not in src, "Incorrect EL0 claim remains"
     assert "_unsupported_el_halt:" in src, "Safe halt for invalid EL not implemented!"
 
     # VBAR_EL1 must be set and followed by isb
@@ -1151,6 +1158,32 @@ def test_entry_system_register_audit():
     halt_block = text[unsupported: text.find("\n\n", unsupported)]
     assert "wfi" not in halt_block.lower(), \
         "Unsupported-EL fallback must not depend on WFI"
+
+
+@test("entry/docs — CurrentEL EL0 and loader ABI claims are truthful")
+def test_entry_contract_documentation():
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root_dir, "boot", "entry.S"), encoding="utf-8") as f:
+        entry = f.read().lower()
+    with open(os.path.join(root_dir, "docs", "HARDWARE_BRINGUP.md"), encoding="utf-8") as f:
+        bringup = f.read()
+    with open(os.path.join(root_dir, "docs", "PRE_HARDWARE_AUDIT.md"), encoding="utf-8") as f:
+        audit = f.read()
+
+    assert "currentel at el0 is undefined" in entry
+    assert "dreyzeos loader abi — unknown/blocked" in bringup.lower()
+    assert "xnu `x0=boot_args` is not a dreyzeos contract" in audit.lower()
+
+
+@test("pre-hardware MMIO — actual C harness keeps UART and AIC untouched")
+def test_pre_hardware_mmio_gate_harness():
+    """The native harness asserts zero UART/AIC MMIO accesses and RAM-log availability."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    output_path = os.path.join(root_dir, "build", "test_host_c")
+    assert os.path.exists(output_path), "C harness was not built"
+    result = run_command_cross([output_path], "./build/test_host_c")
+    assert result.returncode == 0, result.stderr
+    assert "test_pre_hardware_mmio_gate... PASS" in result.stdout
 
 
 @test("CPU state — snapshot symbols and read-only invariant")
@@ -1310,6 +1343,8 @@ def main():
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,
+        test_entry_contract_documentation,
+        test_pre_hardware_mmio_gate_harness,
         test_cpu_state_symbols_and_safety,
         test_virt_base_truthfulness,
         test_framebuffer_hard_interlock_symbols,

@@ -3,7 +3,7 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **watchOS**: 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.1: Pre-Hardware Boot Audit & Safety Hardening  
+**Phase**: 4 — Step 2.3: Pre-Hardware MMIO / Entry Contract Hardening
 **Status**: Pre-hardware (host-side validation complete, real device test BLOCKED)
 
 ---
@@ -50,34 +50,40 @@ DreyzeOS enforces a strictly monotonic boot stage machine:
 
 | Stage | Name | What Happens |
 |:---:|:---|:---|
-| 0 | `BOOT_STAGE_ENTRY` | C entry reached, `CurrentEL` verified, read-only CPU state captured |
-| 1 | `BOOT_STAGE_UART` | UART0 at `0x2E500000` initialized, banner & CPU state logged |
+| 0 | `BOOT_STAGE_ENTRY` | C entry reached under the mandatory EL1 loader contract; read-only CPU state captured |
+| 1 | `BOOT_STAGE_RAM_LOG` | RAM logger initialized; UART MMIO remains disabled unless mapping is verified |
 | 2 | `BOOT_STAGE_BOOT_ARGS` | `boot_args` / DeviceTree validated, real `virt_base` logged |
 | 3 | `BOOT_STAGE_MEM_MAP` | DRAM non-zero check passed, memory map validated |
-| 4 | `BOOT_STAGE_AIC` | AIC initialized, all 1024 interrupts masked |
+| 4 | `BOOT_STAGE_AIC` | AIC evaluated; no MMIO access or CONFIG write without verified mapping |
 | 5 | `BOOT_STAGE_FB` | Framebuffer evaluated (HEADLESS vs VALIDATED_NOMAP, writes **hard-locked**) |
-| 6 | `BOOT_STAGE_IDLE` | Safe WFI halt — no IRQs, no FB writes, no NAND access |
+| 6 | `BOOT_STAGE_IDLE` | Branch-loop halt — no IRQs, no MMIO, no FB writes, no NAND access |
 
 `BOOT_STAGE_ERROR = 0xFF` — set by `boot_stage_failsafe()`.
 - Backward stage transitions trigger immediate failsafe.
 - `g_last_successful_stage` is preserved separately from `g_current_stage = ERROR`.
-- Pre-UART failsafe (before Stage 1) disables IRQs and enters WFI silently to prevent recursive logging faults.
+- Before RAM logging, failsafe enters a branch loop silently. After RAM logging, diagnostics go to RAM; UART readiness is separate from boot stages.
 
 ---
 
-## 3. Boot ABI (Handover from iBoot)
+## 3. XNU ABI vs. DreyzeOS Loader ABI
 
-### Confirmed Facts
+### XNU ABI — Confirmed for the researched kernelcache only
 
 | Item | Value / Status |
 |:---|:---:|
-| Exception Level on entry | **EL1** — CONFIRMED (ARM64 kernel convention, verified in kernelcache disasm) |
+| Exception Level on entry | XNU handoff evidence only; it does **not** prove DreyzeOS loader entry EL |
 | `x0` = pointer to `xnu_arm64_boot_args_t` | **CONFIRMED** (kernelcache entry `0xfffffff007b2c070`) |
-| `x1` = size or unused | **LIKELY** (iBoot convention, not directly confirmed) |
-| DAIF: IRQs disabled on entry | **CONFIRMED** (entry.S + bootloader convention) |
+| `x1` = size or unused | **LIKELY** for XNU; not a DreyzeOS loader contract |
+| DAIF: IRQs disabled on entry | DreyzeOS masks DAIF after its EL1 contract is met |
 | VBAR_EL1 = DreyzeOS exception vectors | **CONFIRMED** (installed in `boot/entry.S`, verified by readback) |
 | Stack initialized before `kernel_main` | **CONFIRMED** (entry.S, outside BSS, 16-byte aligned) |
 | BSS zeroed before `kernel_main` | **CONFIRMED** (entry.S, does not touch stack) |
+
+### DreyzeOS loader ABI — UNKNOWN/BLOCKED
+
+The future loader must explicitly prove EL1 entry, x0/x1 semantics, stack state,
+DAIF, MMU/TTBR/cache state, payload VA/PA, and DeviceTree/boot_args delivery.
+`MRS CurrentEL` is UNDEFINED at EL0, so it cannot be used as a universal EL0 detector.
 
 ### Unconfirmed — Do NOT Assume
 
@@ -214,4 +220,4 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 
 ---
 
-*Last updated: Phase 4 Step 2.1 — All 39 tests PASS. Build: ELF=PASS BIN=PASS. Binary: 49KB.*
+*Last updated: Phase 4 Step 2.3 — MMIO/entry-contract hardening. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*

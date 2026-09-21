@@ -77,6 +77,7 @@ KERNEL_SRCS := \
 	kernel/cpu_state.c
 
 HAL_SRCS := \
+	hal/t8006/mmio_gate.c \
 	hal/t8006/platform.c \
 	hal/t8006/device_tree.c \
 	hal/t8006/uart.c \

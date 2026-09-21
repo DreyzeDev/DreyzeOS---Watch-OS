@@ -3,7 +3,7 @@
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
  * Implements monotonic milestone tracking, separate last-successful-stage
- * recording, pre-UART / post-UART failsafe halting, and test support.
+ * recording, RAM-log-aware failsafe halting, and test support.
  */
 
 #include "../include/boot_stage.h"
@@ -36,10 +36,10 @@ void boot_stage_set(boot_stage_t stage)
     g_last_successful_stage = stage;
 
     /*
-     * Only log stage advance if UART/logging has been reached (STAGE 1+).
-     * At STAGE 0, UART is not yet initialized.
+     * Only log stage advance after the RAM logger is ready. UART readiness is
+     * independent and may remain false throughout pre-hardware bring-up.
      */
-    if (stage >= BOOT_STAGE_UART) {
+    if (log_is_ram_ready()) {
         klog_info("--> [BOOT-STAGE] Reached ");
         klog_info(boot_stage_name(stage));
     }
@@ -69,12 +69,12 @@ const char *boot_stage_name(boot_stage_t stage)
 {
     switch (stage) {
         case BOOT_STAGE_ENTRY:     return "STAGE 0: Entry Reached";
-        case BOOT_STAGE_UART:      return "STAGE 1: UART / Early HAL";
+        case BOOT_STAGE_RAM_LOG:   return "STAGE 1: RAM Log Ready";
         case BOOT_STAGE_BOOT_ARGS: return "STAGE 2: Boot Args & DeviceTree";
         case BOOT_STAGE_MEM_MAP:   return "STAGE 3: Memory Map";
         case BOOT_STAGE_AIC:       return "STAGE 4: AIC Controller";
         case BOOT_STAGE_FB:        return "STAGE 5: Framebuffer Evaluated";
-        case BOOT_STAGE_IDLE:      return "STAGE 6: Safe Idle (WFI)";
+        case BOOT_STAGE_IDLE:      return "STAGE 6: Safe Idle";
         case BOOT_STAGE_ERROR:     return "STAGE ERROR: Failsafe Halted";
         default:                   return "STAGE UNKNOWN";
     }
@@ -92,19 +92,15 @@ void boot_stage_failsafe(const char *reason)
     arch_irq_disable();
 
     /*
-     * 3. Pre-UART vs. Post-UART Failsafe:
-     * If failure occurred before UART was initialized (pre-Stage 1),
-     * we CANNOT call klog_info or log_flush without risking recursive faults.
-     * Simply halt safely with WFI.
+     * 3. Before RAM logging we cannot call klog/log_flush. UART does not
+     * participate in this decision because it may be deliberately disabled.
      */
-    if (g_last_successful_stage < BOOT_STAGE_UART) {
+    if (!log_is_ram_ready()) {
 #ifdef HOST_TEST
         extern void host_test_halt_intercept(void);
         host_test_halt_intercept();
 #else
-        for (;;) {
-            __asm__ volatile("wfi");
-        }
+        for (;;) { __asm__ volatile("b ."); }
 #endif
     }
 
@@ -132,14 +128,12 @@ void boot_stage_failsafe(const char *reason)
 
     log_flush();
 
-    /* 5. Safe infinite halt (intercepted during host testing) */
+    /* 5. Branch-loop halt (intercepted during host testing). */
 #ifdef HOST_TEST
     extern void host_test_halt_intercept(void);
     host_test_halt_intercept();
 #else
-    for (;;) {
-        __asm__ volatile("wfi");
-    }
+    for (;;) { __asm__ volatile("b ."); }
 #endif
 }
 

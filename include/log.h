@@ -9,6 +9,9 @@
 
 void log_init(void);
 void log_flush(void);
+bool log_is_ram_ready(void);
+bool log_is_uart_ready(void);
+void log_try_enable_uart(void);
 
 void klog_info(const char *msg);
 void klog_warn(const char *msg);

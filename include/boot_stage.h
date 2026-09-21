@@ -3,7 +3,7 @@
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
  * Provides structured monotonic tracking of boot milestones, separate
- * last-successful stage preservation, and pre-UART / post-UART failsafe handling.
+ * last-successful stage preservation, and RAM-log-aware failsafe handling.
  */
 
 #pragma once
@@ -16,12 +16,12 @@
  */
 typedef enum {
     BOOT_STAGE_ENTRY     = 0,   /* STAGE 0: entry reached (entry.S -> kernel_main) */
-    BOOT_STAGE_UART      = 1,   /* STAGE 1: early platform init & UART0 initialized */
+    BOOT_STAGE_RAM_LOG   = 1,   /* STAGE 1: RAM logger initialized; UART may be unavailable */
     BOOT_STAGE_BOOT_ARGS = 2,   /* STAGE 2: boot_args / DeviceTree validated */
     BOOT_STAGE_MEM_MAP   = 3,   /* STAGE 3: memory map validated (DRAM & reservations) */
-    BOOT_STAGE_AIC       = 4,   /* STAGE 4: AIC initialized & masked */
+    BOOT_STAGE_AIC       = 4,   /* STAGE 4: AIC evaluated; MMIO may remain untouched */
     BOOT_STAGE_FB        = 5,   /* STAGE 5: framebuffer evaluated */
-    BOOT_STAGE_IDLE      = 6,   /* STAGE 6: system safely idle in low-power WFI loop */
+    BOOT_STAGE_IDLE      = 6,   /* STAGE 6: system halted in a branch loop */
     BOOT_STAGE_ERROR     = 0xFF /* Failsafe triggered: execution halted */
 } boot_stage_t;
 
@@ -48,9 +48,9 @@ const char *boot_stage_name(boot_stage_t stage);
 
 /*
  * Failsafe handler:
- * Pre-UART: Disables IRQs, disables FB writes, records failure state in RAM, halts via WFI.
- *           NEVER calls klog/log_flush to avoid recursive exceptions.
- * Post-UART: Logs full diagnostic crash dump, flushes UART, halts via WFI.
+ * Before RAM logging: records failure state and enters a branch loop.
+ * After RAM logging: writes diagnostics to the RAM log, then enters a branch loop.
+ * UART readiness is separate and is never inferred from a boot stage.
  *
  * This function NEVER returns.
  */

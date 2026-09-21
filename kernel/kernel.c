@@ -18,7 +18,7 @@
  *   - Framebuffer writes HARD-LOCKED by mapping_verified == false.
  *   - MMU state captured read-only without assuming identity mapping.
  *   - virt_base logged ONLY if real (from boot_args), otherwise marked UNKNOWN.
- *   - Pre-UART and post-UART failsafe paths clearly separated.
+ *   - RAM logging is available without UART; MMIO remains gated.
  *   - Stage progression is strictly monotonic.
  */
 
@@ -53,9 +53,9 @@ const build_provenance_t *build_get_provenance(void)
  * kernel_main — primary kernel entry point.
  *
  * Parameters:
- *   dtree_ptr — x0: pointer to xnu_arm64_boot_args_t or raw DeviceTree
- *   arg1      — x1: secondary argument (size or unused)
- *   boot_el   — x2: confirmed entry Exception Level from entry.S
+ *   dtree_ptr — x0: untrusted future-loader argument (may be boot_args/ADT)
+ *   arg1      — x1: untrusted future-loader secondary argument
+ *   boot_el   — x2: CurrentEL value observed under the mandatory EL1 contract
  *
  * This function must never return.
  */
@@ -76,14 +76,13 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     }
 
     /* ================================================================
-     * STAGE 1 — UART0 & Early HAL Initialized
+     * STAGE 1 — RAM Logging Initialized
      * ================================================================
-     * platform_early_init sets up UART0 at 0x2E500000.
-     * After this point, klog output is active and post-UART failsafe is safe.
+     * No UART MMIO occurs here. RAM logging makes failsafe diagnostics safe.
      */
     platform_early_init();
-    boot_stage_set(BOOT_STAGE_UART);
     log_init();
+    boot_stage_set(BOOT_STAGE_RAM_LOG);
 
     /* Banner & Provenance */
     klog_info("========================================");
@@ -103,11 +102,11 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_info("  [OK] Stack initialized outside BSS       (CONFIRMED, DreyzeOS.ld)");
     klog_info("  [OK] BSS zeroed without stack overlap    (CONFIRMED, entry.S)");
     klog_info("  [OK] VBAR_EL1 installed & verified       (CONFIRMED, entry.S + diag)");
-    klog_info("  [OK] DAIF: IRQs disabled on entry        (CONFIRMED, entry.S)");
-    klog_info("  [OK] x0 = boot_args / dtree pointer      (CONFIRMED, kernelcache ABI)");
-    klog_info("  [??] x1 = size or unused                 (LIKELY, not confirmed)");
-    klog_info("  [??] MMU: identity mapping               (LIKELY - NOT CONFIRMED)");
-    klog_info("  [??] Caches: enabled by loader           (LIKELY - check SCTLR above)");
+    klog_info("  [OK] DAIF masked by DreyzeOS after EL1 entry contract");
+    klog_info("  [!!] Loader x0/x1 ABI: UNKNOWN/BLOCKED (XNU ABI is not loader ABI)");
+    klog_info("  [!!] Loader entry EL: UNKNOWN/BLOCKED (DreyzeOS requires EL1)");
+    klog_info("  [??] MMU/cache state: UNKNOWN (snapshot only after valid EL1 entry)");
+    klog_info("  [OK] RAM logger ready; UART MMIO remains disabled");
     klog_info("  [!!] Physical FB dereference: BLOCKED    (MMU mapping unverified)");
     klog_info("  [!!] Framebuffer writes: HARD-LOCKED     (mapping_verified=false)");
 
@@ -177,13 +176,13 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     boot_stage_set(BOOT_STAGE_MEM_MAP);
 
     /* ================================================================
-     * STAGE 4 — AIC Initialized & Masked
+     * STAGE 4 — AIC Evaluated
      * ================================================================
      */
     klog_info("[BOOT] Stage 4: Interrupt controller setup:");
     platform_init();
-    klog_info("  [AIC] Initialized and all 1024 IRQ lines MASKED");
-    klog_info("  [AIC] CPU IRQ delivery globally DISABLED (DAIF=0xF)");
+    klog_info("  [AIC] MMIO mapping unverified: no AIC read/write/configuration");
+    klog_info("  [AIC] CPU IRQ delivery remains masked by DAIF");
     boot_stage_set(BOOT_STAGE_AIC);
 
     /* ================================================================
@@ -223,7 +222,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     boot_stage_set(BOOT_STAGE_FB);
 
     /* ================================================================
-     * STAGE 6 — Safe Idle (WFI Loop)
+     * STAGE 6 — Safe Idle (branch loop)
      * ================================================================
      */
     boot_stage_set(BOOT_STAGE_IDLE);
@@ -233,16 +232,14 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_info("PHASE 4 Step 2.1 COMPLETE: Pre-Hardware Safety Audit Passed.");
     klog_info("All early boot invariants verified.");
     klog_info("NO NAND writes. NO FB writes. NO unmasked interrupts.");
-    klog_info("System entering low-power safe halt (WFI).");
+    klog_info("System entering branch-loop halt; WFI is not assumed safe before loader contract verification.");
     klog_info("========================================");
     klog_info("");
-    klog_info("[HALT] Safe WFI halt active. Crown + Side Button to reset.");
+    klog_info("[HALT] Branch-loop halt active. Crown + Side Button is the expected reset path.");
 
     log_flush();
 
-    for (;;) {
-        __asm__ volatile("wfi");
-    }
+    for (;;) { __asm__ volatile("b ."); }
 
     /* UNREACHABLE */
     panic("kernel_main returned unexpectedly");

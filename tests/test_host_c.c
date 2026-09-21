@@ -18,6 +18,11 @@
 #include "../include/boot_info.h"
 #include "../hal/t8006/device_tree.h"
 #include "../hal/t8006/framebuffer.h"
+#include "../hal/t8006/mmio_gate.h"
+#include "../hal/t8006/uart.h"
+#include "../hal/t8006/aic.h"
+#include "../hal/t8006/platform.h"
+#include "../include/log.h"
 
 /* ============================================================
  * Test Harness Stubs for Host Execution
@@ -26,15 +31,7 @@
 static jmp_buf g_failsafe_jmp;
 static bool g_intercept_failsafe = false;
 
-/* Mock log and HAL dependencies */
-void klog_info(const char *msg) { (void)msg; }
-void klog_warn(const char *msg) { (void)msg; }
-void klog_hex(const char *msg, unsigned long long val) { (void)msg; (void)val; }
-void log_flush(void) {}
 void arch_irq_disable(void) {}
-void uart_diag(void) {}
-void aic_init(void) {}
-void aic_diag(void) {}
 
 static void make_prop(unsigned char *dst, const char *name,
                       const unsigned char *value, unsigned int size)
@@ -66,9 +63,9 @@ static void test_stage_sequential_progression(void)
     assert(boot_stage_get() == BOOT_STAGE_ENTRY);
     assert(boot_stage_get_last_successful() == BOOT_STAGE_ENTRY);
 
-    boot_stage_set(BOOT_STAGE_UART);
-    assert(boot_stage_get() == BOOT_STAGE_UART);
-    assert(boot_stage_get_last_successful() == BOOT_STAGE_UART);
+    boot_stage_set(BOOT_STAGE_RAM_LOG);
+    assert(boot_stage_get() == BOOT_STAGE_RAM_LOG);
+    assert(boot_stage_get_last_successful() == BOOT_STAGE_RAM_LOG);
 
     boot_stage_set(BOOT_STAGE_BOOT_ARGS);
     assert(boot_stage_get() == BOOT_STAGE_BOOT_ARGS);
@@ -111,7 +108,7 @@ static void test_stage_invalid_backward_transition(void)
     boot_stage_reset_for_test();
 
     boot_stage_set(BOOT_STAGE_ENTRY);
-    boot_stage_set(BOOT_STAGE_UART);
+    boot_stage_set(BOOT_STAGE_RAM_LOG);
     boot_stage_set(BOOT_STAGE_BOOT_ARGS);
     boot_stage_set(BOOT_STAGE_MEM_MAP);
     assert(boot_stage_get() == BOOT_STAGE_MEM_MAP);
@@ -119,7 +116,7 @@ static void test_stage_invalid_backward_transition(void)
     /* Attempt invalid backwards transition (STAGE 3 -> STAGE 1) */
     g_intercept_failsafe = true;
     if (setjmp(g_failsafe_jmp) == 0) {
-        boot_stage_set(BOOT_STAGE_UART);
+        boot_stage_set(BOOT_STAGE_RAM_LOG);
         assert(false && "Backward transition should have triggered failsafe!");
     }
     g_intercept_failsafe = false;
@@ -140,7 +137,7 @@ static void test_stage_failsafe_preserves_last_successful(void)
     boot_stage_reset_for_test();
 
     boot_stage_set(BOOT_STAGE_ENTRY);
-    boot_stage_set(BOOT_STAGE_UART);
+    boot_stage_set(BOOT_STAGE_RAM_LOG);
     boot_stage_set(BOOT_STAGE_BOOT_ARGS);
 
     /* Trigger failsafe at STAGE 2 */
@@ -266,6 +263,39 @@ static void test_devtree_bounds_and_boot_args(void)
     printf("PASS\n");
 }
 
+static void test_pre_hardware_mmio_gate(void)
+{
+    printf("[C-TEST] Running: test_pre_hardware_mmio_gate... ");
+
+    mmio_mapping_set_verified_for_test(false);
+    uart_reset_mmio_access_count_for_test();
+    aic_reset_mmio_access_count_for_test();
+
+    log_init();
+    assert(log_is_ram_ready() == true);
+    assert(log_is_uart_ready() == false);
+    klog_info("RAM logging works without UART MMIO");
+
+    /* Exercise the actual pre-hardware platform and driver paths. */
+    platform_init();
+    uart_init();
+    uart_putc('x');
+    uart_diag();
+    aic_init();
+    aic_diag();
+    aic_enable_irq(1);
+    aic_mask_all();
+
+    assert(uart_mmio_access_count_for_test() == 0);
+    assert(aic_mmio_access_count_for_test() == 0);
+    assert(aic_is_initialized() == false);
+    assert(log_is_uart_ready() == false);
+
+    uint32_t bytes = 0;
+    assert(klog_get_buffer(&bytes, NULL) != NULL && bytes > 0);
+    printf("PASS\n");
+}
+
 int main(void)
 {
     printf("\n==================================================\n");
@@ -277,9 +307,10 @@ int main(void)
     test_stage_failsafe_preserves_last_successful();
     test_framebuffer_mapping_interlock();
     test_devtree_bounds_and_boot_args();
+    test_pre_hardware_mmio_gate();
 
     printf("==================================================\n");
-    printf("All C-Level Host Tests PASSED (5/5) ✓\n");
+    printf("All C-Level Host Tests PASSED (6/6) ✓\n");
     printf("==================================================\n\n");
 
     return 0;

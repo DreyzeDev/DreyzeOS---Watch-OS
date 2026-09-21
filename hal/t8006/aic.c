@@ -7,6 +7,7 @@
  */
 
 #include "aic.h"
+#include "mmio_gate.h"
 #include "../../include/log.h"
 
 /* Structure to store registered handler info */
@@ -18,6 +19,7 @@ typedef struct {
 /* Static table of registered handlers */
 static irq_slot_t g_irq_table[AIC_MAX_IRQS];
 static bool g_aic_initialized = false;
+static uint32_t g_aic_mmio_access_count = 0;
 
 /* ============================================================
  * Low-Level MMIO Access Helpers
@@ -25,17 +27,23 @@ static bool g_aic_initialized = false;
 
 static inline uint32_t aic_read32(uint32_t offset)
 {
+    g_aic_mmio_access_count++;
     volatile uint32_t *reg = (volatile uint32_t *)(uintptr_t)(T8006_AIC_BASE + offset);
     uint32_t val = *reg;
+#ifdef __aarch64__
     __asm__ volatile ("dsb sy" ::: "memory");
+#endif
     return val;
 }
 
 static inline void aic_write32(uint32_t offset, uint32_t val)
 {
+    g_aic_mmio_access_count++;
     volatile uint32_t *reg = (volatile uint32_t *)(uintptr_t)(T8006_AIC_BASE + offset);
     *reg = val;
+#ifdef __aarch64__
     __asm__ volatile ("dsb sy" ::: "memory");
+#endif
 }
 
 /* ============================================================
@@ -44,11 +52,13 @@ static inline void aic_write32(uint32_t offset, uint32_t val)
 
 uint32_t aic_get_cpu_id(void)
 {
+    if (!mmio_mapping_is_verified()) return 0;
     return aic_read32(AIC_REG_WHOAMI);
 }
 
 void aic_mask_all(void)
 {
+    if (!mmio_mapping_is_verified()) return;
     /* Mask (disable) all 1024 IRQ lines across all 32 banks */
     for (uint32_t bank = 0; bank < AIC_NUM_BANKS; bank++) {
         aic_write32(AIC_REG_MASK_SET_BASE + (bank * 4), 0xFFFFFFFFU);
@@ -57,6 +67,7 @@ void aic_mask_all(void)
 
 void aic_enable_irq(uint32_t irq)
 {
+    if (!mmio_mapping_is_verified()) return;
     if (irq >= AIC_MAX_IRQS) {
         klog_warn("  [AIC] Attempted to enable out-of-range IRQ");
         return;
@@ -67,6 +78,7 @@ void aic_enable_irq(uint32_t irq)
 
 void aic_disable_irq(uint32_t irq)
 {
+    if (!mmio_mapping_is_verified()) return;
     if (irq >= AIC_MAX_IRQS) {
         klog_warn("  [AIC] Attempted to disable out-of-range IRQ");
         return;
@@ -77,11 +89,13 @@ void aic_disable_irq(uint32_t irq)
 
 uint32_t aic_ack(void)
 {
+    if (!mmio_mapping_is_verified()) return AIC_EVENT_NO_PENDING;
     return aic_read32(AIC_REG_EVENT);
 }
 
 void aic_eoi(uint32_t irq)
 {
+    if (!mmio_mapping_is_verified()) return;
     if (irq >= AIC_MAX_IRQS) {
         return;
     }
@@ -115,6 +129,11 @@ int aic_unregister_handler(uint32_t irq)
 
 void aic_init(void)
 {
+    if (!mmio_mapping_is_verified()) {
+        g_aic_initialized = false;
+        klog_info("  [AIC] MMIO mapping unverified: controller left untouched");
+        return;
+    }
     klog_info("  [AIC] Initializing Apple Interrupt Controller (AIC2)...");
 
     /* Clear handler table */
@@ -135,6 +154,10 @@ void aic_init(void)
 
 void aic_diag(void)
 {
+    if (!mmio_mapping_is_verified()) {
+        klog_info("  [AIC] MMIO mapping unverified: diagnostics skipped");
+        return;
+    }
     klog_info("  [AIC] Hardware Diagnostics:");
     klog_hex("  [AIC] Base Address     ", T8006_AIC_BASE);
     klog_hex("  [AIC] Size             ", T8006_AIC_SIZE);
@@ -148,6 +171,21 @@ void aic_diag(void)
     klog_hex("  [AIC] Info     (0x0004)", info);
     klog_hex("  [AIC] WHOAMI   (0x2000)", cpu);
     klog_info("  [AIC] Status: Ready");
+}
+
+bool aic_is_initialized(void)
+{
+    return g_aic_initialized;
+}
+
+uint32_t aic_mmio_access_count_for_test(void)
+{
+    return g_aic_mmio_access_count;
+}
+
+void aic_reset_mmio_access_count_for_test(void)
+{
+    g_aic_mmio_access_count = 0;
 }
 
 /*

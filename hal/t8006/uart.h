@@ -46,3 +46,5 @@ void uart_diag(void);
  * Check if UART0 driver is initialized.
  */
 bool uart_is_ready(void);
+uint32_t uart_mmio_access_count_for_test(void);
+void uart_reset_mmio_access_count_for_test(void);

@@ -24,7 +24,7 @@ static uint32_t panic_magic_check = 0;
  * panic — unrecoverable kernel error.
  *
  * Writes the panic message to the log buffer (readable via debugger/dump),
- * then halts the CPU safely with WFI.
+ * then enters the branch-loop panic halt.
  *
  * This function must never return.
  */
@@ -62,10 +62,8 @@ void panic(const char *msg)
     /* Attempt to flush any pending log output */
     log_flush();
 
-    /* Safe infinite halt — WFI reduces power, device can be reset */
-    for (;;) {
-        __asm__ volatile ("wfi" ::: "memory");
-    }
+    extern __noreturn void _panic_halt(void);
+    _panic_halt();
 }
 
 /*

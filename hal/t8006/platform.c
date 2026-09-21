@@ -8,6 +8,7 @@
 
 #include "platform.h"
 #include "memory_map.h"
+#include "mmio_gate.h"
 #include "../../include/log.h"
 
 /* Platform info — populated from DeviceTree in Phase 3 */
@@ -43,19 +44,20 @@ void platform_early_init(void)
 #include "aic.h"
 
 /*
- * platform_init — called after log_init().
- * Initializes known hardware, stubs unknown.
+ * platform_init — called after RAM logging is available.
+ * MMIO subsystems remain untouched until their virtual mapping is proven.
  */
 void platform_init(void)
 {
     klog_info("  [HAL] T8006 platform_init begin");
     klog_info("  [HAL] Chip: T8006 (Apple S4 SiP / dual-core Tempest)");
-    klog_info("  [HAL] UART0 Base: 0x2e500000 [CONFIRMED]");
+    if (!mmio_mapping_is_verified()) {
+        klog_info("  [HAL] MMIO mapping: UNVERIFIED; UART/AIC left untouched");
+        return;
+    }
 
-    /* Output UART hardware diagnostics */
+    klog_info("  [HAL] MMIO mapping verified by loader contract");
     uart_diag();
-
-    /* Initialize and diagnose Apple Interrupt Controller */
     aic_init();
     aic_diag();
 

@@ -3,10 +3,10 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.1: Pre-Hardware Boot Audit & Safety Hardening  
+**Phase**: 4 — Step 2.3: Pre-Hardware MMIO / Entry Contract Hardening
 **Canonical Branch**: `master`  
-**Current Baseline Commit**: `4138087`  
-**Host Test Status**: 39/39 PASS (Python + Native C Harness)  
+**Current Baseline Commit**: `c66b766f040cda1c0a516d4d3049120b4bd5b922`
+**Host Test Status**: 41/41 PASS (Python + Native C Harness)
 **Build Status**: ELF=PASS, BIN=PASS, 0 Compiler Warnings  
 **Hardware Execution Gate**: **NOT READY (BLOCKED)**
 
@@ -50,8 +50,8 @@
 | **AIC Version** | AIC2 (1024 IRQ lines, 32 banks) | Kernelcache disasm + DeviceTree `aic-version` = 2 |
 | **boot_args ABI Layout** | `virt_base` (+0x08), `phys_base` (+0x10), `video` (+0x28), `devicetree_p` (+0x60) | XNU kernelcache entry point `0xfffffff007b2c070` |
 | **Pixel Color Format** | `"BBBBBBBBGGGGGGGGRRRRRRRR"` (BGRA32) | Kernelcache read-only string at `0xfffffff00823ea2c` |
-| **Exception Level** | EL1 on kernel handoff | ARM64 boot convention, XNU kernel vector table |
-| **Interrupt Masking on Entry** | DAIF = `0xF` (D, A, I, F masked) | ARM64 kernel entry convention + `boot/entry.S` |
+| **XNU boot ABI** | XNU kernelcache consumes its own EL/x0 ABI | Kernelcache evidence; not a DreyzeOS loader ABI |
+| **DreyzeOS source contract** | DreyzeOS requires privileged EL1 entry | `boot/entry.S`; future loader state remains BLOCKED |
 | **Vector Table Alignment** | Must be 2048-byte aligned | ARMv8-A Architectural Reference Manual |
 | **Stack Alignment** | Must be 16-byte aligned | AAPCS64 (ARM 64-bit Procedure Call Standard) |
 
@@ -118,18 +118,17 @@ The following items prevent safe hardware execution today:
 DreyzeOS implements the following strict startup sequence:
 
 ```
-[iBoot / Loader Handover]
-  x0: Pointer to xnu_arm64_boot_args_t or Apple DeviceTree
-  x1: Secondary size parameter
-  CurrentEL: Expected EL1 (kernel mode)
-  DAIF: Interrupts masked
+[DreyzeOS Loader Handover — BLOCKED/UNKNOWN]
+  EL1 entry: mandatory contract, not detected from EL0
+  x0/x1, SP, DAIF, MMU, TTBR, caches: loader must prove these
        │
        ▼
 [boot/entry.S: _start]
   1. Save x0 -> x20, x1 -> x21
-  2. Read CurrentEL immediately
-     ├── If CurrentEL != 1 (e.g. EL0) ──► _unsupported_el_halt (branch loop, no EL1 writes)
-     └── If CurrentEL == 1 (EL1) ────────► Proceed safely
+  2. Read CurrentEL under the prior EL1 contract
+     ├── EL2/EL3 ──► _unsupported_el_halt (branch loop)
+     └── EL1 ──────► Proceed safely
+     EL0: MRS CurrentEL is UNDEFINED; this path is not an EL0 detector
   3. Mask interrupts (msr daifset, #0xf)
   4. Setup stack: sp = __stack_top (16-byte aligned)
   5. Clear BSS (__bss_start to __bss_end, does not touch stack)
@@ -256,7 +255,8 @@ Execution on real hardware may only proceed once **ALL** of the following condit
 | **boot_args / DeviceTree availability** | **UNKNOWN** | Supported parser paths exist, but future loader register/pointer delivery is unproven |
 | **MMU/cache state at handoff** | **BLOCKED** | Snapshot is read-only; no loader mapping evidence |
 | **Relocation requirements verified** | **BLOCKED** | Non-PIC binary with 0 relocations |
-| **CurrentEL validation before EL1 writes** | **CONFIRMED** | `entry.S` queries `CurrentEL` before MSR |
+| **EL1 loader entry contract** | **BLOCKED** | Source requires EL1; CurrentEL cannot safely detect EL0 |
+| **MMIO mapping gate** | **CONFIRMED** | Defaults false; UART/AIC are untouched without verified mapping |
 | **Stack isolated from BSS clear** | **CONFIRMED** | `.stack` placed strictly after `__bss_end` |
 | **Exception vector table installed** | **CONFIRMED** | 2048-byte aligned, `msr vbar_el1` + `isb` |
 | **CPU state captured read-only** | **CONFIRMED** | `boot_cpu_state_capture()` does not modify SCTLR/TCR |

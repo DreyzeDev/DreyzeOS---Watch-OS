@@ -3,9 +3,9 @@
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
  * Safety Invariants:
- *   - CurrentEL is queried IMMEDIATELY before any EL1-specific system register writes!
- *   - If entry EL is unsupported (e.g. EL0), CPU branches to a minimal safe halt
- *     without modifying system registers or touching the stack.
+ *   - Entry at EL1 is a mandatory loader contract. CurrentEL is read only
+ *     after that precondition; it cannot safely detect EL0 because MRS
+ *     CurrentEL at EL0 is UNDEFINED.
  *   - Interrupts are disabled via DAIF.
  *   - Stack is set up pointing to __stack_top (16-byte aligned).
  *   - BSS is cleared (__bss_start to __bss_end, with .stack placed outside).
@@ -25,9 +25,8 @@
 /*
  * _start — very first instruction executed by the CPU.
  *
- * Parameters passed by bootloader (iBoot / Pongo / shim):
- *   x0: Pointer to struct xnu_arm64_boot_args or Apple DeviceTree (ADT)
- *   x1: Secondary argument (size or unused)
+ * Loader ABI: BLOCKED/UNKNOWN. x0/x1 are preserved for diagnostics only;
+ * XNU's ABI does not establish a future loader -> DreyzeOS ABI.
  */
 _start:
     /*
@@ -38,9 +37,10 @@ _start:
     mov     x21, x1             /* x21 = arg1 (size or unused) */
 
     /*
-     * Step 2: Query CurrentEL immediately BEFORE any EL1-specific operations.
+     * Step 2: Validate the privileged-EL loader contract.
      * CurrentEL bits [3:2] contain the Exception Level (0, 1, 2, or 3).
-     * Reading CurrentEL is architecturally permitted at all Exception Levels.
+     * MRS CurrentEL is UNDEFINED at EL0, so this is NOT an EL0 detector.
+     * The loader must enter DreyzeOS at EL1 before reaching _start.
      */
     mrs     x22, CurrentEL
     lsr     x22, x22, #2
@@ -49,9 +49,8 @@ _start:
     /*
      * Step 3: Validate Exception Level.
      * DreyzeOS expects to be entered at EL1 (kernel mode).
-     * If the loader drops in at an unsupported EL (e.g. EL0 user mode),
-     * we CANNOT access EL1 registers (MSR to CPACR_EL1/VBAR_EL1 would trap).
-     * In that case, branch immediately to a minimal safe halt loop!
+     * EL2/EL3 are rejected by the branch below. EL0 cannot reach this point
+     * safely and remains a loader-contract violation.
      */
     cmp     x22, #1
     b.ne    _unsupported_el_halt
@@ -115,7 +114,7 @@ _start:
     b       _halt
 
 /*
- * _unsupported_el_halt — safe minimal halt for invalid entry EL (e.g. EL0).
+ * _unsupported_el_halt — minimal halt for an unsupported privileged EL.
  * Does not execute any privileged system register instructions.
  * Does not touch memory or stack. A plain branch loop is used instead of
  * WFI because WFI may be trapped by an unknown higher-EL environment.
@@ -137,18 +136,16 @@ _early_cpu_setup:
     ret
 
 /*
- * _halt — safe infinite halt loop.
- * Low-power WFI state. Recovers only on hardware reset or interrupt.
+ * _halt — branch-loop halt. WFI is not used before the loader execution
+ * environment and higher-EL trapping configuration are verified.
  */
 _halt:
-    wfi
     b       _halt
 
 /*
- * _panic_halt — identical to _halt, symbolically distinguished for crash analysis.
+ * _panic_halt — branch-loop halt, symbolically distinguished for crash analysis.
  */
 _panic_halt:
-    wfi
     b       _panic_halt
 
 /* ============================================================

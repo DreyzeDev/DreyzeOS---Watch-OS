@@ -13,6 +13,8 @@
 #include "../include/types.h"
 #include "../include/log.h"
 #include "../lib/string.h"
+#include "../hal/t8006/uart.h"
+#include "../hal/t8006/mmio_gate.h"
 
 /* ============================================================
  * RAM ring buffer log
@@ -42,9 +44,7 @@ typedef struct {
 /* Place log buffer in BSS (zero-initialized) with a clear name for dumps */
 static klog_buffer_t klog_buffer __attribute__((section(".klog_buffer")));
 
-/* UART ready check and output */
-extern bool uart_is_ready(void);
-extern void uart_putc(char c);
+static bool g_ram_log_ready = false;
 
 /* ============================================================
  * Internal helpers
@@ -118,12 +118,24 @@ void log_init(void)
 
     /* Mark start of log */
     klog_write_str("[DLOG] DreyzeOS kernel log initialized\r\n");
+    g_ram_log_ready = true;
+}
 
-    /*
-     * Initialize UART0 console (Base: 0x2e500000 CONFIRMED).
-     */
-    extern void uart_init(void);
-    uart_init();
+bool log_is_ram_ready(void)
+{
+    return g_ram_log_ready;
+}
+
+bool log_is_uart_ready(void)
+{
+    return uart_is_ready();
+}
+
+void log_try_enable_uart(void)
+{
+    if (mmio_mapping_is_verified()) {
+        uart_init();
+    }
 }
 
 void log_flush(void)
@@ -132,7 +144,11 @@ void log_flush(void)
      * With UART: would flush TX FIFO.
      * Stub for now.
      */
+#ifdef __aarch64__
     __asm__ volatile ("dsb sy" ::: "memory");
+#else
+    __asm__ volatile ("" ::: "memory");
+#endif
 }
 
 void klog_info(const char *msg)
