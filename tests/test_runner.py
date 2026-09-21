@@ -1039,7 +1039,7 @@ def test_boot_stage_error_separate_from_last_successful():
         f"BOOT_STAGE_ERROR must fit in uint8_t, got {BOOT_STAGE_ERROR}"
 
 # ============================================================
-# Tests: Phase 4 Step 2.4 — Handoff Pointer Safety & Trust Boundary
+# Tests: Phase 4 Step 2.5 — Verified Handoff Descriptor & Loader Contract
 # ============================================================
 
 @test("C-level host test harness execution")
@@ -1219,7 +1219,7 @@ def test_virt_base_truthfulness():
         "dram_phys_base": 0x800000000,
         "dram_virt_base": 0,
         "virt_base_valid": False,
-        "is_fallback_data": False
+        "metadata_status": "RUNTIME_VERIFIED"
     }
     assert raw_adt_info["virt_base_valid"] is False
     assert raw_adt_info["dram_virt_base"] == 0
@@ -1232,7 +1232,7 @@ def test_virt_base_truthfulness():
         "dram_phys_base": 0x800000000,
         "dram_virt_base": 0xFFFFFFF000000000,
         "virt_base_valid": True,
-        "is_fallback_data": False
+        "metadata_status": "RUNTIME_VERIFIED"
     }
     assert boot_args_info["virt_base_valid"] is True
     assert boot_args_info["dram_virt_base"] == 0xFFFFFFF000000000
@@ -1340,7 +1340,7 @@ def main():
         test_boot_stage_progression,
         test_boot_stage_failsafe_preserves_last_successful,
         test_boot_stage_error_separate_from_last_successful,
-        # Phase 4 Step 2.4 — Handoff Pointer Safety & Trust Boundary
+        # Phase 4 Step 2.5 — Verified Handoff Descriptor & Loader Contract
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,

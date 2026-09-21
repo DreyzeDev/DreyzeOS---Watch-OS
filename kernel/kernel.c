@@ -2,7 +2,7 @@
  * DreyzeOS — Kernel Main
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
- * PHASE 4 — Step 2.4: Handoff Pointer Safety & Boot-Argument Trust Boundary
+ * PHASE 4 — Step 2.5: Verified Handoff Descriptor & Loader Contract Research
  *
  * This is the C entry point for the DreyzeOS kernel.
  * Called from boot/entry.S after:
@@ -28,6 +28,7 @@
 #include "../include/boot_info.h"
 #include "../include/boot_stage.h"
 #include "../include/cpu_state.h"
+#include "../include/loader_handoff.h"
 #include "../include/build_info.h"
 #include "../hal/t8006/platform.h"
 #include "../hal/t8006/framebuffer.h"
@@ -89,7 +90,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_info(DREYZEOS_VERSION_STRING);
     klog_info("Target:   " DREYZEOS_TARGET);
     klog_info("Arch:     " DREYZEOS_ARCH);
-    klog_info("Phase:    PHASE 4 - Step 2.4: Handoff Pointer Safety");
+    klog_info("Phase:    PHASE 4 - Step 2.5: Verified Handoff Descriptor");
     klog_info("Branch:   " DREYZEOS_CANONICAL_BRANCH);
     klog_info("Git SHA:  " GIT_COMMIT_SHA);
     klog_info("========================================");
@@ -148,9 +149,10 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     }
 
     klog_info("[BOOT] Discovered Platform Parameters:");
-    klog_hex("  Raw x0             ", binfo->raw_arg0);
-    klog_hex("  Raw x1             ", binfo->raw_arg1);
-    if (!binfo->loader_handoff_verified) {
+    const loader_handoff_descriptor_t *handoff = loader_handoff_get();
+    klog_hex("  Raw x0             ", handoff->raw_x0);
+    klog_hex("  Raw x1             ", handoff->raw_x1);
+    if (!loader_handoff_is_verified()) {
         klog_info("  Handoff status     : HANDOFF_UNAVAILABLE");
         klog_info("  Metadata status    : BOOT_METADATA_FALLBACK (no pointer dereference)");
     } else {
@@ -180,10 +182,12 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     }
 
     klog_info("[BOOT] Stage 3: Memory map validation:");
-    if (binfo->is_fallback_data) {
-        klog_warn("  [MEM] DRAM parameters are STATIC FALLBACK (research build) - NOT verified hardware!");
+    if (binfo->metadata_status == BOOT_METADATA_RUNTIME_VERIFIED) {
+        klog_info("  [MEM] DRAM parameters are RUNTIME VERIFIED by handoff descriptor");
+    } else if (binfo->metadata_status == BOOT_METADATA_STATIC_FALLBACK) {
+        klog_warn("  [MEM] DRAM parameters are STATIC FALLBACK (research build) - NOT a validated runtime map!");
     } else {
-        klog_info("  [MEM] DRAM parameters are RUNTIME DISCOVERED from bootloader");
+        klog_warn("  [MEM] DRAM parameters are UNAVAILABLE");
     }
     klog_info("  [MEM] Physical memory dereference BLOCKED until MMU verified");
     boot_stage_set(BOOT_STAGE_MEM_MAP);
@@ -242,7 +246,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
 
     klog_info("");
     klog_info("========================================");
-    klog_info("PHASE 4 Step 2.4 COMPLETE: Handoff Pointer Safety Audit Passed.");
+    klog_info("PHASE 4 Step 2.5 COMPLETE: Handoff Descriptor Audit Passed.");
     klog_info("All early boot invariants verified.");
     klog_info("NO NAND writes. NO FB writes. NO unmasked interrupts.");
     klog_info("System entering branch-loop halt; WFI is not assumed safe before loader contract verification.");

@@ -3,7 +3,7 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **watchOS**: 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.4: Handoff Pointer Safety & Boot-Argument Trust Boundary
+**Phase**: 4 — Step 2.5: Verified Handoff Descriptor & Loader Contract Research
 **Status**: Pre-hardware (host-side validation complete, real device test BLOCKED)
 
 ---
@@ -21,7 +21,7 @@
 - Addresses marked **LIKELY** are architecturally reasonable but unverified on real hardware.
 - Addresses marked **UNKNOWN** must not be used in code until confirmed.
 - Addresses marked **BLOCKED** represent hardware-critical missing parameters that prevent safe execution.
-- The MMU state at kernel entry is **LIKELY identity mapping** — physical framebuffer address **cannot** be blindly dereferenced as a virtual address until confirmed.
+- The MMU state at kernel entry is **UNKNOWN/BLOCKED** — physical framebuffer address **cannot** be blindly dereferenced as a virtual address until confirmed.
 
 ---
 
@@ -53,7 +53,7 @@ DreyzeOS enforces a strictly monotonic boot stage machine:
 | 0 | `BOOT_STAGE_ENTRY` | C entry reached under the mandatory EL1 loader contract; read-only CPU state captured |
 | 1 | `BOOT_STAGE_RAM_LOG` | RAM logger initialized; UART MMIO remains disabled unless mapping is verified |
 | 2 | `BOOT_STAGE_BOOT_ARGS` | Boot metadata status recorded; unverified handoff uses `BOOT_METADATA_FALLBACK` |
-| 3 | `BOOT_STAGE_MEM_MAP` | DRAM non-zero check passed, memory map validated |
+| 3 | `BOOT_STAGE_MEM_MAP` | Memory metadata status evaluated; static fallback is never called a validated runtime map |
 | 4 | `BOOT_STAGE_AIC` | AIC evaluated; no MMIO access or CONFIG write without verified mapping |
 | 5 | `BOOT_STAGE_FB` | Framebuffer evaluated (HEADLESS vs VALIDATED_NOMAP, writes **hard-locked**) |
 | 6 | `BOOT_STAGE_IDLE` | Branch-loop halt — no IRQs, no MMIO, no FB writes, no NAND access |
@@ -89,17 +89,49 @@ DAIF, MMU/TTBR/cache state, payload VA/PA, and DeviceTree/boot_args delivery.
 
 The production `platform_boot_info_init(x0, x1)` path preserves raw x0/x1 for
 RAM diagnostics and selects static fallback metadata. It does not dereference
-either value, auto-detect an ABI, or guess an ADT size. `loader_handoff_verified`
-therefore remains false until a future loader verifier proves both pointer
-ownership and bounded lengths. A `boot_args->devicetree_p` value is a separate
-trust boundary and requires its own independently verified pointer and length.
+either value, auto-detect an ABI, or guess an ADT size. A single loader handoff
+descriptor is the authoritative trust state; its verified ranges must prove
+pointer ownership and bounded lengths. A `boot_args->devicetree_p` value is a
+separate trust boundary and requires its own independently verified range.
+
+### DreyzeOS Loader ABI — DESIGN / NOT YET HARDWARE VERIFIED
+
+This is a host-testable ABI design, not a hardware contract:
+
+| Descriptor fact | Representation | Status |
+|:---|:---|:---:|
+| Descriptor identity | magic, version, size, verified flag | **DESIGN** |
+| Raw legacy inputs | `raw_x0`, `raw_x1` retained as diagnostics | **DESIGN** |
+| Payload placement | physical address, execution VA, size, explicit known bit | **DESIGN** |
+| Entry state | entry EL with explicit known bit | **DESIGN** |
+| MMU state | `mmu_enabled` plus `mmu_state_known` | **DESIGN** |
+| boot_args buffer | concrete readable `[base, base + length)` range | **DESIGN** |
+| DeviceTree buffer | independent concrete readable range | **DESIGN** |
+| MMIO mappings | separate MMIO/UART/AIC mapping facts | **DESIGN** |
+| T8006 loader implementation | no loader/shim selected or executed | **UNKNOWN/BLOCKED** |
+
+`verified_range_contains_object()` rejects zero-length objects, unreadable
+ranges, overflow, outside pointers, and partial overlap. Exact-end containment
+is accepted only when the complete non-empty object fits. A non-zero address is
+never treated as proof of safety.
+
+The intended architecture is `x0 -> loader_handoff_descriptor_t`; a future
+loader translates any XNU/iBoot-specific inputs into this DreyzeOS-owned
+descriptor. The current kernel does not consume such a hardware descriptor and
+does not implement a loader.
+
+Cross-project references are architectural context only, not T8006 evidence:
+[m1n1 payload documentation](https://github.com/AsahiLinux/m1n1) describes
+explicit payload chaining, while [PongoOS](https://github.com/checkra1n/PongoOS)
+documents a pre-boot AArch64 environment. Neither proves DreyzeOS load PA/VA,
+entry state, or MMU mappings on Watch4,2.
 
 ### Unconfirmed — Do NOT Assume
 
 | Item | Status | Risk if Wrong |
 |:---|:---:|:---|
-| MMU: identity mapping (phys == virt) | **LIKELY** | Physical framebuffer dereference crashes/corrupts |
-| Caches: enabled on entry | **LIKELY** | Cache coherency issues if assumption wrong |
+| MMU: identity mapping (phys == virt) | **UNKNOWN/BLOCKED** | Physical framebuffer dereference crashes/corrupts |
+| Caches: enabled on entry | **UNKNOWN** | Cache coherency issues if assumption wrong |
 | Framebuffer physical dereference as virtual | **BLOCKED** | Hardware hang / invalid memory access |
 
 ### `boot_args` Structure (CONFIRMED, from kernelcache disassembly)
@@ -213,7 +245,8 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 | Entry EL handled | **CONFIRMED** | `CurrentEL` checked, EL1 required |
 | Stack valid & isolated | **CONFIRMED** | 16-byte aligned, placed outside BSS |
 | VBAR_EL1 installed | **CONFIRMED** | 2048-byte aligned, set in entry.S |
-| MMU state safely handled | **CONFIRMED** | Read-only capture, physical deref blocked |
+| Dangerous physical dereferences | **CONFIRMED** | Read-only inherited-register capture; framebuffer/MMIO writes and unsafe physical dereferences are gated |
+| Actual MMU/TTBR mappings | **UNKNOWN/BLOCKED** | SCTLR/TCR/TTBR/MAIR values alone do not prove a usable mapping |
 | Loader -> DreyzeOS handoff ABI | **BLOCKED** | No loader/shim selected; XNU `x0=boot_args` is not sufficient evidence |
 | boot_args / DeviceTree availability | **UNKNOWN** | Parser supports both forms, but future loader delivery is unproven |
 | DeviceTree bounds-checked | **CONFIRMED** | Recursion limit 32, fuzz tested |
@@ -229,4 +262,4 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 
 ---
 
-*Last updated: Phase 4 Step 2.4 — handoff pointer safety. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*
+*Last updated: Phase 4 Step 2.5 — verified handoff descriptor design. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*

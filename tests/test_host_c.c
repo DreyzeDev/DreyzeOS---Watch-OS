@@ -250,44 +250,83 @@ static void test_devtree_bounds_and_boot_args(void)
     assert(devtree_find_node_by_path((uintptr_t)tree, sizeof(tree), "/missing") == 0);
 
     /* Unverified x0/x1 are preserved but never dereferenced or parsed. */
-    loader_handoff_set_verified_for_test(false);
     platform_boot_info_init(0xDEAD000000001234ULL, UINT64_MAX);
     const platform_boot_info_t *info = platform_get_boot_info();
-    assert(info->raw_arg0 == 0xDEAD000000001234ULL);
-    assert(info->raw_arg1 == UINT64_MAX);
-    assert(info->loader_handoff_verified == false);
     assert(loader_handoff_is_verified() == false);
     assert(info->boot_args_present == false);
     assert(info->devtree_present == false);
-    assert(info->is_fallback_data == true);
+    assert(info->metadata_status == BOOT_METADATA_STATIC_FALLBACK);
 
-    /* A valid boot_args buffer is accepted only through the verified test ABI. */
+    /* A direct ADT pointer with unavailable length is never scanned/guessed. */
+    unsigned char raw_tree[96];
+    memset(raw_tree, 0, sizeof(raw_tree));
+    *(unsigned int *)(void *)(raw_tree + 0) = 1;
+    {
+        const unsigned char name[] = "root";
+        make_prop(raw_tree + 8, "name", name, sizeof(name));
+    }
+    platform_boot_info_init((uint64_t)(uintptr_t)raw_tree, 0);
+    info = platform_get_boot_info();
+    assert(loader_handoff_is_verified() == false);
+    assert(info->devtree_present == false);
+    assert(info->metadata_status == BOOT_METADATA_STATIC_FALLBACK);
+
+    printf("PASS\n");
+}
+
+static void make_verified_descriptor(loader_handoff_descriptor_t *descriptor,
+                                     uintptr_t raw_x0,
+                                     uint64_t raw_x1,
+                                     uintptr_t boot_args_base,
+                                     size_t boot_args_length,
+                                     uintptr_t dt_base,
+                                     size_t dt_length)
+{
+    memset(descriptor, 0, sizeof(*descriptor));
+    descriptor->magic = DREYZE_HANDOFF_MAGIC;
+    descriptor->version = DREYZE_HANDOFF_VERSION;
+    descriptor->size = sizeof(*descriptor);
+    descriptor->flags = DREYZE_HANDOFF_FLAG_VERIFIED;
+    descriptor->raw_x0 = raw_x0;
+    descriptor->raw_x1 = raw_x1;
+    descriptor->boot_args_range.base = boot_args_base;
+    descriptor->boot_args_range.length = boot_args_length;
+    descriptor->boot_args_range.readable = true;
+    descriptor->device_tree_range.base = dt_base;
+    descriptor->device_tree_range.length = dt_length;
+    descriptor->device_tree_range.readable = true;
+}
+
+static void test_handoff_descriptor_and_ranges(void)
+{
+    printf("[C-TEST] Running: test_handoff_descriptor_and_ranges... ");
+
+    /* Generic containment: exact end is valid only for a non-empty fit. */
+    verified_range_t range = { 0x1000, 0x100, true };
+    assert(verified_range_is_valid(&range) == true);
+    assert(verified_range_contains(&range, 0x1000, 1) == true);
+    assert(verified_range_contains_object(&range, 0x10FF, 1) == true);
+    assert(verified_range_contains(&range, 0x1100, 1) == false);
+    assert(verified_range_contains(&range, 0x1000, 0) == false);
+
+    verified_range_t non_readable = { 0x1000, 0x100, false };
+    assert(verified_range_is_valid(&non_readable) == false);
+    verified_range_t null_range = { 0, 1, true };
+    assert(verified_range_is_valid(&null_range) == false);
+
+    verified_range_t max_overflow = { UINTPTR_MAX - 1, 2, true };
+    assert(verified_range_is_valid(&max_overflow) == false);
+    verified_range_t max_edge = { UINTPTR_MAX - 1, 1, true };
+    assert(verified_range_is_valid(&max_edge) == true);
+    assert(verified_range_contains(&max_edge, UINTPTR_MAX - 1, 1) == true);
+    assert(verified_range_contains(&max_edge, UINTPTR_MAX, 1) == false);
+
     xnu_arm64_boot_args_t ba;
     memset(&ba, 0, sizeof(ba));
     ba.phys_base = 0x800000000ULL;
     ba.mem_size = 0x40000000ULL;
     ba.virt_base = 0xFFFF000080000000ULL;
-    platform_boot_info_init_verified_for_test(
-        (uint64_t)(uintptr_t)&ba, sizeof(ba), true, false, 0);
-    info = platform_get_boot_info();
-    assert(info->loader_handoff_verified == true);
-    assert(loader_handoff_is_verified() == true);
-    assert(info->boot_args_present == true);
-    assert(info->devtree_present == false);
-    assert(info->virt_base_valid == true);
-    assert(info->dram_virt_base == ba.virt_base);
-    assert(info->dram_virt_base != info->dram_phys_base);
 
-    /* Top-level verification does not authorize an invalid nested pointer. */
-    ba.devicetree_p = UINTPTR_MAX;
-    ba.devicetree_length = 96;
-    platform_boot_info_init_verified_for_test(
-        (uint64_t)(uintptr_t)&ba, sizeof(ba), true, false, 0);
-    info = platform_get_boot_info();
-    assert(info->boot_args_present == true);
-    assert(info->devtree_present == false);
-
-    /* Nested ADT parsing requires an independent pointer+length verification. */
     unsigned char nested_tree[96];
     memset(nested_tree, 0, sizeof(nested_tree));
     *(unsigned int *)(void *)(nested_tree + 0) = 1;
@@ -296,20 +335,73 @@ static void test_devtree_bounds_and_boot_args(void)
         const unsigned char name[] = "root";
         make_prop(nested_tree + 8, "name", name, sizeof(name));
     }
+
+    loader_handoff_descriptor_t descriptor;
+
+    /* Full boot_args object is mandatory before any copy. */
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba) - 1,
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    platform_boot_info_init_verified_for_test(&descriptor, true);
+    const platform_boot_info_t *info = platform_get_boot_info();
+    assert(loader_handoff_is_verified() == true);
+    assert(info->boot_args_present == false);
+    assert(info->metadata_status != BOOT_METADATA_RUNTIME_VERIFIED);
+
+    /* An arbitrary untrusted pointer still cannot be dereferenced. */
+    make_verified_descriptor(&descriptor, UINTPTR_MAX, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    platform_boot_info_init_verified_for_test(&descriptor, true);
+    info = platform_get_boot_info();
+    assert(info->boot_args_present == false);
+
     ba.devicetree_p = (uint64_t)(uintptr_t)nested_tree;
     ba.devicetree_length = sizeof(nested_tree);
-    platform_boot_info_init_verified_for_test(
-        (uint64_t)(uintptr_t)&ba, sizeof(ba), true, true, sizeof(nested_tree));
+
+    /* Nested pointer outside the independently verified range: reject. */
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)(nested_tree + sizeof(nested_tree)), 1);
+    platform_boot_info_init_verified_for_test(&descriptor, true);
+    info = platform_get_boot_info();
+    assert(info->boot_args_present == true);
+    assert(info->devtree_present == false);
+
+    /* Nested pointer partially overlaps the range: reject the whole object. */
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)(nested_tree + 1), sizeof(nested_tree) - 1);
+    platform_boot_info_init_verified_for_test(&descriptor, true);
+    info = platform_get_boot_info();
+    assert(info->boot_args_present == true);
+    assert(info->devtree_present == false);
+
+    /* Exact nested pointer and exact bounded length: parse is permitted. */
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    platform_boot_info_init_verified_for_test(&descriptor, true);
     info = platform_get_boot_info();
     assert(info->boot_args_present == true);
     assert(info->devtree_present == true);
+    assert(info->metadata_status == BOOT_METADATA_RUNTIME_VERIFIED);
+
+    /* Direct ADT handoff also requires an explicit x1 length and DT range. */
+    make_verified_descriptor(&descriptor, (uintptr_t)nested_tree,
+                             sizeof(nested_tree), (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    platform_boot_info_init_verified_for_test(&descriptor, false);
+    info = platform_get_boot_info();
+    assert(info->boot_args_present == false);
+    assert(info->devtree_present == true);
     assert(info->devtree_size == sizeof(nested_tree));
 
-    /* A direct ADT pointer with unavailable length is never scanned/guessed. */
-    platform_boot_info_init((uint64_t)(uintptr_t)nested_tree, 0);
-    info = platform_get_boot_info();
-    assert(info->loader_handoff_verified == false);
-    assert(info->devtree_present == false);
+    /* The descriptor, not platform_boot_info_t, is the sole trust state. */
+    platform_boot_info_init(UINTPTR_MAX, UINTPTR_MAX);
+    assert(loader_handoff_is_verified() == false);
+    assert(loader_handoff_get()->raw_x0 == UINTPTR_MAX);
+    assert(loader_handoff_get()->raw_x1 == UINTPTR_MAX);
 
     printf("PASS\n");
 }
@@ -358,10 +450,11 @@ int main(void)
     test_stage_failsafe_preserves_last_successful();
     test_framebuffer_mapping_interlock();
     test_devtree_bounds_and_boot_args();
+    test_handoff_descriptor_and_ranges();
     test_pre_hardware_mmio_gate();
 
     printf("==================================================\n");
-    printf("All C-Level Host Tests PASSED (6/6) ✓\n");
+    printf("All C-Level Host Tests PASSED (7/7) ✓\n");
     printf("==================================================\n\n");
 
     return 0;

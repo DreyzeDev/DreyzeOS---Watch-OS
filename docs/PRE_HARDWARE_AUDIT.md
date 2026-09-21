@@ -3,10 +3,10 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.4: Handoff Pointer Safety & Boot-Argument Trust Boundary
+**Phase**: 4 — Step 2.5: Verified Handoff Descriptor & Loader Contract Research
 **Canonical Branch**: `master`  
-**Phase-Start Baseline Commit**: `6334f2674b4a427498736ab0ec47eed7e3405f2f`
-**Host Test Status**: 41/41 PASS (Python + Native C Harness)
+**Phase-Start Baseline Commit**: `05ac7195e6b6944c42d1bf75046001436b394bd7`
+**Host Test Status**: 41/41 PASS (Python + Native C Harness; C harness 7/7)
 **Build Status**: ELF=PASS, BIN=PASS, 0 Compiler Warnings  
 **Hardware Execution Gate**: **NOT READY (BLOCKED)**
 
@@ -57,14 +57,14 @@
 
 ---
 
-## 4. Likely Facts (Pending Hardware Confirmation)
+## 4. Research Patterns (Not T8006 Evidence)
 
-| Fact | Rational Basis | Risk if Incorrect |
+| Pattern | Basis | Status |
 |:---|:---|:---|
-| **iBoot Flat/Identity Mapping** | Bootloader shims typically leave a 1:1 physical-to-virtual window for low RAM | Dereferencing physical addresses causes synchronous translation faults |
-| **Caches Enabled by Loader** | SecureROM and iBoot operate with caches on for boot performance | Inconsistent memory views between CPU and display scanout engine |
-| **x1 Register Semantic** | iBoot typically passes kernel size or unused 0 in x1 | Register value ignored or mistaken for address pointer |
-| **UART0 Baud Rate = 115200** | Standard Apple development serial console baud rate | Corrupted characters on serial terminal |
+| **iBoot Flat/Identity Mapping** | Common bootloader pattern only | **UNKNOWN/BLOCKED**; no T8006 evidence |
+| **Caches Enabled by Loader** | Common bootloader pattern only | **UNKNOWN**; no T8006 evidence |
+| **x1 Register Semantic** | Varies by boot ABI | **UNKNOWN/BLOCKED**; never interpreted without descriptor proof |
+| **UART0 Baud Rate = 115200** | Common serial-console convention | **UNKNOWN** on T8006 |
 
 ---
 
@@ -138,13 +138,14 @@ DreyzeOS implements the following strict startup sequence:
 ```
 
 Production boot metadata behavior is deliberately conservative: `kernel_main`
-passes raw x0/x1 to `platform_boot_info_init`, which records them but performs
-no pointer dereference or ADT scan while `loader_handoff_verified` is false.
-Stage 2 is therefore `HANDOFF_UNAVAILABLE` / `BOOT_METADATA_FALLBACK`, not a
-claim that boot_args or DeviceTree was validated. Any future verified path must
-provide an explicit top-level bound; no `0x100000`, `0x200000`, or `0x80000`
-size estimate is permitted. The nested `boot_args->devicetree_p` pointer needs
-an independent verification and bounded length.
+passes raw x0/x1 to `platform_boot_info_init`, which records them in the single
+loader handoff descriptor but performs no pointer dereference or ADT scan while
+that descriptor is unverified. Stage 2 is therefore `HANDOFF_UNAVAILABLE` /
+`BOOT_METADATA_FALLBACK`, not a claim that boot_args or DeviceTree was validated.
+Any future verified path must provide an explicit top-level range; no `0x100000`,
+`0x200000`, or `0x80000` size estimate is permitted. The nested
+`boot_args->devicetree_p` pointer must be fully contained in a separate verified
+readable range, including overflow-safe start and end checks.
 
 ---
 
@@ -177,9 +178,10 @@ typedef struct {
 
 ## 10. MMU Status
 
-- **Status**: **UNKNOWN / LIKELY identity mapped**, but **UNVERIFIED**.
+- **Status**: **UNKNOWN/BLOCKED**; identity mapping is not assumed.
 - **Rule**: Physical addresses cannot be dereferenced as pointers without proven mapping.
 - **Enforcement**: Memory dereferencing of the physical framebuffer buffer is **strictly blocked**.
+- **Precise interpretation**: inherited `SCTLR_EL1`, `TCR_EL1`, `TTBR0_EL1`, `TTBR1_EL1`, and `MAIR_EL1` values are readable only after valid EL1 entry; those values alone do not prove that DreyzeOS virtual addresses or MMIO ranges are mapped.
 
 ---
 
@@ -264,21 +266,54 @@ Execution on real hardware may only proceed once **ALL** of the following condit
 | **Entry point model verified** | **CONFIRMED** | `_start` at image offset 0; delivery entry contract remains UNKNOWN |
 | **Loader selected and handoff ABI** | **BLOCKED** | No loader/shim is selected or evidenced; XNU `x0=boot_args` is not a DreyzeOS contract |
 | **boot_args / DeviceTree availability** | **UNKNOWN** | Supported parser paths exist, but future loader register/pointer delivery is unproven |
-| **MMU/cache state at handoff** | **BLOCKED** | Snapshot is read-only; no loader mapping evidence |
+| **MMU/cache state at handoff** | **UNKNOWN/BLOCKED** | Inherited-register snapshot is read-only; no loader mapping evidence |
 | **Relocation requirements verified** | **BLOCKED** | Non-PIC binary with 0 relocations |
 | **EL1 loader entry contract** | **BLOCKED** | Source requires EL1; CurrentEL cannot safely detect EL0 |
 | **MMIO mapping gate** | **CONFIRMED** | Defaults false; UART/AIC are untouched without verified mapping |
 | **Stack isolated from BSS clear** | **CONFIRMED** | `.stack` placed strictly after `__bss_end` |
 | **Exception vector table installed** | **CONFIRMED** | 2048-byte aligned, `msr vbar_el1` + `isb` |
-| **CPU state captured read-only** | **CONFIRMED** | `boot_cpu_state_capture()` does not modify SCTLR/TCR |
+| **CPU state captured read-only** | **CONFIRMED** | `boot_cpu_state_capture()` does not modify inherited SCTLR/TCR/TTBR/MAIR; DAIF/VBAR/CPACR are explicitly post-entry |
 | **virt_base truthfulness** | **CONFIRMED** | Real `virt_base` from boot_args, no phys_base proxy |
-| **DeviceTree recursion/overflow safety** | **CONFIRMED** | Max depth 32, fuzz tested |
+| **DeviceTree recursion/overflow safety** | **CONFIRMED** | Max depth 32, fuzz tested; future handoff ranges add overflow-safe pointer containment |
 | **UART timeout protection** | **CONFIRMED** | Cycle timeout in TX loop |
 | **CPU interrupt delivery disabled** | **CONFIRMED** | DAIF=0xF after entry.S; AIC line mask state remains UNKNOWN because MMIO is untouched |
 | **Framebuffer writes hard-locked** | **CONFIRMED** | `mapping_verified = false` gate |
 | **No NAND writes** | **CONFIRMED** | Freestanding, 0 flash write routines |
 | **Expected recovery path documented** | **CONFIRMED** | Crown + Side Button expected reset documented |
 | **Build provenance recorded** | **CONFIRMED** | Git SHA + canonical branch embedded |
+
+## 18. DreyzeOS Loader ABI — DESIGN / NOT YET HARDWARE VERIFIED
+
+The project now has a host-testable descriptor design, but no real loader or
+shim implements it. The descriptor is intended to become the DreyzeOS-owned
+handoff ABI (`x0 -> loader_handoff_descriptor_t`) and to translate any
+XNU/iBoot-specific inputs before the kernel parses metadata.
+
+| Area | Design representation | Evidence status |
+|:---|:---|:---:|
+| Descriptor identity | magic, version, size, explicit verified flag | **DESIGN** |
+| Payload placement | payload PA, execution VA, size, explicit known bit | **DESIGN** |
+| Entry state | EL plus known bit; CPU fields are not inferred | **DESIGN** |
+| MMU state | enabled plus known bit; no mapping implied | **DESIGN** |
+| boot_args | verified readable range containing the complete object | **DESIGN** |
+| DeviceTree | separate verified readable range containing the complete nested object | **DESIGN** |
+| Raw x0/x1 | retained for diagnostics only when unverified | **DESIGN** |
+| MMIO mappings | separate MMIO/UART/AIC facts | **DESIGN** |
+| Payload physical destination | no T8006 loader/shim evidence | **UNKNOWN** |
+| Payload execution VA | current `0x100000000` is a linker placeholder | **BLOCKED** |
+| Safe maximum payload size | overlap with loader/ADT/framebuffer/reserved RAM unknown | **UNKNOWN** |
+| Identity vs non-identity mapping | not established | **UNKNOWN/BLOCKED** |
+
+The range helpers reject zero-length or unreadable ranges, addition overflow,
+`UINTPTR_MAX` wraparound, outside pointers, and partial overlaps. Exact-end
+containment is accepted only when the complete non-empty object fits. A boolean
+such as “nested pointer verified” is intentionally not part of the parser API.
+
+Research references are architectural context only: [m1n1](https://github.com/AsahiLinux/m1n1)
+documents explicit payload chaining on Apple Silicon, and
+[PongoOS](https://github.com/checkra1n/PongoOS) documents a pre-boot AArch64
+environment. These sources do not establish a Watch4,2/T8006 load PA, VA,
+entry state, or MMU mapping and are not treated as such.
 
 ---
 

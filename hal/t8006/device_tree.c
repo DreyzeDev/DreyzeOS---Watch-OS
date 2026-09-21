@@ -3,7 +3,7 @@
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
  * Implements:
- *   - Boot ABI auto-detection (iBoot boot_args vs. direct ADT pointer)
+ *   - Boot metadata parsing only after an explicit verified handoff descriptor
  *   - Safe bounds-checked recursive Apple DeviceTree (ADT) traversal
  *   - Dynamic DRAM memory range extraction (/memory, boot_args)
  *   - Memory reservation mapping (/chosen/memory-map)
@@ -435,19 +435,14 @@ int devtree_parse_dynamic(uintptr_t base, uint32_t size, platform_boot_info_t *i
 static void platform_boot_info_reset_fallback(uint64_t arg0, uint64_t arg1)
 {
     memset(&g_boot_info, 0, sizeof(g_boot_info));
-    g_boot_info.raw_arg0          = arg0;
-    g_boot_info.raw_arg1          = arg1;
-    g_boot_info.loader_handoff_verified = false;
+    loader_handoff_reset_unverified(arg0, arg1);
     g_boot_info.dram_phys_base    = T8006_DRAM_BASE;
     g_boot_info.dram_size         = T8006_DRAM_SIZE;
     g_boot_info.dram_virt_base    = 0;
     g_boot_info.virt_base_valid   = false;
-    g_boot_info.is_fallback_data  = true;
+    g_boot_info.metadata_status   = BOOT_METADATA_STATIC_FALLBACK;
     g_boot_info.chip_id           = 0x8006;
     strncpy(g_boot_info.model, "Watch4,2", sizeof(g_boot_info.model) - 1);
-#ifdef HOST_TEST
-    loader_handoff_set_verified_for_test(false);
-#endif
     g_boot_info_initialized = true;
 }
 
@@ -477,8 +472,7 @@ static void platform_boot_info_apply_video(const boot_video_t *video)
 
 static void platform_boot_info_apply_verified_boot_args(
     const xnu_arm64_boot_args_t *ba,
-    bool nested_devtree_verified,
-    uint32_t nested_devtree_length)
+    const loader_handoff_descriptor_t *handoff)
 {
     if (!ba) {
         return;
@@ -491,7 +485,7 @@ static void platform_boot_info_apply_verified_boot_args(
     }
 
     g_boot_info.boot_args_present = true;
-    g_boot_info.is_fallback_data  = false;
+    g_boot_info.metadata_status   = BOOT_METADATA_RUNTIME_VERIFIED;
     g_boot_info.dram_phys_base    = ba->phys_base;
     g_boot_info.dram_size         = ba->mem_size;
 
@@ -507,9 +501,10 @@ static void platform_boot_info_apply_verified_boot_args(
      * independently verified nested buffer and its bounded length permit
      * ADT validation/parsing.
      */
-    if (!nested_devtree_verified || ba->devicetree_p == 0 ||
-        ba->devicetree_length < 64 || nested_devtree_length < 64 ||
-        ba->devicetree_length > nested_devtree_length) {
+    if (!handoff || ba->devicetree_length < 64 ||
+        !verified_range_contains_object(&handoff->device_tree_range,
+                                        (uintptr_t)ba->devicetree_p,
+                                        ba->devicetree_length)) {
         return;
     }
 
@@ -533,37 +528,51 @@ void platform_boot_info_init(uint64_t arg0, uint64_t arg1)
 }
 
 #ifdef HOST_TEST
-void platform_boot_info_init_verified_for_test(uint64_t arg0,
-                                                uint32_t arg0_length,
-                                                bool arg0_is_boot_args,
-                                                bool nested_devtree_verified,
-                                                uint32_t nested_devtree_length)
+void platform_boot_info_init_verified_for_test(
+    const loader_handoff_descriptor_t *descriptor,
+    bool arg0_is_boot_args)
 {
-    platform_boot_info_reset_fallback(arg0, arg0_length);
-    loader_handoff_set_verified_for_test(true);
-    g_boot_info.loader_handoff_verified = true;
+    if (!descriptor) {
+        platform_boot_info_reset_fallback(0, 0);
+        return;
+    }
 
-    if (arg0 == 0 || arg0_length < 64) {
+    platform_boot_info_reset_fallback(descriptor->raw_x0, descriptor->raw_x1);
+    loader_handoff_set_verified_for_test(descriptor);
+    const loader_handoff_descriptor_t *handoff = loader_handoff_get();
+
+    if (!loader_handoff_is_verified()) {
         return;
     }
 
     if (arg0_is_boot_args) {
-        if (arg0_length < sizeof(xnu_arm64_boot_args_t)) {
+        if (!verified_range_contains_object(&handoff->boot_args_range,
+                                            (uintptr_t)handoff->raw_x0,
+                                            sizeof(xnu_arm64_boot_args_t))) {
             return;
         }
 
-        /* Copy only after the caller has supplied a verified bound. */
+        /* Copy only after the descriptor proves the complete object readable. */
         xnu_arm64_boot_args_t ba;
-        memcpy(&ba, (const void *)(uintptr_t)arg0, sizeof(ba));
-        platform_boot_info_apply_verified_boot_args(
-            &ba, nested_devtree_verified, nested_devtree_length);
+        memcpy(&ba, (const void *)(uintptr_t)handoff->raw_x0, sizeof(ba));
+        platform_boot_info_apply_verified_boot_args(&ba, handoff);
         return;
     }
 
-    /* Direct ADT handoff also requires an explicit, verified exact bound. */
-    if (devtree_validate_header((uintptr_t)arg0, arg0_length) &&
-        devtree_parse_dynamic((uintptr_t)arg0, arg0_length, &g_boot_info) == 0) {
-        g_boot_info.is_fallback_data = false;
+    /* Direct ADT also requires an explicit exact x1 length and DT range. */
+    if (handoff->raw_x1 > 0xFFFFFFFFULL ||
+        !verified_range_contains_object(&handoff->device_tree_range,
+                                        (uintptr_t)handoff->raw_x0,
+                                        (size_t)handoff->raw_x1) ||
+        handoff->raw_x1 < 64) {
+        return;
+    }
+    if (devtree_validate_header((uintptr_t)handoff->raw_x0,
+                                (uint32_t)handoff->raw_x1) &&
+        devtree_parse_dynamic((uintptr_t)handoff->raw_x0,
+                               (uint32_t)handoff->raw_x1,
+                               &g_boot_info) == 0) {
+        g_boot_info.metadata_status = BOOT_METADATA_RUNTIME_VERIFIED;
     }
 }
 #endif
@@ -580,13 +589,15 @@ const boot_framebuffer_info_t *platform_get_framebuffer(void)
 
 void platform_boot_info_diag(void)
 {
+    const loader_handoff_descriptor_t *handoff = loader_handoff_get();
+
     klog_info("========================================");
     klog_info("  [BOOT-DISCOVERY] Platform Diagnostics");
     klog_info("========================================");
 
-    klog_hex("  [BOOT] Raw x0          ", g_boot_info.raw_arg0);
-    klog_hex("  [BOOT] Raw x1          ", g_boot_info.raw_arg1);
-    if (!g_boot_info.loader_handoff_verified) {
+    klog_hex("  [BOOT] Raw x0          ", handoff->raw_x0);
+    klog_hex("  [BOOT] Raw x1          ", handoff->raw_x1);
+    if (!loader_handoff_is_verified()) {
         klog_info("  [BOOT] Handoff: UNVERIFIED (x0/x1 preserved; no pointer dereference)");
         klog_info("  [BOOT] Metadata: STATIC FALLBACK / HANDOFF_UNAVAILABLE");
     } else if (g_boot_info.boot_args_present) {
@@ -606,10 +617,16 @@ void platform_boot_info_diag(void)
     }
 
     /* Memory Layout */
-    if (g_boot_info.is_fallback_data) {
+    switch (g_boot_info.metadata_status) {
+    case BOOT_METADATA_RUNTIME_VERIFIED:
+        klog_info("  [MEM] DRAM Data Source: RUNTIME VERIFIED HANDOFF");
+        break;
+    case BOOT_METADATA_STATIC_FALLBACK:
         klog_info("  [MEM] DRAM Data Source: STATIC FALLBACK (research placeholder - unverified)");
-    } else {
-        klog_info("  [MEM] DRAM Data Source: RUNTIME DISCOVERED (hardware handoff)");
+        break;
+    default:
+        klog_info("  [MEM] DRAM Data Source: UNAVAILABLE");
+        break;
     }
     klog_hex("  [MEM] DRAM Physical Base", g_boot_info.dram_phys_base);
     klog_hex("  [MEM] DRAM Total Size   ", g_boot_info.dram_size);

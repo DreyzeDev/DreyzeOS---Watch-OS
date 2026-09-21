@@ -13,6 +13,7 @@
 #pragma once
 
 #include "types.h"
+#include "loader_handoff.h"
 
 /* ============================================================
  * Apple XNU ARM64 boot_args ABI Definitions
@@ -78,12 +79,15 @@ typedef struct {
     const char *source;      /* Discovery source: "boot_args" or "devicetree" */
 } boot_framebuffer_info_t;
 
+typedef enum {
+    BOOT_METADATA_UNAVAILABLE = 0,
+    BOOT_METADATA_STATIC_FALLBACK,
+    BOOT_METADATA_RUNTIME_VERIFIED
+} boot_metadata_status_t;
+
 /* Complete Platform Boot Information */
 typedef struct {
     /* Boot ABI source detection */
-    uint64_t raw_arg0;               /* x0 preserved verbatim; never trusted by itself */
-    uint64_t raw_arg1;               /* x1 preserved verbatim; never trusted by itself */
-    bool     loader_handoff_verified;/* True only after an external verifier proves bounds */
     bool     boot_args_present;      /* True if valid xnu boot_args was detected in x0 */
     bool     devtree_present;        /* True if valid Apple DeviceTree was detected */
     uintptr_t devtree_base;          /* Address of DeviceTree in memory */
@@ -94,7 +98,7 @@ typedef struct {
     uint64_t dram_size;              /* Total DRAM size in bytes */
     uint64_t dram_virt_base;         /* Base virtual address of DRAM from boot_args (+0x08) */
     bool     virt_base_valid;        /* True ONLY if obtained from confirmed boot_args */
-    bool     is_fallback_data;       /* True if static fallback used (NOT validated hardware) */
+    boot_metadata_status_t metadata_status; /* Provenance of metadata, not address validity */
 
     /* Memory regions from /chosen/memory-map */
     memory_range_t memory_ranges[MAX_BOOT_MEMORY_RANGES];
@@ -119,16 +123,14 @@ void platform_boot_info_init(uint64_t arg0, uint64_t arg1);
 
 #ifdef HOST_TEST
 /*
- * Test-only model of a future verified loader handoff.  The caller supplies
- * an independently verified top-level bound.  Nested DeviceTree parsing is
- * separately enabled and separately bounded; top-level verification does
- * not authorize dereferencing boot_args->devicetree_p.
+ * Test-only model of a future verified loader handoff.  The descriptor must
+ * contain concrete readable ranges for boot_args and, independently, ADT.
+ * The caller selects the legacy buffer format only to exercise the parser;
+ * the descriptor remains the single source of trust state.
  */
-void platform_boot_info_init_verified_for_test(uint64_t arg0,
-                                                uint32_t arg0_length,
-                                                bool arg0_is_boot_args,
-                                                bool nested_devtree_verified,
-                                                uint32_t nested_devtree_length);
+void platform_boot_info_init_verified_for_test(
+    const loader_handoff_descriptor_t *descriptor,
+    bool arg0_is_boot_args);
 #endif
 
 /* Retrieve pointer to global boot info structure */
