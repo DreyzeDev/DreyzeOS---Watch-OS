@@ -37,6 +37,8 @@ void platform_early_init(void)
     __asm__ volatile ("isb" ::: "memory");
 }
 
+#include "uart.h"
+
 /*
  * platform_init — called after log_init().
  * Initializes known hardware, stubs unknown.
@@ -44,10 +46,13 @@ void platform_early_init(void)
 void platform_init(void)
 {
     klog_info("  [HAL] T8006 platform_init begin");
-    klog_info("  [HAL] Chip: T8006 (Apple S4) — chip_id 0x8006 [LIKELY]");
-    klog_info("  [HAL] All MMIO addresses: UNKNOWN — stub mode");
-    klog_info("  [HAL] DeviceTree parsing required for real addresses");
-    klog_info("  [HAL] T8006 platform_init done (stub)");
+    klog_info("  [HAL] Chip: T8006 (Apple S4 SiP / dual-core Tempest)");
+    klog_info("  [HAL] UART0 Base: 0x2e500000 [CONFIRMED]");
+
+    /* Output UART hardware diagnostics */
+    uart_diag();
+
+    klog_info("  [HAL] T8006 platform_init complete");
 }
 
 /*

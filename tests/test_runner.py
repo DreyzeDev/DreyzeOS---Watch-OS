@@ -147,6 +147,49 @@ def test_bin_exists():
         return
     assert os.path.getsize(bin_path) > 0, "Binary is empty"
 
+@test("UART0 — header hardware constants match DeviceTree")
+def test_uart0_constants():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    header_path = os.path.join(project_root, 'hal', 't8006', 'memory_map.h')
+    with open(header_path, 'r') as f:
+        content = f.read()
+    import re
+    assert re.search(r'#define\s+T8006_UART0_BASE\s+0x000000002e500000', content), "T8006_UART0_BASE not 0x2e500000"
+    assert re.search(r'#define\s+UART_UTXH_OFFSET\s+0x20', content), "UART_UTXH_OFFSET not 0x20"
+    assert re.search(r'#define\s+UART_UTRSTAT_OFFSET\s+0x10', content), "UART_UTRSTAT_OFFSET not 0x10"
+
+@test("UART0 — exported symbols in built ELF")
+def test_uart0_symbols_in_elf():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(project_root, 'build', 'DreyzeOS.elf')
+    if not os.path.exists(elf_path):
+        return
+    import subprocess
+    res = subprocess.run(['aarch64-linux-gnu-nm', elf_path], capture_output=True, text=True)
+    assert res.returncode == 0
+    symbols = res.stdout
+    for sym in ['uart_init', 'uart_putc', 'uart_puts', 'uart_diag', 'uart_is_ready']:
+        assert sym in symbols, f"Missing UART symbol {sym} in ELF"
+
+@test("UART0 — verified in Watch4,2 DeviceTree binary")
+def test_watch42_devtree_uart0():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    adt_path = os.path.join(project_root, 'research', 'ipsw', '21U580', 'DeviceTree.n131bap.adt')
+    if not os.path.exists(adt_path):
+        return
+    from tools.device_tree_dump import parse_adt, walk_nodes
+    root, _ = parse_adt(open(adt_path, 'rb').read())
+    uart0_node = None
+    for path, node in walk_nodes(root):
+        if path == '/arm-io/uart0':
+            uart0_node = node
+            break
+    assert uart0_node is not None, "Node /arm-io/uart0 not found in Watch4,2 DeviceTree"
+    regs = uart0_node.get_prop('reg').as_reg()
+    assert len(regs) > 0, "No reg in uart0"
+    assert regs[0][0] == 0x2e500000, f"UART0 base 0x{regs[0][0]:x} != 0x2e500000"
+    assert regs[0][1] == 0x4000, f"UART0 size 0x{regs[0][1]:x} != 0x4000"
+
 # ============================================================
 # Run all tests
 # ============================================================
@@ -165,6 +208,9 @@ def main():
         test_inspect_binary_exists,
         test_elf_exists,
         test_bin_exists,
+        test_uart0_constants,
+        test_uart0_symbols_in_elf,
+        test_watch42_devtree_uart0,
     ]
 
     for t in tests:

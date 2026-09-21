@@ -42,8 +42,9 @@ typedef struct {
 /* Place log buffer in BSS (zero-initialized) with a clear name for dumps */
 static klog_buffer_t klog_buffer __attribute__((section(".klog_buffer")));
 
-/* UART stub — will be replaced when UART_BASE is known */
-static bool uart_available = false;
+/* UART ready check and output */
+extern bool uart_is_ready(void);
+extern void uart_putc(char c);
 
 /* ============================================================
  * Internal helpers
@@ -60,10 +61,9 @@ static void klog_write_char(char c)
         klog_buffer.wrap_count++;
     }
 
-    /* If UART is available, also write to UART */
-    if (uart_available) {
-        /* TODO Phase 6: uart_putchar(c) */
-        /* Requires confirmed UART_BASE — UNKNOWN_T8006_UART_BASE */
+    /* If UART is available, also output to serial console */
+    if (uart_is_ready()) {
+        uart_putc(c);
     }
 }
 
@@ -120,11 +120,10 @@ void log_init(void)
     klog_write_str("[DLOG] DreyzeOS kernel log initialized\r\n");
 
     /*
-     * UART initialization deferred until UART_BASE confirmed.
-     * Status: UNKNOWN_T8006_UART_BASE
-     * When available, set uart_available = true and call uart_init()
+     * Initialize UART0 console (Base: 0x2e500000 CONFIRMED).
      */
-    uart_available = false;
+    extern void uart_init(void);
+    uart_init();
 }
 
 void log_flush(void)

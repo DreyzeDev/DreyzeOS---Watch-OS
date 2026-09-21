@@ -67,7 +67,8 @@ KERNEL_SRCS := \
 
 HAL_SRCS := \
 	hal/t8006/platform.c \
-	hal/t8006/device_tree.c
+	hal/t8006/device_tree.c \
+	hal/t8006/uart.c
 
 LIB_SRCS := \
 	lib/string.c \
