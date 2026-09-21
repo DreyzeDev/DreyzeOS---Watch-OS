@@ -291,15 +291,67 @@ static void make_verified_descriptor(loader_handoff_descriptor_t *descriptor,
     descriptor->raw_x1 = raw_x1;
     descriptor->boot_args_range.base = boot_args_base;
     descriptor->boot_args_range.length = boot_args_length;
-    descriptor->boot_args_range.readable = true;
+    descriptor->boot_args_range.flags = DREYZE_HANDOFF_RANGE_FLAG_READABLE;
+    descriptor->boot_args_range.reserved = 0;
     descriptor->device_tree_range.base = dt_base;
     descriptor->device_tree_range.length = dt_length;
-    descriptor->device_tree_range.readable = true;
+    descriptor->device_tree_range.flags = DREYZE_HANDOFF_RANGE_FLAG_READABLE;
+    descriptor->device_tree_range.reserved = 0;
 }
 
 static void test_handoff_descriptor_and_ranges(void)
 {
     printf("[C-TEST] Running: test_handoff_descriptor_and_ranges... ");
+
+    /* The wire ABI has exact, reviewable offsets independent of host types. */
+    assert(sizeof(loader_handoff_range_v1_t) == 24);
+    assert(sizeof(loader_handoff_descriptor_t) == 128);
+    assert(offsetof(loader_handoff_descriptor_t, magic) == 0);
+    assert(offsetof(loader_handoff_descriptor_t, version) == 8);
+    assert(offsetof(loader_handoff_descriptor_t, size) == 12);
+    assert(offsetof(loader_handoff_descriptor_t, flags) == 16);
+    assert(offsetof(loader_handoff_descriptor_t, entry_el) == 24);
+    assert(offsetof(loader_handoff_descriptor_t, payload_pa) == 32);
+    assert(offsetof(loader_handoff_descriptor_t, payload_va) == 40);
+    assert(offsetof(loader_handoff_descriptor_t, payload_size) == 48);
+    assert(offsetof(loader_handoff_descriptor_t, mmu_enabled) == 56);
+    assert(offsetof(loader_handoff_descriptor_t, raw_x0) == 64);
+    assert(offsetof(loader_handoff_descriptor_t, raw_x1) == 72);
+    assert(offsetof(loader_handoff_descriptor_t, boot_args_range) == 80);
+    assert(offsetof(loader_handoff_descriptor_t, device_tree_range) == 104);
+
+    uintptr_t converted_base = 0;
+    size_t converted_length = 0;
+    assert(loader_handoff_u64_to_uintptr(0, &converted_base) == true);
+    assert(loader_handoff_u64_to_size(0, &converted_length) == true);
+#if UINTPTR_MAX < UINT64_MAX
+    assert(loader_handoff_u64_to_uintptr(UINTPTR_MAX + 1ULL,
+                                         &converted_base) == false);
+#else
+    assert(loader_handoff_u64_to_uintptr(UINT64_MAX,
+                                         &converted_base) == true);
+#endif
+#if SIZE_MAX < UINT64_MAX
+    assert(loader_handoff_u64_to_size((uint64_t)SIZE_MAX + 1ULL,
+                                      &converted_length) == false);
+#else
+    assert(loader_handoff_u64_to_size(UINT64_MAX,
+                                      &converted_length) == true);
+#endif
+
+    loader_handoff_range_v1_t wire_range = {
+        .base = 0x1000,
+        .length = 0x100,
+        .flags = DREYZE_HANDOFF_RANGE_FLAG_READABLE,
+        .reserved = 0
+    };
+    verified_range_t native_range;
+    assert(loader_handoff_range_to_native(&wire_range, &native_range) == true);
+    wire_range.flags = 0;
+    assert(loader_handoff_range_to_native(&wire_range, &native_range) == false);
+    wire_range.flags = DREYZE_HANDOFF_RANGE_FLAG_READABLE;
+    wire_range.length = 0;
+    assert(loader_handoff_range_to_native(&wire_range, &native_range) == false);
 
     /* Generic containment: exact end is valid only for a non-empty fit. */
     verified_range_t range = { 0x1000, 0x100, true };
@@ -337,6 +389,31 @@ static void test_handoff_descriptor_and_ranges(void)
     }
 
     loader_handoff_descriptor_t descriptor;
+
+    /* Structural validation rejects malformed identity/version/size fields. */
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    descriptor.magic ^= 1ULL;
+    loader_handoff_set_verified_for_test(&descriptor);
+    assert(loader_handoff_get()->magic != DREYZE_HANDOFF_MAGIC);
+    assert(loader_handoff_is_verified() == false);
+
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    descriptor.version = DREYZE_HANDOFF_VERSION + 1U;
+    assert(loader_handoff_descriptor_validate(&descriptor) == false);
+    platform_boot_info_init_verified_for_test(&descriptor, true);
+    assert(loader_handoff_is_verified() == false);
+
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    descriptor.size = DREYZE_HANDOFF_V1_SIZE - 1U;
+    assert(loader_handoff_descriptor_validate(&descriptor) == false);
+    platform_boot_info_init_verified_for_test(&descriptor, true);
+    assert(loader_handoff_is_verified() == false);
 
     /* Full boot_args object is mandatory before any copy. */
     make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
@@ -385,6 +462,14 @@ static void test_handoff_descriptor_and_ranges(void)
     info = platform_get_boot_info();
     assert(info->boot_args_present == true);
     assert(info->devtree_present == true);
+    assert(info->metadata_status == BOOT_METADATA_RUNTIME_VERIFIED);
+
+    /* A larger V1-compatible descriptor is accepted without reading its tail. */
+    descriptor.size = DREYZE_HANDOFF_V1_SIZE + 64U;
+    assert(loader_handoff_descriptor_validate(&descriptor) == true);
+    platform_boot_info_init_verified_for_test(&descriptor, true);
+    info = platform_get_boot_info();
+    assert(loader_handoff_is_verified() == true);
     assert(info->metadata_status == BOOT_METADATA_RUNTIME_VERIFIED);
 
     /* Direct ADT handoff also requires an explicit x1 length and DT range. */

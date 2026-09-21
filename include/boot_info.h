@@ -123,10 +123,11 @@ void platform_boot_info_init(uint64_t arg0, uint64_t arg1);
 
 #ifdef HOST_TEST
 /*
- * Test-only model of a future verified loader handoff.  The descriptor must
- * contain concrete readable ranges for boot_args and, independently, ADT.
- * The caller selects the legacy buffer format only to exercise the parser;
- * the descriptor remains the single source of trust state.
+ * Test-only model of a future verified loader handoff. The input is the fixed
+ * width V1 descriptor; it must contain concrete readable ranges for boot_args
+ * and, independently, ADT. The caller selects the legacy buffer format only
+ * to exercise the parser; the descriptor remains the single source of trust
+ * state. The production path does not consume an arbitrary x0 descriptor.
  */
 void platform_boot_info_init_verified_for_test(
     const loader_handoff_descriptor_t *descriptor,

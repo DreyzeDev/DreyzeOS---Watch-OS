@@ -474,6 +474,8 @@ static void platform_boot_info_apply_verified_boot_args(
     const xnu_arm64_boot_args_t *ba,
     const loader_handoff_descriptor_t *handoff)
 {
+    verified_range_t device_tree_range;
+
     if (!ba) {
         return;
     }
@@ -502,7 +504,9 @@ static void platform_boot_info_apply_verified_boot_args(
      * ADT validation/parsing.
      */
     if (!handoff || ba->devicetree_length < 64 ||
-        !verified_range_contains_object(&handoff->device_tree_range,
+        !loader_handoff_range_to_native(&handoff->device_tree_range,
+                                        &device_tree_range) ||
+        !verified_range_contains_object(&device_tree_range,
                                         (uintptr_t)ba->devicetree_p,
                                         ba->devicetree_length)) {
         return;
@@ -540,36 +544,44 @@ void platform_boot_info_init_verified_for_test(
     platform_boot_info_reset_fallback(descriptor->raw_x0, descriptor->raw_x1);
     loader_handoff_set_verified_for_test(descriptor);
     const loader_handoff_descriptor_t *handoff = loader_handoff_get();
+    uintptr_t raw_x0;
+    size_t raw_x1;
+    verified_range_t boot_args_range;
+    verified_range_t device_tree_range;
 
     if (!loader_handoff_is_verified()) {
         return;
     }
 
     if (arg0_is_boot_args) {
-        if (!verified_range_contains_object(&handoff->boot_args_range,
-                                            (uintptr_t)handoff->raw_x0,
+        if (!loader_handoff_u64_to_uintptr(handoff->raw_x0, &raw_x0) ||
+            !loader_handoff_range_to_native(&handoff->boot_args_range,
+                                            &boot_args_range) ||
+            !verified_range_contains_object(&boot_args_range, raw_x0,
                                             sizeof(xnu_arm64_boot_args_t))) {
             return;
         }
 
         /* Copy only after the descriptor proves the complete object readable. */
         xnu_arm64_boot_args_t ba;
-        memcpy(&ba, (const void *)(uintptr_t)handoff->raw_x0, sizeof(ba));
+        memcpy(&ba, (const void *)raw_x0, sizeof(ba));
         platform_boot_info_apply_verified_boot_args(&ba, handoff);
         return;
     }
 
     /* Direct ADT also requires an explicit exact x1 length and DT range. */
-    if (handoff->raw_x1 > 0xFFFFFFFFULL ||
-        !verified_range_contains_object(&handoff->device_tree_range,
-                                        (uintptr_t)handoff->raw_x0,
-                                        (size_t)handoff->raw_x1) ||
-        handoff->raw_x1 < 64) {
+    if (handoff->raw_x1 > 0xFFFFFFFFULL || handoff->raw_x1 < 64 ||
+        !loader_handoff_u64_to_uintptr(handoff->raw_x0, &raw_x0) ||
+        !loader_handoff_u64_to_size(handoff->raw_x1, &raw_x1) ||
+        !loader_handoff_range_to_native(&handoff->device_tree_range,
+                                        &device_tree_range) ||
+        !verified_range_contains_object(&device_tree_range, raw_x0,
+                                        raw_x1)) {
         return;
     }
-    if (devtree_validate_header((uintptr_t)handoff->raw_x0,
+    if (devtree_validate_header(raw_x0,
                                 (uint32_t)handoff->raw_x1) &&
-        devtree_parse_dynamic((uintptr_t)handoff->raw_x0,
+        devtree_parse_dynamic(raw_x0,
                                (uint32_t)handoff->raw_x1,
                                &g_boot_info) == 0) {
         g_boot_info.metadata_status = BOOT_METADATA_RUNTIME_VERIFIED;

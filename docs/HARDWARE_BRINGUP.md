@@ -3,7 +3,7 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **watchOS**: 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.5: Verified Handoff Descriptor & Loader Contract Research
+**Phase**: 4 — Step 2.6: Stable Loader ABI & T8006 Loader Evidence Research
 **Status**: Pre-hardware (host-side validation complete, real device test BLOCKED)
 
 ---
@@ -34,9 +34,9 @@ Before DreyzeOS can be safely executed on real hardware, the following blockers 
 | **RAM payload load address** | `0x100000000` | Linker placeholder (4GB boundary) | **BLOCKED** |
 | **Physical RAM base (DRAM)** | `0x800000000` | DeviceTree `/memory` node | **CONFIRMED** |
 | **Virtual entry address** | UNKNOWN | iBoot entry mapping unverified | **BLOCKED** |
-| **Identity mapping at handoff** | UNKNOWN / LIKELY | iBoot flat-map convention | **LIKELY ONLY** |
+| **Identity mapping at handoff** | UNKNOWN / BLOCKED | No T8006 loader evidence proves a flat map | **UNKNOWN/BLOCKED** |
 | **Relocation requirements** | Static / non-PIC | Statically linked at `0x100000000` (0 relocs) | **BLOCKED** |
-| **Delivery vector (usbliter8)** | THEORETICAL | BootROM USB DWC2 buffer underflow (requires RP2350 + iBUS) | **THEORETICAL** |
+| **Delivery vector (usbliter8)** | Public T8006-related research exists; exact Watch4,2 path unresolved | BootROM USB DWC2 research, requires external hardware | **UNKNOWN/BLOCKED** |
 | **Diagnostic UART physical pin** | UNKNOWN | iBUS 5-pin connector TX line | **UNKNOWN** |
 
 > [!IMPORTANT]
@@ -107,8 +107,44 @@ This is a host-testable ABI design, not a hardware contract:
 | MMU state | `mmu_enabled` plus `mmu_state_known` | **DESIGN** |
 | boot_args buffer | concrete readable `[base, base + length)` range | **DESIGN** |
 | DeviceTree buffer | independent concrete readable range | **DESIGN** |
-| MMIO mappings | separate MMIO/UART/AIC mapping facts | **DESIGN** |
+| MMIO mappings | descriptor flag bits for MMIO/UART/AIC | **DESIGN** |
 | T8006 loader implementation | no loader/shim selected or executed | **UNKNOWN/BLOCKED** |
+
+#### Stable wire ABI V1
+
+The externally visible ABI is fixed-width and exactly 128 bytes. It contains no
+`bool`, `size_t`, or `uintptr_t`; those types are used only by the internal
+native conversion helpers. `offsetof()` and `_Static_assert` enforce the
+following layout at compile time:
+
+| Offset | Field | Width |
+|---:|---|---:|
+| `0x00` | `magic` | `u64` |
+| `0x08` | `version` | `u32` |
+| `0x0C` | `size` | `u32` |
+| `0x10` | `flags` (verified, EL, payload, MMU, MMIO/UART/AIC facts) | `u64` |
+| `0x18` | `entry_el` | `u32` |
+| `0x1C` | `reserved0` | `u32` |
+| `0x20` | `payload_pa` | `u64` |
+| `0x28` | `payload_va` | `u64` |
+| `0x30` | `payload_size` | `u64` |
+| `0x38` | `mmu_enabled` | `u32` |
+| `0x3C` | `reserved1` | `u32` |
+| `0x40` | `raw_x0` | `u64` |
+| `0x48` | `raw_x1` | `u64` |
+| `0x50` | `boot_args_range` (`base u64`, `length u64`, `flags u32`, `reserved u32`) | `24` |
+| `0x68` | `device_tree_range` (`base u64`, `length u64`, `flags u32`, `reserved u32`) | `24` |
+
+Validation rules are: exact magic, supported version V1, `size >= 128`, no
+unknown V1 flags, zero reserved fields, and `mmu_enabled` equal to 0 or 1.
+An oversized descriptor is accepted for forward compatibility, but V1 ignores
+its tail. Range conversion separately rejects non-readable, zero-length,
+overflowing, non-representable, or otherwise invalid ranges. The `VERIFIED`
+bit is not a cryptographic root of trust: the memory containing the descriptor
+must already be readable under the loader's contract. A real bootstrap must
+prove the descriptor prefix, copy it into kernel-owned memory, and only then
+use independently validated ranges. The current production path does none of
+this; the setter is host-test-only.
 
 `verified_range_contains_object()` rejects zero-length objects, unreadable
 ranges, overflow, outside pointers, and partial overlap. Exact-end containment
@@ -125,6 +161,10 @@ Cross-project references are architectural context only, not T8006 evidence:
 explicit payload chaining, while [PongoOS](https://github.com/checkra1n/PongoOS)
 documents a pre-boot AArch64 environment. Neither proves DreyzeOS load PA/VA,
 entry state, or MMU mappings on Watch4,2.
+
+The complete public-evidence matrix, including the T8006-specific closest
+primitive and PIC stage-0 analysis, is maintained in
+[T8006_LOADER_RESEARCH.md](T8006_LOADER_RESEARCH.md).
 
 ### Unconfirmed — Do NOT Assume
 
@@ -166,7 +206,7 @@ typedef struct {
 - **Exploit**: DWC2 USB buffer underflow in T8006/T8010 SecureROM
 - **Hardware**: RP2350 / Raspberry Pi Pico 2 acting as USB host interposer
 - **Adapter**: iBUS S4/S5 adapter (5-pin diagnostic connector in Watch band slot)
-- **Status**: **THEORETICAL** for this configuration. No publicly confirmed working tool for Watch4,2 + watchOS 10.6.1.
+- **Status**: **UNKNOWN/BLOCKED** for this configuration. Public T8006-related code exists, but no reproducible Watch4,2 + watchOS 10.6.1 DreyzeOS delivery contract is established.
 - **Requirement**: Physical iBUS/AWRT adapter + Pico 2 interposer hardware build
 
 ### Physical Connector
@@ -262,4 +302,4 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 
 ---
 
-*Last updated: Phase 4 Step 2.5 — verified handoff descriptor design. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*
+*Last updated: Phase 4 Step 2.6 — stable fixed-width ABI and public loader evidence research. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*

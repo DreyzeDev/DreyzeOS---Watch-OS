@@ -44,6 +44,11 @@ typedef _Bool               bool;
 #define NULL                ((void *)0)
 #endif
 
+/* Freestanding replacement for the standard offsetof macro. */
+#ifndef offsetof
+#define offsetof(type, member) __builtin_offsetof(type, member)
+#endif
+
 /* Useful macros */
 #define ARRAY_SIZE(x)       (sizeof(x) / sizeof((x)[0]))
 #define ALIGN_UP(val, align)   (((val) + (align) - 1) & ~((align) - 1))

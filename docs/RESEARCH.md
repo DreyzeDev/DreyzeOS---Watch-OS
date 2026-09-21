@@ -84,7 +84,7 @@ checkm8 (bootrom exploit)
         → Stack init
         → BSS clear
         → Exception vector setup
-        → MMU setup (identity mapping)
+        → MMU setup (identity mapping; PongoOS reference only)
         → DeviceTree location (already in DRAM from iBoot)
         → USB serial init (for pongoterm)
         → pongo_main()
@@ -100,7 +100,7 @@ checkm8 (bootrom exploit)
 | Stack | Static BSS area | Same — ✅ |
 | BSS clear | Manual loop in assembly | Same — ✅ |
 | Exception vectors | 2KB-aligned, 16 entries | Same — ✅ |
-| MMU | Identity mapping + enable | Phase 3-4 |
+| MMU | Identity mapping + enable (reference pattern only) | Phase 3-4; DreyzeOS/T8006 evidence UNKNOWN/BLOCKED |
 | UART | Direct MMIO, chip-detected | Phase 6 (when addr known) |
 | DeviceTree | Read from memory (iBoot placed it) | Phase 3-4 |
 | Memory mgmt | Bump allocator | Same — Phase 1 ✅ |

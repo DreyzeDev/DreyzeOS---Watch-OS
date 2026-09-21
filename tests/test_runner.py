@@ -1039,7 +1039,7 @@ def test_boot_stage_error_separate_from_last_successful():
         f"BOOT_STAGE_ERROR must fit in uint8_t, got {BOOT_STAGE_ERROR}"
 
 # ============================================================
-# Tests: Phase 4 Step 2.5 — Verified Handoff Descriptor & Loader Contract
+# Tests: Phase 4 Step 2.6 — Stable Loader ABI & T8006 Loader Evidence
 # ============================================================
 
 @test("C-level host test harness execution")
@@ -1340,7 +1340,7 @@ def main():
         test_boot_stage_progression,
         test_boot_stage_failsafe_preserves_last_successful,
         test_boot_stage_error_separate_from_last_successful,
-        # Phase 4 Step 2.5 — Verified Handoff Descriptor & Loader Contract
+        # Phase 4 Step 2.6 — Stable Loader ABI & T8006 Loader Evidence
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,

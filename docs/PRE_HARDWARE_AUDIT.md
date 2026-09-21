@@ -3,9 +3,9 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.5: Verified Handoff Descriptor & Loader Contract Research
+**Phase**: 4 — Step 2.6: Stable Loader ABI & T8006 Loader Evidence Research
 **Canonical Branch**: `master`  
-**Phase-Start Baseline Commit**: `05ac7195e6b6944c42d1bf75046001436b394bd7`
+**Phase-Start Baseline Commit**: `c1ed127f244f28ce6b5570c61cb48f024a17a6d6`
 **Host Test Status**: 41/41 PASS (Python + Native C Harness; C harness 7/7)
 **Build Status**: ELF=PASS, BIN=PASS, 0 Compiler Warnings  
 **Hardware Execution Gate**: **NOT READY (BLOCKED)**
@@ -74,7 +74,7 @@
 |:---|:---|:---|
 | **Exact RAM Handover Address** | Address where loader deposits DreyzeOS.bin | `DREYZEOS_LOAD_BASE = 0x100000000` marked as PLACEHOLDER / BLOCKED |
 | **Physical TX Routing on Connector** | Which of the 5 pins in the iBUS slot carries UART0 TX | Logic analyzer probe required; no hardware write assumed |
-| **usbliter8 S4 Exploit Reliability** | Whether USB DWC2 buffer underflow triggers cleanly on Watch4,2 | Treated strictly as THEORETICAL; exploit not run |
+| **usbliter8 S4 Exploit Reliability** | Whether USB DWC2 buffer underflow triggers cleanly on Watch4,2 | **UNKNOWN/BLOCKED**; exploit not run |
 | **Display Panel Initialization** | Whether OLED panel scanout is active at handoff | Writes hard-locked; no MIPI DSI programming attempted |
 
 ---
@@ -240,7 +240,7 @@ typedef struct {
   - Exploits USB buffer underflow in SecureROM DWC2 stack on Apple S4 (T8006).
   - Requires physical connection to the diagnostic port via an iBUS S4/S5 adapter or AWRT tool.
   - Requires an external RP2350 / Raspberry Pi Pico 2 microcontroller acting as a USB host controller interposer.
-  - Status for Watch4,2: **THEORETICAL**. No confirmed turnkey deployment script exists for this exact board configuration.
+  - Status for Watch4,2: **UNKNOWN/BLOCKED**. Public T8006-related code exists, but no confirmed turnkey DreyzeOS deployment contract exists for this exact board configuration.
 
 ---
 
@@ -304,6 +304,18 @@ XNU/iBoot-specific inputs before the kernel parses metadata.
 | Safe maximum payload size | overlap with loader/ADT/framebuffer/reserved RAM unknown | **UNKNOWN** |
 | Identity vs non-identity mapping | not established | **UNKNOWN/BLOCKED** |
 
+The fixed V1 wire object is exactly 128 bytes. Its offsets are `magic 0x00`,
+`version 0x08`, `size 0x0C`, `flags 0x10`, `entry_el 0x18`, `payload_pa
+0x20`, `payload_va 0x28`, `payload_size 0x30`, `mmu_enabled 0x38`, `raw_x0
+0x40`, `raw_x1 0x48`, `boot_args_range 0x50`, and `device_tree_range 0x68`.
+Each range is 24 bytes: `base u64`, `length u64`, `flags u32`, `reserved u32`.
+V1 validation requires the magic, version, `size >= 128`, known flags, zero
+reserved fields, and a boolean-valued MMU field. A larger size is accepted but
+the unknown tail is ignored. The `VERIFIED` flag is only an assertion from an
+already-trusted bootstrap; it is not a root of trust, signature, or proof that
+the descriptor pointer is readable. Range conversion and full-object
+containment are checked before every host parser copy or scan.
+
 The range helpers reject zero-length or unreadable ranges, addition overflow,
 `UINTPTR_MAX` wraparound, outside pointers, and partial overlaps. Exact-end
 containment is accepted only when the complete non-empty object fits. A boolean
@@ -314,6 +326,9 @@ documents explicit payload chaining on Apple Silicon, and
 [PongoOS](https://github.com/checkra1n/PongoOS) documents a pre-boot AArch64
 environment. These sources do not establish a Watch4,2/T8006 load PA, VA,
 entry state, or MMU mapping and are not treated as such.
+
+See the evidence matrix and unresolved T8006 loader questions in
+[docs/T8006_LOADER_RESEARCH.md](T8006_LOADER_RESEARCH.md).
 
 ---
 
