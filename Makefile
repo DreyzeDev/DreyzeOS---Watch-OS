@@ -66,7 +66,8 @@ BOOT_SRCS := \
 KERNEL_SRCS := \
 	kernel/kernel.c \
 	kernel/panic.c \
-	kernel/log.c
+	kernel/log.c \
+	kernel/boot_stage.c
 
 HAL_SRCS := \
 	hal/t8006/platform.c \

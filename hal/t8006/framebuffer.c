@@ -316,6 +316,7 @@ void framebuffer_diag(void)
 
     /* Pixel format details from kernelcache */
     klog_info("  [FB] Pixel Format: BBBBBBBBGGGGGGGGRRRRRRRR (BGRA32) [CONFIRMED]");
+    klog_info("  [FB] MMU Mapping: Identity mapping UNVERIFIED (Direct dereference blocked)");
 
     if (g_fb.is_write_allowed) {
         klog_info("  [FB] Write Status: Hardware writes ALLOWED");

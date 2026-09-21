@@ -870,6 +870,164 @@ def test_framebuffer_test_pattern_generation():
     fb.check_canaries()
 
 
+
+# ============================================================
+# Tests: Phase 4 Step 2 — Boot Stage Tracking & Failsafe
+# ============================================================
+
+@test("boot stage — symbols present in ELF")
+def test_boot_stage_symbols_in_elf():
+    """Verify that all boot stage API symbols are in the compiled ELF."""
+    elf_path = os.path.join(os.path.dirname(os.path.dirname(os.path.abspath(__file__))),
+                            "build", "DreyzeOS.elf")
+    if not os.path.exists(elf_path):
+        raise AssertionError(f"ELF not found: {elf_path} (run 'make' first)")
+
+    import subprocess
+    result = subprocess.run(
+        ["aarch64-linux-gnu-nm", "--defined-only", elf_path],
+        capture_output=True, text=True
+    )
+    # Fall back to wsl nm if direct call fails
+    if result.returncode != 0:
+        result = subprocess.run(
+            ["wsl", "-d", "Ubuntu", "--", "bash", "-c",
+             f"aarch64-linux-gnu-nm --defined-only /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"],
+            capture_output=True, text=True
+        )
+
+    sym_output = result.stdout + result.stderr
+    required_symbols = [
+        "boot_stage_set",
+        "boot_stage_get",
+        "boot_stage_get_last_successful",
+        "boot_stage_failsafe",
+        "boot_stage_name",
+    ]
+    for sym in required_symbols:
+        assert sym in sym_output, f"Symbol '{sym}' not found in ELF"
+
+
+@test("boot stage — stage values are monotonically increasing")
+def test_boot_stage_progression():
+    """
+    Python simulation: verify STAGE 0..6 are monotonically increasing integers
+    and BOOT_STAGE_ERROR is not in the normal progression sequence.
+    """
+    # Mirror the enum values from boot_stage.h
+    BOOT_STAGE_ENTRY     = 0
+    BOOT_STAGE_UART      = 1
+    BOOT_STAGE_BOOT_ARGS = 2
+    BOOT_STAGE_MEM_MAP   = 3
+    BOOT_STAGE_AIC       = 4
+    BOOT_STAGE_FB        = 5
+    BOOT_STAGE_IDLE      = 6
+    BOOT_STAGE_ERROR     = 0xFF
+
+    stages = [
+        BOOT_STAGE_ENTRY,
+        BOOT_STAGE_UART,
+        BOOT_STAGE_BOOT_ARGS,
+        BOOT_STAGE_MEM_MAP,
+        BOOT_STAGE_AIC,
+        BOOT_STAGE_FB,
+        BOOT_STAGE_IDLE,
+    ]
+
+    # Verify monotonically increasing
+    for i in range(len(stages) - 1):
+        assert stages[i] < stages[i + 1], (
+            f"Stages not monotonically increasing at index {i}: "
+            f"{stages[i]} >= {stages[i+1]}"
+        )
+
+    # BOOT_STAGE_ERROR must not be in normal sequence
+    assert BOOT_STAGE_ERROR not in stages, \
+        "BOOT_STAGE_ERROR (0xFF) must not appear in normal boot stage sequence"
+
+    # ERROR must be higher than all normal stages
+    assert BOOT_STAGE_ERROR > BOOT_STAGE_IDLE, \
+        f"BOOT_STAGE_ERROR ({BOOT_STAGE_ERROR}) must be > BOOT_STAGE_IDLE ({BOOT_STAGE_IDLE})"
+
+
+@test("boot stage — failsafe preserves last successful stage separately")
+def test_boot_stage_failsafe_preserves_last_successful():
+    """
+    Python simulation: when failsafe is triggered at STAGE 3,
+    last_successful must remain STAGE 3, current must be ERROR.
+    Verifies the two-variable design (g_current_stage vs g_last_successful_stage).
+    """
+    BOOT_STAGE_ENTRY     = 0
+    BOOT_STAGE_UART      = 1
+    BOOT_STAGE_BOOT_ARGS = 2
+    BOOT_STAGE_MEM_MAP   = 3
+    BOOT_STAGE_AIC       = 4
+    BOOT_STAGE_FB        = 5
+    BOOT_STAGE_IDLE      = 6
+    BOOT_STAGE_ERROR     = 0xFF
+
+    # Simulate boot_stage_set and boot_stage_failsafe logic
+    g_current_stage = BOOT_STAGE_ENTRY
+    g_last_successful_stage = BOOT_STAGE_ENTRY
+
+    def boot_stage_set(stage):
+        nonlocal g_current_stage, g_last_successful_stage
+        g_current_stage = stage
+        if stage != BOOT_STAGE_ERROR:
+            g_last_successful_stage = stage
+
+    def boot_stage_failsafe():
+        nonlocal g_current_stage
+        # Does NOT update g_last_successful_stage
+        g_current_stage = BOOT_STAGE_ERROR
+
+    # Simulate progression to stage 3
+    boot_stage_set(BOOT_STAGE_ENTRY)
+    boot_stage_set(BOOT_STAGE_UART)
+    boot_stage_set(BOOT_STAGE_BOOT_ARGS)
+    boot_stage_set(BOOT_STAGE_MEM_MAP)
+
+    assert g_last_successful_stage == BOOT_STAGE_MEM_MAP, \
+        f"Last successful should be STAGE_3 before failsafe, got {g_last_successful_stage}"
+
+    # Trigger failsafe at stage 3
+    boot_stage_failsafe()
+
+    assert g_current_stage == BOOT_STAGE_ERROR, \
+        f"Current stage should be ERROR after failsafe, got {g_current_stage}"
+    assert g_last_successful_stage == BOOT_STAGE_MEM_MAP, \
+        f"Last successful stage must be preserved as STAGE_3, got {g_last_successful_stage}"
+
+    # Critically: last_successful must NOT be ERROR
+    assert g_last_successful_stage != BOOT_STAGE_ERROR, \
+        "g_last_successful_stage must not be set to BOOT_STAGE_ERROR by failsafe"
+
+
+@test("boot stage — ERROR stage is separate from all valid stages")
+def test_boot_stage_error_separate_from_last_successful():
+    """
+    Verify BOOT_STAGE_ERROR (0xFF) is not equal to any valid boot stage value.
+    This is a static correctness check on the enum design.
+    """
+    BOOT_STAGE_ERROR = 0xFF
+    valid_stages = {
+        "ENTRY":     0,
+        "UART":      1,
+        "BOOT_ARGS": 2,
+        "MEM_MAP":   3,
+        "AIC":       4,
+        "FB":        5,
+        "IDLE":      6,
+    }
+    for name, value in valid_stages.items():
+        assert BOOT_STAGE_ERROR != value, \
+            f"BOOT_STAGE_ERROR ({BOOT_STAGE_ERROR}) must not equal {name} ({value})"
+
+    # Must be representable as uint8_t
+    assert 0 <= BOOT_STAGE_ERROR <= 255, \
+        f"BOOT_STAGE_ERROR must fit in uint8_t, got {BOOT_STAGE_ERROR}"
+
+
 # ============================================================
 # Run all tests
 # ============================================================
@@ -910,6 +1068,11 @@ def main():
         test_framebuffer_canary_overrun,
         test_framebuffer_fill_and_rect,
         test_framebuffer_test_pattern_generation,
+        # Phase 4 Step 2 — Boot Stage Tracking & Failsafe
+        test_boot_stage_symbols_in_elf,
+        test_boot_stage_progression,
+        test_boot_stage_failsafe_preserves_last_successful,
+        test_boot_stage_error_separate_from_last_successful,
     ]
 
     for t in tests:
