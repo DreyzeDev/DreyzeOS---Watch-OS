@@ -191,6 +191,71 @@ def test_watch42_devtree_uart0():
     assert regs[0][1] == 0x4000, f"UART0 size 0x{regs[0][1]:x} != 0x4000"
 
 # ============================================================
+# Tests: AIC (Apple Interrupt Controller)
+# ============================================================
+
+@test("AIC — hardware constants match DeviceTree and kernelcache")
+def test_aic_constants():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    header_path = os.path.join(project_root, 'hal', 't8006', 'memory_map.h')
+    aic_h_path = os.path.join(project_root, 'hal', 't8006', 'aic.h')
+    with open(header_path, 'r') as f:
+        mm_content = f.read()
+    with open(aic_h_path, 'r') as f:
+        aic_content = f.read()
+    import re
+    assert re.search(r'#define\s+T8006_AIC_BASE\s+0x000000002d180000', mm_content), "T8006_AIC_BASE not 0x2d180000"
+    assert re.search(r'#define\s+T8006_AIC_SIZE\s+0x00008000', mm_content), "T8006_AIC_SIZE not 0x8000"
+    assert re.search(r'#define\s+T8006_AIC_TIMEBASE_BASE\s+0x000000002d188000', mm_content), "T8006_AIC_TIMEBASE_BASE not 0x2d188000"
+    assert re.search(r'#define\s+AIC_REG_EVENT\s+0x2004', aic_content), "AIC_REG_EVENT not 0x2004"
+    assert re.search(r'#define\s+AIC_REG_WHOAMI\s+0x2000', aic_content), "AIC_REG_WHOAMI not 0x2000"
+    assert re.search(r'#define\s+AIC_REG_MASK_SET_BASE\s+0x4000', aic_content), "AIC_REG_MASK_SET_BASE not 0x4000"
+    assert re.search(r'#define\s+AIC_REG_MASK_CLR_BASE\s+0x4080', aic_content), "AIC_REG_MASK_CLR_BASE not 0x4080"
+
+@test("AIC — exported symbols in built ELF")
+def test_aic_symbols_in_elf():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(project_root, 'build', 'DreyzeOS.elf')
+    if not os.path.exists(elf_path):
+        return
+    import subprocess
+    res = subprocess.run(['aarch64-linux-gnu-nm', elf_path], capture_output=True, text=True)
+    assert res.returncode == 0
+    symbols = res.stdout
+    for sym in ['aic_init', 'aic_enable_irq', 'aic_disable_irq', 'aic_mask_all',
+                'aic_ack', 'aic_eoi', 'aic_get_cpu_id', 'aic_handle_irq', 'aic_diag',
+                'arch_irq_enable', 'arch_irq_disable']:
+        assert sym in symbols, f"Missing AIC symbol {sym} in ELF"
+
+@test("AIC — verified in Watch4,2 DeviceTree binary")
+def test_watch42_devtree_aic():
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    adt_path = os.path.join(project_root, 'research', 'ipsw', '21U580', 'DeviceTree.n131bap.adt')
+    if not os.path.exists(adt_path):
+        return
+    from tools.device_tree_dump import parse_adt, walk_nodes
+    root, _ = parse_adt(open(adt_path, 'rb').read())
+    aic_node = None
+    timebase_node = None
+    for path, node in walk_nodes(root):
+        if path == '/arm-io/aic':
+            aic_node = node
+        elif path == '/arm-io/aic-timebase':
+            timebase_node = node
+    assert aic_node is not None, "Node /arm-io/aic not found in Watch4,2 DeviceTree"
+    assert timebase_node is not None, "Node /arm-io/aic-timebase not found in Watch4,2 DeviceTree"
+    compat = aic_node.get_prop('compatible')
+    assert compat is not None and 'aic,1' in compat.as_str(), f"AIC compatible={compat.as_str()!r}"
+    regs = aic_node.get_prop('reg').as_reg()
+    assert len(regs) == 1, f"AIC regs count={len(regs)}"
+    assert regs[0][0] == 0x2d180000, f"AIC base 0x{regs[0][0]:x} != 0x2d180000"
+    assert regs[0][1] == 0x8000, f"AIC size 0x{regs[0][1]:x} != 0x8000"
+    tb_regs = timebase_node.get_prop('reg').as_reg()
+    assert len(tb_regs) == 1, f"AIC timebase regs count={len(tb_regs)}"
+    assert tb_regs[0][0] == 0x2d188000, f"AIC timebase base 0x{tb_regs[0][0]:x} != 0x2d188000"
+    assert tb_regs[0][1] == 0x1000, f"AIC timebase size 0x{tb_regs[0][1]:x} != 0x1000"
+
+# ============================================================
 # Run all tests
 # ============================================================
 
@@ -211,6 +276,9 @@ def main():
         test_uart0_constants,
         test_uart0_symbols_in_elf,
         test_watch42_devtree_uart0,
+        test_aic_constants,
+        test_aic_symbols_in_elf,
+        test_watch42_devtree_aic,
     ]
 
     for t in tests:

@@ -48,11 +48,23 @@
 
 /* ============================================================
  * Interrupt Controller (AIC)
- * Status: CONFIRMED from /arm-io/aic
+ * Status: CONFIRMED from /arm-io/aic & kernelcache disassembly
  * ============================================================ */
 #define T8006_AIC_BASE                  0x000000002d180000ULL  /* CONFIRMED — 32KB (0x8000) */
 #define T8006_AIC_SIZE                  0x00008000ULL
 #define T8006_AIC_VERSION               2                      /* aic-version = 2 (AIC2) */
+
+/* AIC Confirmed Registers (Offsets from T8006_AIC_BASE) */
+#define AIC_REVISION_OFFSET             0x0000                 /* CONFIRMED */
+#define AIC_INFO_OFFSET                 0x0004                 /* CONFIRMED */
+#define AIC_CONFIG_OFFSET               0x0010                 /* CONFIRMED */
+#define AIC_WHOAMI_OFFSET               0x2000                 /* CONFIRMED */
+#define AIC_EVENT_OFFSET                0x2004                 /* CONFIRMED — IACK */
+#define AIC_IPI_SEND_OFFSET             0x2008                 /* CONFIRMED */
+#define AIC_IPI_ACK_OFFSET              0x200C                 /* CONFIRMED */
+#define AIC_MASK_SET_OFFSET             0x4000                 /* CONFIRMED — IRQ Disable */
+#define AIC_MASK_CLR_OFFSET             0x4080                 /* CONFIRMED — IRQ Enable / EOI */
+#define AIC_HW_STATE_OFFSET             0x4200                 /* CONFIRMED — Line status */
 
 /* AIC Timebase (Timer) */
 #define T8006_AIC_TIMEBASE_BASE         0x000000002d188000ULL  /* CONFIRMED — 4KB (0x1000) */

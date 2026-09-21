@@ -38,6 +38,7 @@ void platform_early_init(void)
 }
 
 #include "uart.h"
+#include "aic.h"
 
 /*
  * platform_init — called after log_init().
@@ -51,6 +52,10 @@ void platform_init(void)
 
     /* Output UART hardware diagnostics */
     uart_diag();
+
+    /* Initialize and diagnose Apple Interrupt Controller */
+    aic_init();
+    aic_diag();
 
     klog_info("  [HAL] T8006 platform_init complete");
 }

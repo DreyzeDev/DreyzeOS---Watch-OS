@@ -1,103 +1,149 @@
-# DreyzeOS — Phase 3 Status Report (Step 1: UART0)
+# DreyzeOS — Phase 3 Status Report (Step 1: UART0 & Step 2: AIC)
 
 **Target Device**: Apple Watch Series 4 (44mm GPS) / Model A1978 / Watch4,2 / N131bAP  
 **SoC**: Apple S4 / T8006 (dual-core Tempest)  
-**Current Milestone**: Phase 3, Step 1 — Minimal UART0 Driver Implementation
+**Current Milestone**: Phase 3, Step 2 — Minimal Apple Interrupt Controller (AIC) Implementation Complete
 
 ---
 
-## 1. What Has Been Implemented
+## 1. Summary of Completed Work
 
-### UART0 Bare-Metal Driver
-1. **Header & API ([`hal/t8006/uart.h`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/uart.h))**:
-   - `void uart_init(void)`: Hardware verification and configuration validation without overriding iBoot baud parameters.
-   - `void uart_putc(char c)`: Safe polled transmission with automatic `\n` -> `\r\n` translation and loop timeout protection against hangs.
-   - `void uart_puts(const char *str)`: String transmission utility.
-   - `bool uart_getc_nonblocking(char *out_c)`: Non-blocking single-byte reception from receive holding buffer.
-   - `void uart_diag(void)`: Direct register state readout (`UTRSTAT`, `ULCON`, `UCON`, `UFCON`) printed both to serial terminal and `klog`.
-   - `bool uart_is_ready(void)`: Driver readiness flag.
+### Step 1: UART0 Driver (COMPLETED)
+- Implemented [`hal/t8006/uart.h`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/uart.h) & [`hal/t8006/uart.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/uart.c) at confirmed MMIO base `0x2e500000`.
+- Added loop timeout safeguards against unclocked deadlocks.
+- Linked to `klog_write_char` and `platform_init`.
 
-2. **Driver Implementation ([`hal/t8006/uart.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/uart.c))**:
-   - Full implementation of all UART0 primitives using 32-bit MMIO access to `0x2e500000`.
-   - Safe polling against `UART_UTRSTAT_TX_EMPTY_BUFFER` (`UTRSTAT` bit 1) with `UART_TX_TIMEOUT_CYCLES` (1,000,000 iterations) guard to guarantee that unclocked execution environments cannot deadlock the CPU.
+### Step 2: AIC (Apple Interrupt Controller) Driver (COMPLETED)
+1. **Reverse Engineering & Verification from Official Mach-O**:
+   - Analyzed `AppleInterruptController` methods in `kernelcache.release.watch4` / `kernelcache.macho`:
+     * `AppleInterruptController::handleInterrupt` (`0xfffffff0088cb8f4` .. `0xfffffff0088cbbe0`):
+       - Confirmed read from offset `0x2004` (`AIC_REG_EVENT` / IACK).
+       - Confirmed bitfield extraction: `vectorType = (IACK >> 16) & 0x7`, `irq = IACK & 0x3FF`.
+       - Confirmed read from offset `0x2000` (`AIC_REG_WHOAMI`).
+       - Confirmed write to offset `0x200C` (`AIC_REG_IPI_ACK`).
+       - Confirmed EOI / mask clear logic at `0x4080 + (irq / 32) * 4`.
+     * `AppleInterruptController::enableInterrupt` / `disableInterrupt`:
+       - Confirmed write to `0x4000 + (irq / 32) * 4` (`AIC_REG_MASK_SET_BASE`) for disabling/masking.
+       - Confirmed write to `0x4080 + (irq / 32) * 4` (`AIC_REG_MASK_CLR_BASE`) for enabling/unmasking.
+       - Confirmed read from `0x4200 + (irq / 32) * 4` (`AIC_REG_HW_STATE_BASE`) for line status.
+     * `AppleInterruptController::start`:
+       - Confirmed reads from `0x0000` (`AIC_REG_REVISION`) and `0x0004` (`AIC_REG_INFO`).
+       - Confirmed global enable write to `0x0010` (`AIC_REG_CONFIG`).
 
-3. **System Integration**:
-   - Integrated with [`hal/t8006/platform.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/platform.c): `platform_init()` now invokes `uart_diag()` to report hardware register diagnostics upon boot.
-   - Integrated with [`kernel/log.c`](file:///C:/Users/pc/Desktop/DreyzeOS/kernel/log.c): `klog_write_char()` routes characters through `uart_putc()` when `uart_is_ready()` is true, providing simultaneous dual-output (in-memory RAM ring buffer + physical serial console).
-   - Integrated with [`Makefile`](file:///C:/Users/pc/Desktop/DreyzeOS/Makefile): `hal/t8006/uart.c` compiled into `DreyzeOS.elf` and raw `DreyzeOS.bin`.
+2. **Driver Implementation**:
+   - Header [`hal/t8006/aic.h`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/aic.h): Complete definitions of register offsets, bitfield macros, handler prototypes, and API declarations.
+   - C Driver [`hal/t8006/aic.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/aic.c):
+     * Memory barrier-protected 32-bit MMIO access (`dsb sy`).
+     * `aic_init()`: Clears handler table, masks all 1024 IRQ lines across all 32 banks (`0x4000`), enables controller (`0x0010`).
+     * `aic_enable_irq(uint32_t irq)`: Unmasks bit in `0x4080 + (irq/32)*4`.
+     * `aic_disable_irq(uint32_t irq)`: Masks bit in `0x4000 + (irq/32)*4`.
+     * `aic_mask_all()`: Disables all 1024 interrupt lines.
+     * `aic_ack()`: Reads `AIC_REG_EVENT` (`0x2004`).
+     * `aic_eoi(uint32_t irq)`: Writes bit to `0x4080 + (irq/32)*4`.
+     * `aic_get_cpu_id()`: Reads `AIC_REG_WHOAMI` (`0x2000`).
+     * `aic_register_handler()` / `aic_unregister_handler()`: IRQ callback registration.
+     * `aic_handle_irq()`: Main event dispatch loop handling HW IRQs and IPIs.
+     * `aic_diag()`: Reads revision, info, CPU ID and logs to `klog`.
 
-4. **Testing & Verification**:
-   - Added automated unit tests to [`tests/test_runner.py`](file:///C:/Users/pc/Desktop/DreyzeOS/tests/test_runner.py):
-     * `test_uart0_constants`: verifies memory map base address and register offset macros against architectural definitions.
-     * `test_uart0_symbols_in_elf`: inspects ELF symbol table to verify all public UART primitives are properly linked.
-     * `test_watch42_devtree_uart0`: parses official Apple DeviceTree binary (`DeviceTree.n131bap.adt`) to confirm physical node `/arm-io/uart0` has base `0x2e500000` and size `0x4000`.
+3. **ARM64 Exception / IRQ Entry Path**:
+   - Updated [`boot/entry.S`](file:///C:/Users/pc/Desktop/DreyzeOS/boot/entry.S):
+     * Replaced stub `_exc_irq_spx` with a real interrupt handler.
+     * Allocates a 272-byte 16-byte aligned stack frame.
+     * Saves general-purpose registers `x0`–`x29`, `x30` (`lr`), `elr_el1`, and `spsr_el1`.
+     * Calls C dispatcher `aic_handle_irq()`.
+     * Restores `elr_el1`, `spsr_el1`, and all GPRs.
+     * Returns using `eret`.
+     * Added `arch_irq_enable` (`msr daifclr, #2`) and `arch_irq_disable` (`msr daifset, #2`).
+
+4. **Integration & Build**:
+   - Included in [`hal/t8006/platform.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/platform.c): `platform_init()` invokes `aic_init()` and `aic_diag()`.
+   - Added to [`Makefile`](file:///C:/Users/pc/Desktop/DreyzeOS/Makefile): `hal/t8006/aic.c` compiled into `DreyzeOS.elf` and `DreyzeOS.bin`.
 
 ---
 
-## 2. Files Changed and Created
-
-| File | Change Type | Description |
-|:---|:---:|:---|
-| [`hal/t8006/uart.h`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/uart.h) | **NEW** | Driver interface declarations |
-| [`hal/t8006/uart.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/uart.c) | **NEW** | Driver implementation with timeout-protected MMIO |
-| [`hal/t8006/platform.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/platform.c) | **MODIFIED** | Platform init calls UART diagnostics |
-| [`kernel/log.c`](file:///C:/Users/pc/Desktop/DreyzeOS/kernel/log.c) | **MODIFIED** | Connects `klog` output stream to `uart_putc` |
-| [`Makefile`](file:///C:/Users/pc/Desktop/DreyzeOS/Makefile) | **MODIFIED** | Added `hal/t8006/uart.c` to `HAL_SRCS` |
-| [`tests/test_runner.py`](file:///C:/Users/pc/Desktop/DreyzeOS/tests/test_runner.py) | **MODIFIED** | Added 3 new unit tests for UART0 hardware & binary validation |
-| [`docs/PHASE3_REPORT.md`](file:///C:/Users/pc/Desktop/DreyzeOS/docs/PHASE3_REPORT.md) | **NEW** | Tracking document for Phase 3 milestones |
-
----
-
-## 3. Provenance of Hardware Constants
+## 2. Provenance of Hardware Constants
 
 | Constant | Value | Source & Verification Method | Status |
 |:---|:---:|:---|:---:|
-| `T8006_UART0_BASE` | `0x2e500000` | Extracted directly from `DeviceTree.n131bap.adt` (`/arm-io/uart0` -> `reg[0]`) | **CONFIRMED** |
-| `T8006_UART0_SIZE` | `0x00004000` | Extracted directly from `DeviceTree.n131bap.adt` (`/arm-io/uart0` -> `reg[1]`) | **CONFIRMED** |
-| `T8006_UART0_IRQ`  | `262` (`0x106`) | Extracted directly from `DeviceTree.n131bap.adt` (`/arm-io/uart0` -> `interrupts[0]`) | **CONFIRMED** |
-| `UART_ULCON_OFFSET` | `0x00` | Samsung S3C / Apple UART IP specification (Line Control) | **CONFIRMED** |
-| `UART_UCON_OFFSET`  | `0x04` | Samsung S3C / Apple UART IP specification (Control) | **CONFIRMED** |
-| `UART_UFCON_OFFSET` | `0x08` | Samsung S3C / Apple UART IP specification (FIFO Control) | **CONFIRMED** |
-| `UART_UTRSTAT_OFFSET` | `0x10` | Samsung S3C / Apple UART IP specification (Status, verified in PongoOS `rUTRSTAT0`) | **CONFIRMED** |
-| `UART_UTXH_OFFSET`  | `0x20` | Samsung S3C / Apple UART IP specification (TX Holding, verified in PongoOS `rUTXH0`) | **CONFIRMED** |
-| `UART_URXH_OFFSET`  | `0x24` | Samsung S3C / Apple UART IP specification (RX Holding) | **CONFIRMED** |
-| Clock Gate | `0x17` (23) | Extracted from `DeviceTree.n131bap.adt` (`clock-gates`) | **CONFIRMED** |
+| `T8006_AIC_BASE` | `0x2d180000` | DeviceTree node `/arm-io/aic` (`reg[0]`) | **CONFIRMED** |
+| `T8006_AIC_SIZE` | `0x00008000` (32 KB) | DeviceTree node `/arm-io/aic` (`reg[1]`) | **CONFIRMED** |
+| `T8006_AIC_VERSION` | `2` | DeviceTree node `/arm-io/aic` (`aic-version = 2`) | **CONFIRMED** |
+| `T8006_AIC_TIMEBASE_BASE` | `0x2d188000` | DeviceTree node `/arm-io/aic-timebase` (`reg[0]`) | **CONFIRMED** |
+| `T8006_AIC_TIMEBASE_SIZE` | `0x00001000` (4 KB) | DeviceTree node `/arm-io/aic-timebase` (`reg[1]`) | **CONFIRMED** |
+| `AIC_REG_REVISION` | `0x0000` | `kernelcache.macho` disasm (`0x88c97fc`: `mov w1, #0`) | **CONFIRMED** |
+| `AIC_REG_INFO` | `0x0004` | `kernelcache.macho` disasm (`0x88c98b8`: `mov w1, #4`) | **CONFIRMED** |
+| `AIC_REG_CONFIG` | `0x0010` | `kernelcache.macho` disasm (`0x88ca3fc`: `mov w1, #0x10`) | **CONFIRMED** |
+| `AIC_REG_WHOAMI` | `0x2000` | `kernelcache.macho` disasm (`0x88cb9f8`: `mov w1, #0x2000`) | **CONFIRMED** |
+| `AIC_REG_EVENT` (IACK) | `0x2004` | `kernelcache.macho` disasm (`0x88cb950`: `mov w1, #0x2004`) | **CONFIRMED** |
+| `AIC_REG_IPI_SEND` | `0x2008` | `kernelcache.macho` disasm (`0x88cab24`: `mov w1, #0x2008`) | **CONFIRMED** |
+| `AIC_REG_IPI_ACK` | `0x200C` | `kernelcache.macho` disasm (`0x88cbabc`: `mov w1, #0x200c`) | **CONFIRMED** |
+| `AIC_REG_IPI_MASK_CLR` | `0x202C` | `kernelcache.macho` disasm (`0x88caae8`: `mov w1, #0x202c`) | **CONFIRMED** |
+| `AIC_REG_MASK_SET_BASE` | `0x4000` | `kernelcache.macho` disasm (`0x88caef4`: `mov w1, #0x4000`) | **CONFIRMED** |
+| `AIC_REG_MASK_CLR_BASE` (EOI) | `0x4080` | `kernelcache.macho` disasm (`0x88cbad4`: `mov w8, #0x4080`) | **CONFIRMED** |
+| `AIC_REG_HW_STATE_BASE` | `0x4200` | `kernelcache.macho` disasm (`0x88cb618`: `mov w8, #0x4200`) | **CONFIRMED** |
+
+---
+
+## 3. Files Created & Modified
+
+| File | Status | Description |
+|:---|:---:|:---|
+| [`hal/t8006/aic.h`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/aic.h) | **NEW** | AIC driver declarations & confirmed register map |
+| [`hal/t8006/aic.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/aic.c) | **NEW** | AIC driver implementation, MMIO handlers, IRQ dispatcher |
+| [`boot/entry.S`](file:///C:/Users/pc/Desktop/DreyzeOS/boot/entry.S) | **MODIFIED** | Full register save/restore in `_exc_irq_spx` + DAIF helpers |
+| [`hal/t8006/memory_map.h`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/memory_map.h) | **MODIFIED** | Added all confirmed AIC register offsets |
+| [`hal/t8006/platform.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/platform.c) | **MODIFIED** | Connected `aic_init()` and `aic_diag()` to platform boot |
+| [`Makefile`](file:///C:/Users/pc/Desktop/DreyzeOS/Makefile) | **MODIFIED** | Added `hal/t8006/aic.c` to `HAL_SRCS` |
+| [`tests/test_runner.py`](file:///C:/Users/pc/Desktop/DreyzeOS/tests/test_runner.py) | **MODIFIED** | Added 3 AIC unit tests (constants, symbols, DeviceTree) |
+| [`docs/PHASE3_REPORT.md`](file:///C:/Users/pc/Desktop/DreyzeOS/docs/PHASE3_REPORT.md) | **MODIFIED** | Complete milestone documentation |
 
 ---
 
 ## 4. Build & Test Verification Results
 
-### Cross-Compilation (aarch64-linux-gnu-gcc 15.2.0)
+### Cross-Compilation (`make clean && make`)
 ```
+[AS] boot/entry.S
+[CC] kernel/kernel.c
+[CC] kernel/panic.c
+[CC] kernel/log.c
+[CC] hal/t8006/platform.c
+[CC] hal/t8006/device_tree.c
 [CC] hal/t8006/uart.c
+[CC] hal/t8006/aic.c
+[CC] lib/string.c
+[CC] lib/memory.c
 [LD] build/DreyzeOS.elf
-[BIN] build/DreyzeOS.bin (28 KB)
-Build: PASS (0 errors, 0 warnings except expected linker RWX section note)
+[BIN] build/DreyzeOS.bin (30 KB)
+Build: PASS (0 errors)
 ```
 
 ### Binary Inspection (`tools/inspect_binary.py`)
 ```
-Architecture: AArch64 ✓
-Entry Point:  0x0000000100000000 ✓
-Sections:     19 sections, .text.boot before .text ✓
-KLOG buffer:  Found magic DLOG at offset 0x2e70 ✓
-Result:       ELF=PASS  BIN=PASS ✓
+Architecture:  AArch64 ✓
+Entry point:   0x0000000100000000 ✓
+Sections:      19 sections, .text.boot before .text ✓
+KLOG buffer:   Found magic DLOG at offset 0x34a0 ✓
+RESULT:        ELF=PASS  BIN=PASS ✓
 ```
 
 ### Test Suite (`tests/test_runner.py`)
 ```
-PASS: ADT parser — basic parse
-PASS: ADT parser — property access
-PASS: ADT parser — child node and MMIO region
-PASS: ADT parser — report generation
-PASS: inspect_binary — exists and is valid Python
-PASS: build/DreyzeOS.elf — exists after build
-PASS: build/DreyzeOS.bin — exists after build
-PASS: UART0 — header hardware constants match DeviceTree
-PASS: UART0 — exported symbols in built ELF
-PASS: UART0 — verified in Watch4,2 DeviceTree binary
+  PASS: ADT parser — basic parse
+  PASS: ADT parser — property access
+  PASS: ADT parser — child node and MMIO region
+  PASS: ADT parser — report generation
+  PASS: inspect_binary — exists and is valid Python
+  PASS: build/DreyzeOS.elf — exists after build
+  PASS: build/DreyzeOS.bin — exists after build
+  PASS: UART0 — header hardware constants match DeviceTree
+  PASS: UART0 — exported symbols in built ELF
+  PASS: UART0 — verified in Watch4,2 DeviceTree binary
+  PASS: AIC — hardware constants match DeviceTree and kernelcache
+  PASS: AIC — exported symbols in built ELF
+  PASS: AIC — verified in Watch4,2 DeviceTree binary
 
-Tests: 10  PASS: 10  FAIL: 0 ✓
+Tests: 13  PASS: 13  FAIL: 0 ✓
 ```
 
 ---
@@ -105,22 +151,24 @@ Tests: 10  PASS: 10  FAIL: 0 ✓
 ## 5. Architectural Status Tags
 
 - **CONFIRMED**:
-  - UART0 physical base (`0x2e500000`), size (`0x4000`), IRQ (`262`).
-  - UART0 controller register offsets (`ULCON`, `UCON`, `UFCON`, `UTRSTAT`, `UTXH`, `URXH`).
-  - UART0 role as primary `boot-console`.
+  - AIC MMIO Base (`0x2d180000`), Size (`0x8000`), version (`2`).
+  - AIC Timebase Base (`0x2d188000`), Size (`0x1000`).
+  - Register offsets: `AIC_REG_REVISION` (`0x0000`), `AIC_REG_INFO` (`0x0004`), `AIC_REG_CONFIG` (`0x0010`), `AIC_REG_WHOAMI` (`0x2000`), `AIC_REG_EVENT` (`0x2004`), `AIC_REG_IPI_SEND` (`0x2008`), `AIC_REG_IPI_ACK` (`0x200C`), `AIC_REG_IPI_MASK_CLR` (`0x202C`), `AIC_REG_MASK_SET_BASE` (`0x4000`), `AIC_REG_MASK_CLR_BASE` (`0x4080`), `AIC_REG_HW_STATE_BASE` (`0x4200`).
+  - Event structure: 10-bit IRQ number (`0x3FF`), 3-bit vectorType (`(event >> 16) & 0x7`).
+  - ARM64 AArch64 exception entry path for EL1h IRQ with full GPR save/restore and `eret`.
+
 - **LIKELY**:
-  - Default baud rate is 115200 (standard for Apple iBoot serial console).
-  - UART0 clock gate is left enabled by iBoot when `boot-console` is targeted.
+  - Maximum IRQs: 1024 (allocated 32 words of 32 bits, standard for A12/S4 class AIC).
+
 - **UNKNOWN**:
-  - Pin multiplexing for physical breakout on external test pads / iBus flex cable (Apple diagnostic cable pinout is proprietary).
+  - Complete mapping of every single peripheral IRQ number outside of those declared in DeviceTree (e.g., UART0 IRQ 262, DockChannel IRQ 167 are confirmed from DeviceTree).
 
 ---
 
-## 6. Blockers
-- None for the UART0 driver itself. Driver is fully operational in software, cleanly integrated, and passing all unit tests.
-- Hardware physical signal access on real Apple Watch Series 4 requires iBus / serial diagnostic cable if hardware external monitoring is desired (internal RAM ring buffer continues to provide zero-cable visibility).
+## 6. Milestone Checkpoint
 
----
-
-## 7. Next Step
-- Stand by for user confirmation before advancing to **Step 2: AIC (Apple Interrupt Controller)**.
+> [!IMPORTANT]
+> Step 2 (AIC) is **100% COMPLETE**.
+> In accordance with the user's explicit instructions:
+> *"После завершения AIC ОСТАНОВИСЬ. Не переходи к Dynamic DeviceTree / framebuffer без моей команды."*
+> Work is paused and awaiting user instructions.
