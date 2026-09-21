@@ -3,7 +3,7 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **watchOS**: 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.3: Pre-Hardware MMIO / Entry Contract Hardening
+**Phase**: 4 — Step 2.4: Handoff Pointer Safety & Boot-Argument Trust Boundary
 **Status**: Pre-hardware (host-side validation complete, real device test BLOCKED)
 
 ---
@@ -52,7 +52,7 @@ DreyzeOS enforces a strictly monotonic boot stage machine:
 |:---:|:---|:---|
 | 0 | `BOOT_STAGE_ENTRY` | C entry reached under the mandatory EL1 loader contract; read-only CPU state captured |
 | 1 | `BOOT_STAGE_RAM_LOG` | RAM logger initialized; UART MMIO remains disabled unless mapping is verified |
-| 2 | `BOOT_STAGE_BOOT_ARGS` | `boot_args` / DeviceTree validated, real `virt_base` logged |
+| 2 | `BOOT_STAGE_BOOT_ARGS` | Boot metadata status recorded; unverified handoff uses `BOOT_METADATA_FALLBACK` |
 | 3 | `BOOT_STAGE_MEM_MAP` | DRAM non-zero check passed, memory map validated |
 | 4 | `BOOT_STAGE_AIC` | AIC evaluated; no MMIO access or CONFIG write without verified mapping |
 | 5 | `BOOT_STAGE_FB` | Framebuffer evaluated (HEADLESS vs VALIDATED_NOMAP, writes **hard-locked**) |
@@ -84,6 +84,15 @@ DreyzeOS enforces a strictly monotonic boot stage machine:
 The future loader must explicitly prove EL1 entry, x0/x1 semantics, stack state,
 DAIF, MMU/TTBR/cache state, payload VA/PA, and DeviceTree/boot_args delivery.
 `MRS CurrentEL` is UNDEFINED at EL0, so it cannot be used as a universal EL0 detector.
+
+### Handoff pointer trust boundary
+
+The production `platform_boot_info_init(x0, x1)` path preserves raw x0/x1 for
+RAM diagnostics and selects static fallback metadata. It does not dereference
+either value, auto-detect an ABI, or guess an ADT size. `loader_handoff_verified`
+therefore remains false until a future loader verifier proves both pointer
+ownership and bounded lengths. A `boot_args->devicetree_p` value is a separate
+trust boundary and requires its own independently verified pointer and length.
 
 ### Unconfirmed — Do NOT Assume
 
@@ -209,7 +218,7 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 | boot_args / DeviceTree availability | **UNKNOWN** | Parser supports both forms, but future loader delivery is unproven |
 | DeviceTree bounds-checked | **CONFIRMED** | Recursion limit 32, fuzz tested |
 | UART timeout safe | **CONFIRMED** | Non-blocking loop with cycle limit |
-| IRQs disabled | **CONFIRMED** | DAIF=0xF, AIC all masked |
+| IRQ delivery disabled | **CONFIRMED** | DAIF=0xF after entry.S; AIC MMIO/configuration remains untouched and unknown |
 | Framebuffer writes hard-locked | **CONFIRMED** | `mapping_verified = false` gate |
 | No NAND writes | **CONFIRMED** | Freestanding, 0 flash write routines |
 | Recovery path documented | **CONFIRMED** | Expected path documented, no false claims |
@@ -220,4 +229,4 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 
 ---
 
-*Last updated: Phase 4 Step 2.3 — MMIO/entry-contract hardening. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*
+*Last updated: Phase 4 Step 2.4 — handoff pointer safety. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*

@@ -81,6 +81,9 @@ typedef struct {
 /* Complete Platform Boot Information */
 typedef struct {
     /* Boot ABI source detection */
+    uint64_t raw_arg0;               /* x0 preserved verbatim; never trusted by itself */
+    uint64_t raw_arg1;               /* x1 preserved verbatim; never trusted by itself */
+    bool     loader_handoff_verified;/* True only after an external verifier proves bounds */
     bool     boot_args_present;      /* True if valid xnu boot_args was detected in x0 */
     bool     devtree_present;        /* True if valid Apple DeviceTree was detected */
     uintptr_t devtree_base;          /* Address of DeviceTree in memory */
@@ -113,6 +116,20 @@ typedef struct {
 
 /* Initialize platform boot info from bootloader registers x0 and x1 */
 void platform_boot_info_init(uint64_t arg0, uint64_t arg1);
+
+#ifdef HOST_TEST
+/*
+ * Test-only model of a future verified loader handoff.  The caller supplies
+ * an independently verified top-level bound.  Nested DeviceTree parsing is
+ * separately enabled and separately bounded; top-level verification does
+ * not authorize dereferencing boot_args->devicetree_p.
+ */
+void platform_boot_info_init_verified_for_test(uint64_t arg0,
+                                                uint32_t arg0_length,
+                                                bool arg0_is_boot_args,
+                                                bool nested_devtree_verified,
+                                                uint32_t nested_devtree_length);
+#endif
 
 /* Retrieve pointer to global boot info structure */
 const platform_boot_info_t *platform_get_boot_info(void);

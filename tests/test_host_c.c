@@ -19,6 +19,7 @@
 #include "../hal/t8006/device_tree.h"
 #include "../hal/t8006/framebuffer.h"
 #include "../hal/t8006/mmio_gate.h"
+#include "../hal/t8006/handoff_gate.h"
 #include "../hal/t8006/uart.h"
 #include "../hal/t8006/aic.h"
 #include "../hal/t8006/platform.h"
@@ -248,17 +249,67 @@ static void test_devtree_bounds_and_boot_args(void)
     *(unsigned int *)(void *)(tree + 4) = 0xFFFFFFFFU;
     assert(devtree_find_node_by_path((uintptr_t)tree, sizeof(tree), "/missing") == 0);
 
+    /* Unverified x0/x1 are preserved but never dereferenced or parsed. */
+    loader_handoff_set_verified_for_test(false);
+    platform_boot_info_init(0xDEAD000000001234ULL, UINT64_MAX);
+    const platform_boot_info_t *info = platform_get_boot_info();
+    assert(info->raw_arg0 == 0xDEAD000000001234ULL);
+    assert(info->raw_arg1 == UINT64_MAX);
+    assert(info->loader_handoff_verified == false);
+    assert(loader_handoff_is_verified() == false);
+    assert(info->boot_args_present == false);
+    assert(info->devtree_present == false);
+    assert(info->is_fallback_data == true);
+
+    /* A valid boot_args buffer is accepted only through the verified test ABI. */
     xnu_arm64_boot_args_t ba;
     memset(&ba, 0, sizeof(ba));
     ba.phys_base = 0x800000000ULL;
     ba.mem_size = 0x40000000ULL;
     ba.virt_base = 0xFFFF000080000000ULL;
-    platform_boot_info_init((uint64_t)(uintptr_t)&ba, 0);
-    const platform_boot_info_t *info = platform_get_boot_info();
+    platform_boot_info_init_verified_for_test(
+        (uint64_t)(uintptr_t)&ba, sizeof(ba), true, false, 0);
+    info = platform_get_boot_info();
+    assert(info->loader_handoff_verified == true);
+    assert(loader_handoff_is_verified() == true);
     assert(info->boot_args_present == true);
+    assert(info->devtree_present == false);
     assert(info->virt_base_valid == true);
     assert(info->dram_virt_base == ba.virt_base);
     assert(info->dram_virt_base != info->dram_phys_base);
+
+    /* Top-level verification does not authorize an invalid nested pointer. */
+    ba.devicetree_p = UINTPTR_MAX;
+    ba.devicetree_length = 96;
+    platform_boot_info_init_verified_for_test(
+        (uint64_t)(uintptr_t)&ba, sizeof(ba), true, false, 0);
+    info = platform_get_boot_info();
+    assert(info->boot_args_present == true);
+    assert(info->devtree_present == false);
+
+    /* Nested ADT parsing requires an independent pointer+length verification. */
+    unsigned char nested_tree[96];
+    memset(nested_tree, 0, sizeof(nested_tree));
+    *(unsigned int *)(void *)(nested_tree + 0) = 1;
+    *(unsigned int *)(void *)(nested_tree + 4) = 0;
+    {
+        const unsigned char name[] = "root";
+        make_prop(nested_tree + 8, "name", name, sizeof(name));
+    }
+    ba.devicetree_p = (uint64_t)(uintptr_t)nested_tree;
+    ba.devicetree_length = sizeof(nested_tree);
+    platform_boot_info_init_verified_for_test(
+        (uint64_t)(uintptr_t)&ba, sizeof(ba), true, true, sizeof(nested_tree));
+    info = platform_get_boot_info();
+    assert(info->boot_args_present == true);
+    assert(info->devtree_present == true);
+    assert(info->devtree_size == sizeof(nested_tree));
+
+    /* A direct ADT pointer with unavailable length is never scanned/guessed. */
+    platform_boot_info_init((uint64_t)(uintptr_t)nested_tree, 0);
+    info = platform_get_boot_info();
+    assert(info->loader_handoff_verified == false);
+    assert(info->devtree_present == false);
 
     printf("PASS\n");
 }

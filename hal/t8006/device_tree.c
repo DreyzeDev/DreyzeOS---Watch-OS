@@ -12,6 +12,7 @@
  */
 
 #include "device_tree.h"
+#include "handoff_gate.h"
 #include "memory_map.h"
 #include "../../include/log.h"
 #include "../../lib/string.h"
@@ -431,84 +432,141 @@ int devtree_parse_dynamic(uintptr_t base, uint32_t size, platform_boot_info_t *i
  * Public Platform Boot Info API
  * ============================================================ */
 
-void platform_boot_info_init(uint64_t arg0, uint64_t arg1)
+static void platform_boot_info_reset_fallback(uint64_t arg0, uint64_t arg1)
 {
-    /* Initialize defaults with confirmed static baseline */
     memset(&g_boot_info, 0, sizeof(g_boot_info));
-    g_boot_info.dram_phys_base   = T8006_DRAM_BASE;
-    g_boot_info.dram_size        = T8006_DRAM_SIZE;
-    g_boot_info.dram_virt_base   = 0;
-    g_boot_info.virt_base_valid  = false;
-    g_boot_info.is_fallback_data = true;
-    g_boot_info.chip_id          = 0x8006;
+    g_boot_info.raw_arg0          = arg0;
+    g_boot_info.raw_arg1          = arg1;
+    g_boot_info.loader_handoff_verified = false;
+    g_boot_info.dram_phys_base    = T8006_DRAM_BASE;
+    g_boot_info.dram_size         = T8006_DRAM_SIZE;
+    g_boot_info.dram_virt_base    = 0;
+    g_boot_info.virt_base_valid   = false;
+    g_boot_info.is_fallback_data  = true;
+    g_boot_info.chip_id           = 0x8006;
     strncpy(g_boot_info.model, "Watch4,2", sizeof(g_boot_info.model) - 1);
+#ifdef HOST_TEST
+    loader_handoff_set_verified_for_test(false);
+#endif
+    g_boot_info_initialized = true;
+}
 
-    if (arg0 == 0) {
-        /* No boot arguments passed; running standalone or simulator with fallback data */
-        g_boot_info_initialized = true;
+#ifdef HOST_TEST
+static void platform_boot_info_apply_video(const boot_video_t *video)
+{
+    if (!video || video->v_baseAddr == 0) {
         return;
     }
 
-    /*
-     * Boot ABI Detection:
-     * Check whether arg0 is a direct pointer to raw Apple DeviceTree (ADT)
-     * or a pointer to Apple XNU struct boot_args.
-     */
-    if (devtree_validate_header((uintptr_t)arg0, arg1 ? (uint32_t)arg1 : 0x100000)) {
-        /* arg0 is directly an Apple DeviceTree pointer! */
-        uint32_t dt_size = arg1 ? (uint32_t)arg1 : (uint32_t)devtree_get_node_size((uintptr_t)arg0, (uintptr_t)arg0 + 0x200000);
-        if (dt_size < 64) dt_size = 0x80000; /* 512 KB fallback estimate */
-        devtree_parse_dynamic((uintptr_t)arg0, dt_size, &g_boot_info);
-        g_boot_info.is_fallback_data = false;
-        /* Note: raw ADT does NOT supply virt_base; remains virt_base_valid = false */
-    } else {
-        /* Check if arg0 is struct xnu_arm64_boot_args */
-        const xnu_arm64_boot_args_t *ba = (const xnu_arm64_boot_args_t *)(uintptr_t)arg0;
-
-        /* Validate boot_args sanity: physical base non-zero and size reasonable */
-        if (ba->phys_base >= 0x100000000ULL && ba->mem_size >= 0x1000000ULL && ba->mem_size <= 0x80000000ULL) {
-            g_boot_info.boot_args_present = true;
-            g_boot_info.is_fallback_data  = false;
-            g_boot_info.dram_phys_base    = ba->phys_base;
-            g_boot_info.dram_size         = ba->mem_size;
-
-            /* REAL virt_base from confirmed boot_args */
-            if (ba->virt_base != 0) {
-                g_boot_info.dram_virt_base  = ba->virt_base;
-                g_boot_info.virt_base_valid = true;
-            }
-
-            /* Extract Video/Framebuffer from boot_args */
-            if (ba->video.v_baseAddr != 0) {
-                uint64_t v_row_bytes = ba->video.v_rowBytes;
-                uint64_t v_height = ba->video.v_height;
-                uint64_t v_size = 0;
-                /* Integer overflow check on row_bytes * height */
-                if (v_height == 0 || (0xFFFFFFFFFFFFFFFFULL / v_height) >= v_row_bytes) {
-                    v_size = v_row_bytes * v_height;
-                }
-
-                g_boot_info.fb_info.base_paddr = ba->video.v_baseAddr;
-                g_boot_info.fb_info.width      = (uint32_t)ba->video.v_width;
-                g_boot_info.fb_info.height     = (uint32_t)ba->video.v_height;
-                g_boot_info.fb_info.row_bytes  = (uint32_t)v_row_bytes;
-                g_boot_info.fb_info.depth      = (uint32_t)ba->video.v_depth;
-                g_boot_info.fb_info.size       = v_size;
-                g_boot_info.fb_info.is_valid   = true;
-                g_boot_info.fb_info.source     = "boot_args";
-            }
-
-            /* Extract DeviceTree pointed to by boot_args */
-            if (ba->devicetree_p != 0 && ba->devicetree_length >= 64 && ba->devicetree_length <= 0x2000000) {
-                if (devtree_validate_header((uintptr_t)ba->devicetree_p, ba->devicetree_length)) {
-                    devtree_parse_dynamic((uintptr_t)ba->devicetree_p, ba->devicetree_length, &g_boot_info);
-                }
-            }
-        }
+    uint64_t v_row_bytes = video->v_rowBytes;
+    uint64_t v_height = video->v_height;
+    uint64_t v_size = 0;
+    if (v_height == 0 || (0xFFFFFFFFFFFFFFFFULL / v_height) >= v_row_bytes) {
+        v_size = v_row_bytes * v_height;
     }
 
-    g_boot_info_initialized = true;
+    g_boot_info.fb_info.base_paddr = video->v_baseAddr;
+    g_boot_info.fb_info.width      = (uint32_t)video->v_width;
+    g_boot_info.fb_info.height     = (uint32_t)video->v_height;
+    g_boot_info.fb_info.row_bytes  = (uint32_t)v_row_bytes;
+    g_boot_info.fb_info.depth      = (uint32_t)video->v_depth;
+    g_boot_info.fb_info.size       = v_size;
+    g_boot_info.fb_info.is_valid   = true;
+    g_boot_info.fb_info.source     = "boot_args";
 }
+
+static void platform_boot_info_apply_verified_boot_args(
+    const xnu_arm64_boot_args_t *ba,
+    bool nested_devtree_verified,
+    uint32_t nested_devtree_length)
+{
+    if (!ba) {
+        return;
+    }
+
+    if (ba->phys_base < 0x100000000ULL ||
+        ba->mem_size < 0x1000000ULL ||
+        ba->mem_size > 0x80000000ULL) {
+        return;
+    }
+
+    g_boot_info.boot_args_present = true;
+    g_boot_info.is_fallback_data  = false;
+    g_boot_info.dram_phys_base    = ba->phys_base;
+    g_boot_info.dram_size         = ba->mem_size;
+
+    if (ba->virt_base != 0) {
+        g_boot_info.dram_virt_base  = ba->virt_base;
+        g_boot_info.virt_base_valid = true;
+    }
+    platform_boot_info_apply_video(&ba->video);
+
+    /*
+     * boot_args->devicetree_p is a second trust boundary.  A verified
+     * top-level boot_args buffer does not authorize this pointer.  Only an
+     * independently verified nested buffer and its bounded length permit
+     * ADT validation/parsing.
+     */
+    if (!nested_devtree_verified || ba->devicetree_p == 0 ||
+        ba->devicetree_length < 64 || nested_devtree_length < 64 ||
+        ba->devicetree_length > nested_devtree_length) {
+        return;
+    }
+
+    if (devtree_validate_header((uintptr_t)ba->devicetree_p,
+                                ba->devicetree_length)) {
+        (void)devtree_parse_dynamic((uintptr_t)ba->devicetree_p,
+                                     ba->devicetree_length, &g_boot_info);
+    }
+}
+#endif
+
+void platform_boot_info_init(uint64_t arg0, uint64_t arg1)
+{
+    /*
+     * x0/x1 are an UNKNOWN/BLOCKED future-loader ABI.  Preserve the raw
+     * values for diagnostics, but do not dereference either value, attempt
+     * ABI auto-detection, or infer an ADT length.  This is the production
+     * path and intentionally cannot open the handoff trust gate.
+     */
+    platform_boot_info_reset_fallback(arg0, arg1);
+}
+
+#ifdef HOST_TEST
+void platform_boot_info_init_verified_for_test(uint64_t arg0,
+                                                uint32_t arg0_length,
+                                                bool arg0_is_boot_args,
+                                                bool nested_devtree_verified,
+                                                uint32_t nested_devtree_length)
+{
+    platform_boot_info_reset_fallback(arg0, arg0_length);
+    loader_handoff_set_verified_for_test(true);
+    g_boot_info.loader_handoff_verified = true;
+
+    if (arg0 == 0 || arg0_length < 64) {
+        return;
+    }
+
+    if (arg0_is_boot_args) {
+        if (arg0_length < sizeof(xnu_arm64_boot_args_t)) {
+            return;
+        }
+
+        /* Copy only after the caller has supplied a verified bound. */
+        xnu_arm64_boot_args_t ba;
+        memcpy(&ba, (const void *)(uintptr_t)arg0, sizeof(ba));
+        platform_boot_info_apply_verified_boot_args(
+            &ba, nested_devtree_verified, nested_devtree_length);
+        return;
+    }
+
+    /* Direct ADT handoff also requires an explicit, verified exact bound. */
+    if (devtree_validate_header((uintptr_t)arg0, arg0_length) &&
+        devtree_parse_dynamic((uintptr_t)arg0, arg0_length, &g_boot_info) == 0) {
+        g_boot_info.is_fallback_data = false;
+    }
+}
+#endif
 
 const platform_boot_info_t *platform_get_boot_info(void)
 {
@@ -526,12 +584,17 @@ void platform_boot_info_diag(void)
     klog_info("  [BOOT-DISCOVERY] Platform Diagnostics");
     klog_info("========================================");
 
-    if (g_boot_info.boot_args_present) {
+    klog_hex("  [BOOT] Raw x0          ", g_boot_info.raw_arg0);
+    klog_hex("  [BOOT] Raw x1          ", g_boot_info.raw_arg1);
+    if (!g_boot_info.loader_handoff_verified) {
+        klog_info("  [BOOT] Handoff: UNVERIFIED (x0/x1 preserved; no pointer dereference)");
+        klog_info("  [BOOT] Metadata: STATIC FALLBACK / HANDOFF_UNAVAILABLE");
+    } else if (g_boot_info.boot_args_present) {
         klog_info("  [BOOT] Source: XNU boot_args ABI (CONFIRMED)");
     } else if (g_boot_info.devtree_present) {
         klog_info("  [BOOT] Source: Direct DeviceTree pointer (CONFIRMED)");
     } else {
-        klog_info("  [BOOT] Source: Static fallback / standalone execution");
+        klog_info("  [BOOT] Handoff verified, but metadata parser rejected the supplied buffer");
     }
 
     /* DeviceTree Diagnostics */

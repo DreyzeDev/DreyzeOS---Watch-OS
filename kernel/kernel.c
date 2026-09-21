@@ -2,7 +2,7 @@
  * DreyzeOS — Kernel Main
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
- * PHASE 4 — Step 2.1: Pre-Hardware Boot Audit & Safety Hardening
+ * PHASE 4 — Step 2.4: Handoff Pointer Safety & Boot-Argument Trust Boundary
  *
  * This is the C entry point for the DreyzeOS kernel.
  * Called from boot/entry.S after:
@@ -89,7 +89,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_info(DREYZEOS_VERSION_STRING);
     klog_info("Target:   " DREYZEOS_TARGET);
     klog_info("Arch:     " DREYZEOS_ARCH);
-    klog_info("Phase:    PHASE 4 - Step 2.1: Pre-Hardware Safety Audit");
+    klog_info("Phase:    PHASE 4 - Step 2.4: Handoff Pointer Safety");
     klog_info("Branch:   " DREYZEOS_CANONICAL_BRANCH);
     klog_info("Git SHA:  " GIT_COMMIT_SHA);
     klog_info("========================================");
@@ -133,7 +133,12 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_hex("  __stack_top    ", (uint64_t)(uintptr_t)__stack_top);
 
     /* ================================================================
-     * STAGE 2 — Boot Args & DeviceTree Validated
+     * STAGE 2 — Boot Metadata Status
+     *
+     * The production handoff is intentionally unverified.  The initializer
+     * preserves x0/x1 and supplies static fallback metadata without touching
+     * either pointer.  This stage therefore records metadata status; it does
+     * not claim that boot_args or DeviceTree were validated.
      * ================================================================
      */
     platform_boot_info_init(dtree_ptr, arg1);
@@ -143,6 +148,14 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     }
 
     klog_info("[BOOT] Discovered Platform Parameters:");
+    klog_hex("  Raw x0             ", binfo->raw_arg0);
+    klog_hex("  Raw x1             ", binfo->raw_arg1);
+    if (!binfo->loader_handoff_verified) {
+        klog_info("  Handoff status     : HANDOFF_UNAVAILABLE");
+        klog_info("  Metadata status    : BOOT_METADATA_FALLBACK (no pointer dereference)");
+    } else {
+        klog_info("  Handoff status     : VERIFIED");
+    }
     klog_hex("  DeviceTree Base    ", (uint64_t)binfo->devtree_base);
     klog_hex("  DeviceTree Size    ", (uint64_t)binfo->devtree_size);
     klog_hex("  DRAM Phys Base     ", binfo->dram_phys_base);
@@ -229,7 +242,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
 
     klog_info("");
     klog_info("========================================");
-    klog_info("PHASE 4 Step 2.1 COMPLETE: Pre-Hardware Safety Audit Passed.");
+    klog_info("PHASE 4 Step 2.4 COMPLETE: Handoff Pointer Safety Audit Passed.");
     klog_info("All early boot invariants verified.");
     klog_info("NO NAND writes. NO FB writes. NO unmasked interrupts.");
     klog_info("System entering branch-loop halt; WFI is not assumed safe before loader contract verification.");

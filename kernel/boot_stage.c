@@ -70,7 +70,7 @@ const char *boot_stage_name(boot_stage_t stage)
     switch (stage) {
         case BOOT_STAGE_ENTRY:     return "STAGE 0: Entry Reached";
         case BOOT_STAGE_RAM_LOG:   return "STAGE 1: RAM Log Ready";
-        case BOOT_STAGE_BOOT_ARGS: return "STAGE 2: Boot Args & DeviceTree";
+        case BOOT_STAGE_BOOT_ARGS: return "STAGE 2: Boot Metadata Status";
         case BOOT_STAGE_MEM_MAP:   return "STAGE 3: Memory Map";
         case BOOT_STAGE_AIC:       return "STAGE 4: AIC Controller";
         case BOOT_STAGE_FB:        return "STAGE 5: Framebuffer Evaluated";

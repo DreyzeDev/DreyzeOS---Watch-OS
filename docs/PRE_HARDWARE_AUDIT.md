@@ -3,9 +3,9 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.3: Pre-Hardware MMIO / Entry Contract Hardening
+**Phase**: 4 — Step 2.4: Handoff Pointer Safety & Boot-Argument Trust Boundary
 **Canonical Branch**: `master`  
-**Current Baseline Commit**: `c66b766f040cda1c0a516d4d3049120b4bd5b922`
+**Phase-Start Baseline Commit**: `6334f2674b4a427498736ab0ec47eed7e3405f2f`
 **Host Test Status**: 41/41 PASS (Python + Native C Harness)
 **Build Status**: ELF=PASS, BIN=PASS, 0 Compiler Warnings  
 **Hardware Execution Gate**: **NOT READY (BLOCKED)**
@@ -48,7 +48,7 @@
 | **UART0 Interrupt ID** | 262 (`0x106`) | Static ADT node `/arm-io/uart0` `interrupts` property |
 | **AIC Physical Base** | `0x2D180000` | Exact Watch4,2/n131bap ADT `/arm-io/aic` `reg`; `0x2E300000` was a stale report error |
 | **AIC Version** | AIC2 (1024 IRQ lines, 32 banks) | Kernelcache disasm + DeviceTree `aic-version` = 2 |
-| **boot_args ABI Layout** | `virt_base` (+0x08), `phys_base` (+0x10), `video` (+0x28), `devicetree_p` (+0x60) | XNU kernelcache entry point `0xfffffff007b2c070` |
+| **boot_args ABI Layout** | `virt_base` (+0x08), `phys_base` (+0x10), `video` (+0x28), `devicetree_p` (+0x60) | XNU kernelcache entry point `0xfffffff007b2c070`; not a DreyzeOS loader contract |
 | **Pixel Color Format** | `"BBBBBBBBGGGGGGGGRRRRRRRR"` (BGRA32) | Kernelcache read-only string at `0xfffffff00823ea2c` |
 | **XNU boot ABI** | XNU kernelcache consumes its own EL/x0 ABI | Kernelcache evidence; not a DreyzeOS loader ABI |
 | **DreyzeOS source contract** | DreyzeOS requires privileged EL1 entry | `boot/entry.S`; future loader state remains BLOCKED |
@@ -137,11 +137,20 @@ DreyzeOS implements the following strict startup sequence:
   8. Jump to kernel_main(x0, x1, confirmed_el)
 ```
 
+Production boot metadata behavior is deliberately conservative: `kernel_main`
+passes raw x0/x1 to `platform_boot_info_init`, which records them but performs
+no pointer dereference or ADT scan while `loader_handoff_verified` is false.
+Stage 2 is therefore `HANDOFF_UNAVAILABLE` / `BOOT_METADATA_FALLBACK`, not a
+claim that boot_args or DeviceTree was validated. Any future verified path must
+provide an explicit top-level bound; no `0x100000`, `0x200000`, or `0x80000`
+size estimate is permitted. The nested `boot_args->devicetree_p` pointer needs
+an independent verification and bounded length.
+
 ---
 
 ## 9. CPU Register State Expectations & Diagnostics
 
-Stage 0 captures a complete **read-only snapshot** into `boot_cpu_state_t`:
+Stage 0 captures a **read-only post-entry snapshot** into `boot_cpu_state_t`:
 
 ```c
 typedef struct {
@@ -160,7 +169,9 @@ typedef struct {
 
 **Safety Invariant**:
 - The kernel **NEVER writes** to `SCTLR_EL1`, `TCR_EL1`, `TTBR0_EL1`, `TTBR1_EL1`, or `MAIR_EL1`.
-- The snapshot enables post-handoff determination of whether MMU was on (`SCTLR.M`), whether D-cache was on (`SCTLR.C`), and whether I-cache was on (`SCTLR.I`).
+- `SCTLR_EL1`, `TCR_EL1`, `TTBR0_EL1`, and `MAIR_EL1` are inherited/unmodified values.
+- `DAIF`, `VBAR_EL1`, and `CPACR_EL1` are post-entry DreyzeOS values: entry.S masked DAIF, installed VBAR, and enabled FP/SIMD before capture. Their incoming values are UNKNOWN.
+- The snapshot enables post-entry determination of MMU/cache bits, not proof of the loader's complete original CPU state.
 
 ---
 
@@ -202,7 +213,7 @@ typedef struct {
 - **AIC timebase**: separate `/arm-io/aic-timebase` node at `0x2D188000`, size `0x1000`.
 - **Discrepancy resolution**: `0x2E300000` does not occur in the exact ADT artifacts and is rejected as a stale report value; the HAL remains at `0x2D180000`.
 - **Driver Architecture**: Apple AIC2, 1024 IRQ lines, 32 banks.
-- **Safety Status**: `aic_init()` masks all 1024 interrupt lines across all 32 banks.
+- **Safety Status**: current pre-hardware path leaves AIC MMIO, CONFIG, and mask banks untouched because the mapping gate is false. The fact that the AIC has 1024 lines is confirmed, but their live mask state is UNKNOWN. `aic_init()` would mask all lines only after a future verified-MMIO gate opens.
 - **Global IRQ State**: CPU IRQ delivery is globally **DISABLED** (`DAIF=0xF`).
 - **No Interrupt Enabling**: `arch_irq_enable()` is **NEVER** called during boot.
 
@@ -263,7 +274,7 @@ Execution on real hardware may only proceed once **ALL** of the following condit
 | **virt_base truthfulness** | **CONFIRMED** | Real `virt_base` from boot_args, no phys_base proxy |
 | **DeviceTree recursion/overflow safety** | **CONFIRMED** | Max depth 32, fuzz tested |
 | **UART timeout protection** | **CONFIRMED** | Cycle timeout in TX loop |
-| **Interrupts disabled** | **CONFIRMED** | DAIF=0xF, all 1024 AIC lines masked |
+| **CPU interrupt delivery disabled** | **CONFIRMED** | DAIF=0xF after entry.S; AIC line mask state remains UNKNOWN because MMIO is untouched |
 | **Framebuffer writes hard-locked** | **CONFIRMED** | `mapping_verified = false` gate |
 | **No NAND writes** | **CONFIRMED** | Freestanding, 0 flash write routines |
 | **Expected recovery path documented** | **CONFIRMED** | Crown + Side Button expected reset documented |

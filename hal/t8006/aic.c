@@ -59,7 +59,7 @@ uint32_t aic_get_cpu_id(void)
 void aic_mask_all(void)
 {
     if (!mmio_mapping_is_verified()) return;
-    /* Mask (disable) all 1024 IRQ lines across all 32 banks */
+    /* Verified-MMIO path only: mask all 1024 IRQ lines across 32 banks. */
     for (uint32_t bank = 0; bank < AIC_NUM_BANKS; bank++) {
         aic_write32(AIC_REG_MASK_SET_BASE + (bank * 4), 0xFFFFFFFFU);
     }
@@ -149,7 +149,7 @@ void aic_init(void)
     aic_write32(AIC_REG_CONFIG, 1);
 
     g_aic_initialized = true;
-    klog_info("  [AIC] Initialization complete — all IRQs masked");
+    klog_info("  [AIC] Initialization complete — all IRQs masked (verified-MMIO path)");
 }
 
 void aic_diag(void)

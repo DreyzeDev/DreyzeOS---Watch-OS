@@ -3,6 +3,10 @@
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
  * Implements read-only capture of hardware state without altering registers.
+ * The capture occurs after entry.S has masked DAIF, installed VBAR_EL1, and
+ * enabled FP/SIMD through CPACR_EL1.  Those three values are post-entry,
+ * while SCTLR/TCR/TTBR/MAIR remain inherited because entry.S leaves them
+ * untouched.
  */
 
 #include "../include/cpu_state.h"
@@ -59,7 +63,8 @@ void boot_cpu_state_diag(void)
     klog_info("========================================");
 
     klog_hex("  CurrentEL (raw EL) ", (uint64_t)g_boot_cpu_state.current_el);
-    klog_hex("  DAIF (interrupts)  ", g_boot_cpu_state.daif);
+    klog_hex("  DAIF (post-entry)   ", g_boot_cpu_state.daif);
+    klog_info("    DAIF incoming state: UNKNOWN (entry.S masked before capture)");
 
     /* Annotate DAIF bits */
     bool d_masked = (g_boot_cpu_state.daif & (1ULL << 9)) != 0;
@@ -77,7 +82,7 @@ void boot_cpu_state_diag(void)
         return;
     }
 
-    klog_hex("  SCTLR_EL1 (system) ", g_boot_cpu_state.sctlr_el1);
+    klog_hex("  SCTLR_EL1 (inherited)", g_boot_cpu_state.sctlr_el1);
     /* Interpret SCTLR critical bits */
     bool mmu_enabled    = (g_boot_cpu_state.sctlr_el1 & (1ULL << 0)) != 0;
     bool dcache_enabled = (g_boot_cpu_state.sctlr_el1 & (1ULL << 2)) != 0;
@@ -86,13 +91,15 @@ void boot_cpu_state_diag(void)
     klog_info(dcache_enabled ? "    SCTLR.C  : D-Cache ENABLED" : "    SCTLR.C  : D-Cache DISABLED");
     klog_info(icache_enabled ? "    SCTLR.I  : I-Cache ENABLED" : "    SCTLR.I  : I-Cache DISABLED");
 
-    klog_hex("  TCR_EL1   (trans)  ", g_boot_cpu_state.tcr_el1);
-    klog_hex("  TTBR0_EL1 (table0) ", g_boot_cpu_state.ttbr0_el1);
-    klog_hex("  TTBR1_EL1 (table1) ", g_boot_cpu_state.ttbr1_el1);
-    klog_hex("  MAIR_EL1  (attrs)  ", g_boot_cpu_state.mair_el1);
-    klog_hex("  CPACR_EL1 (coproc) ", g_boot_cpu_state.cpacr_el1);
+    klog_hex("  TCR_EL1   (inherited)", g_boot_cpu_state.tcr_el1);
+    klog_hex("  TTBR0_EL1 (inherited)", g_boot_cpu_state.ttbr0_el1);
+    klog_hex("  TTBR1_EL1 (inherited)", g_boot_cpu_state.ttbr1_el1);
+    klog_hex("  MAIR_EL1  (inherited)", g_boot_cpu_state.mair_el1);
+    klog_hex("  CPACR_EL1 (post-entry)", g_boot_cpu_state.cpacr_el1);
+    klog_info("    CPACR incoming state: UNKNOWN (entry.S enabled FP/SIMD before capture)");
 
-    klog_hex("  VBAR_EL1  (vectors)", g_boot_cpu_state.vbar_el1);
+    klog_hex("  VBAR_EL1  (post-entry)", g_boot_cpu_state.vbar_el1);
+    klog_info("    VBAR incoming state: UNKNOWN (entry.S installed vectors before capture)");
     uint64_t expected_vbar = (uint64_t)(uintptr_t)_exception_vectors_base;
     klog_hex("    Expected VBAR    ", expected_vbar);
     if (g_boot_cpu_state.vbar_el1 == expected_vbar) {

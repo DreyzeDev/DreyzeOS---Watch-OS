@@ -1039,7 +1039,7 @@ def test_boot_stage_error_separate_from_last_successful():
         f"BOOT_STAGE_ERROR must fit in uint8_t, got {BOOT_STAGE_ERROR}"
 
 # ============================================================
-# Tests: Phase 4 Step 2.1 — Safety Audit & Hardening
+# Tests: Phase 4 Step 2.4 — Handoff Pointer Safety & Trust Boundary
 # ============================================================
 
 @test("C-level host test harness execution")
@@ -1055,6 +1055,7 @@ def test_c_host_tests_execution():
         os.path.join(root_dir, "kernel", "log.c"),
         os.path.join(root_dir, "hal", "t8006", "device_tree.c"),
         os.path.join(root_dir, "hal", "t8006", "mmio_gate.c"),
+        os.path.join(root_dir, "hal", "t8006", "handoff_gate.c"),
         os.path.join(root_dir, "hal", "t8006", "platform.c"),
         os.path.join(root_dir, "hal", "t8006", "uart.c"),
         os.path.join(root_dir, "hal", "t8006", "aic.c"),
@@ -1065,7 +1066,7 @@ def test_c_host_tests_execution():
     wsl_cmd = (
         "gcc -DHOST_TEST -I. -Iinclude -Ilib "
         "tests/test_host_c.c kernel/boot_stage.c kernel/log.c hal/t8006/device_tree.c "
-        "hal/t8006/mmio_gate.c hal/t8006/platform.c hal/t8006/uart.c hal/t8006/aic.c "
+        "hal/t8006/mmio_gate.c hal/t8006/handoff_gate.c hal/t8006/platform.c hal/t8006/uart.c hal/t8006/aic.c "
         "hal/t8006/framebuffer.c lib/string.c "
         "-o build/test_host_c && ./build/test_host_c"
     )
@@ -1339,7 +1340,7 @@ def main():
         test_boot_stage_progression,
         test_boot_stage_failsafe_preserves_last_successful,
         test_boot_stage_error_separate_from_last_successful,
-        # Phase 4 Step 2.1 — Safety Audit & Hardening
+        # Phase 4 Step 2.4 — Handoff Pointer Safety & Trust Boundary
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,

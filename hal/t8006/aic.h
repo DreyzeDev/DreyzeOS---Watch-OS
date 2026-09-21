@@ -73,7 +73,7 @@ typedef void (*aic_irq_handler_t)(uint32_t irq, void *ctx);
  * AIC Public API
  * ============================================================ */
 
-/* Initialize the AIC controller */
+/* Initialize the AIC controller; no MMIO occurs until mapping is verified. */
 void aic_init(void);
 
 /* Enable / Unmask a specific IRQ line */
@@ -82,7 +82,7 @@ void aic_enable_irq(uint32_t irq);
 /* Disable / Mask a specific IRQ line */
 void aic_disable_irq(uint32_t irq);
 
-/* Mask all interrupt lines (disable all) */
+/* Mask all interrupt lines (verified-MMIO path only) */
 void aic_mask_all(void);
 
 /* Acknowledge pending event (reads AIC_EVENT) */
