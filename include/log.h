@@ -1,0 +1,18 @@
+/*
+ * DreyzeOS — Logging API
+ * Freestanding — no libc.
+ */
+
+#pragma once
+
+#include "types.h"
+
+void log_init(void);
+void log_flush(void);
+
+void klog_info(const char *msg);
+void klog_warn(const char *msg);
+void klog_error(const char *msg);
+void klog_hex(const char *label, uint64_t val);
+
+const char *klog_get_buffer(uint32_t *out_size, uint32_t *out_count);
