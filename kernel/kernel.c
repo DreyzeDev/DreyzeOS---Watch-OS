@@ -14,6 +14,7 @@
 #include "../include/types.h"
 #include "../include/log.h"
 #include "../include/panic.h"
+#include "../include/boot_info.h"
 #include "../hal/t8006/platform.h"
 
 /* Version information */
@@ -30,15 +31,15 @@
  * Kernel build phase tracking.
  * These constants document what is implemented at each build.
  */
-#define PHASE_RESEARCH_BUILD    1  /* Phase 1: Research build — basic boot only */
+#define PHASE_RESEARCH_BUILD    3  /* Phase 3: Hardware Discovery & Drivers */
 
 /*
  * kernel_main — primary kernel entry point.
  *
  * Parameters:
- *   dtree_ptr   — possible pointer to Apple DeviceTree passed by bootloader.
- *                 Status: LIKELY (XNU convention), UNCONFIRMED for T8006 entry.
- *   arg1        — second bootloader argument. UNKNOWN purpose for T8006.
+ *   dtree_ptr   — pointer to Apple DeviceTree or struct boot_args passed by bootloader.
+ *                 Auto-detected and validated by platform_boot_info_init.
+ *   arg1        — second bootloader argument (size or unused).
  *
  * This function must never return.
  * If it returns, entry.S will halt the CPU safely.
@@ -47,48 +48,38 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1)
 {
     /*
      * Step 1: Initialize HAL (Hardware Abstraction Layer).
-     * This sets up any hardware we know about on T8006.
-     * At this phase, most HAL functions are stubs — they exist but don't
-     * talk to real hardware yet because MMIO addresses are UNKNOWN.
      */
     platform_early_init();
 
     /*
-     * Step 2: Early log initialization.
-     * On T8006: UART base address is UNKNOWN.
-     * For now: log_init() sets up a RAM buffer log.
-     * Real UART output requires confirmed UART_BASE from DeviceTree.
+     * Step 2: Initialize Platform Boot Info from boot arguments.
+     * Detects iBoot boot_args vs. direct DeviceTree pointer dynamically.
+     */
+    platform_boot_info_init(dtree_ptr, arg1);
+
+    /*
+     * Step 3: Early log initialization (RAM ring buffer & UART0).
      */
     log_init();
 
     /*
-     * Step 3: Print banner.
-     * At this phase we are not driving a display.
-     * Output goes to the internal RAM log buffer (retrievable via debugger).
+     * Step 4: Print banner.
      */
     klog_info("========================================");
     klog_info(DREYZEOS_VERSION_STRING);
     klog_info("Target: " DREYZEOS_TARGET);
     klog_info("Arch:   " DREYZEOS_ARCH);
-    klog_info("Phase:  PHASE 1 — Research Build");
+    klog_info("Phase:  PHASE 3 — Hardware Discovery & Drivers");
     klog_info("========================================");
 
     /*
-     * Step 4: Log boot arguments.
-     * x0 at entry (dtree_ptr) MAY be a DeviceTree pointer.
-     * Status: LIKELY based on XNU/PongoOS convention.
-     * We log it for research, do NOT dereference yet.
+     * Step 5: Log raw boot arguments and hardware discovery diagnostics.
      */
     klog_info("Boot arguments:");
-    klog_hex("  x0 (possible dtree_ptr)", dtree_ptr);
-    klog_hex("  x1 (unknown arg1)       ", arg1);
+    klog_hex("  x0 (boot_args or dtree_ptr)", dtree_ptr);
+    klog_hex("  x1 (arg1 / size)           ", arg1);
 
-    if (dtree_ptr != 0) {
-        klog_info("  x0 != 0 — possible DeviceTree present (UNCONFIRMED)");
-        klog_info("  DeviceTree parsing: PHASE 3 milestone");
-    } else {
-        klog_info("  x0 == 0 — no DeviceTree pointer (or different entry convention)");
-    }
+    platform_boot_info_diag();
 
     /*
      * Step 5: Log memory layout (from linker script).
@@ -127,9 +118,8 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1)
      *   - Phase 9: touch_init()
      */
     klog_info("");
-    klog_info("PHASE 1 COMPLETE: Research build booted successfully.");
-    klog_info("Kernel halting. Waiting for Phase 3 hardware research.");
-    klog_info("See docs/RESEARCH.md and docs/HARDWARE.md for T8006 findings.");
+    klog_info("PHASE 3 BOOT COMPLETE: Hardware discovery & HAL drivers ready.");
+    klog_info("Kernel halting safely via WFI loop. Waiting for user command.");
 
     /*
      * Step 8: Safe halt loop.

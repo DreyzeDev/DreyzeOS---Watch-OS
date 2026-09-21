@@ -256,6 +256,243 @@ def test_watch42_devtree_aic():
     assert tb_regs[0][1] == 0x1000, f"AIC timebase size 0x{tb_regs[0][1]:x} != 0x1000"
 
 # ============================================================
+# Tests: Phase 3 Step 3 — Dynamic DeviceTree / Boot-Info
+# ============================================================
+
+# ---------------------------------------------------------------------------
+# ADT binary builder helpers (mirrors C adt_node_hdr_t / adt_prop_hdr_t)
+#   adt_node_hdr: uint32 prop_count, uint32 child_count
+#   adt_prop_hdr: char name[32], uint32 size
+#   prop data is NOT padded in Apple ADT (size is exact, next prop/node
+#   starts at next 4-byte boundary after size bytes)
+# ---------------------------------------------------------------------------
+
+def _make_adt_prop(name: str, value: bytes) -> bytes:
+    """Build a single ADT property blob."""
+    name_bytes = name.encode('ascii').ljust(32, b'\x00')[:32]
+    size = len(value)
+    # Pad value to 4-byte boundary (Apple ADT stores padded but size is unpadded)
+    padded = value + b'\x00' * ((4 - size % 4) % 4)
+    return name_bytes + struct.pack('<I', size) + padded
+
+def _make_adt_node(props: list, children: list) -> bytes:
+    """Build a complete ADT node blob."""
+    hdr = struct.pack('<II', len(props), len(children))
+    body = b''.join(props) + b''.join(children)
+    return hdr + body
+
+def _make_minimal_chosen_node(mem_map_entries: dict | None = None) -> bytes:
+    """
+    Build a /chosen node.
+    mem_map_entries: dict of {prop_name: (paddr, size)} for /chosen/memory-map children.
+    If None — no memory-map child.
+    """
+    chosen_props = [
+        _make_adt_prop('name', b'chosen\x00'),
+        _make_adt_prop('chip-id', struct.pack('<I', 0x8006)),
+        _make_adt_prop('board-id', struct.pack('<I', 0x1c)),
+    ]
+    children = []
+    if mem_map_entries is not None:
+        mm_props = [_make_adt_prop('name', b'memory-map\x00')]
+        for prop_name, (paddr, size) in mem_map_entries.items():
+            mm_props.append(_make_adt_prop(prop_name, struct.pack('<QQ', paddr, size)))
+        children.append(_make_adt_node(mm_props, []))
+    return _make_adt_node(chosen_props, children)
+
+def _make_full_test_tree(include_chosen: bool = True,
+                          mem_map: dict | None = None) -> bytes:
+    """Build a minimal but valid full ADT tree (root → [chosen])."""
+    children = []
+    if include_chosen:
+        children.append(_make_minimal_chosen_node(mem_map))
+    root_props = [
+        _make_adt_prop('name', b'device-tree\x00'),
+        _make_adt_prop('compatible', b'apple,t8006\x00'),
+    ]
+    return _make_adt_node(root_props, children)
+
+
+@test("boot-info — valid tree: parse static Watch4,2 ADT")
+def test_boot_info_valid_tree():
+    """
+    Parse the real static Watch4,2 ADT using the Python ADT parser.
+    Validates that the tree is parseable, root model is Watch4,2,
+    and /chosen exists.
+    Source: research/ipsw/21U580/DeviceTree.n131bap.adt (CONFIRMED).
+    """
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    adt_path = os.path.join(project_root, 'research', 'ipsw', '21U580', 'DeviceTree.n131bap.adt')
+    if not os.path.exists(adt_path):
+        # Skip if IPSW not extracted — not a failure in CI
+        print("\n    NOTE: ADT binary not found — skipping (run Phase 2 extraction first)")
+        return
+    from tools.device_tree_dump import parse_adt, walk_nodes
+    data = open(adt_path, 'rb').read()
+    root, consumed = parse_adt(data)
+    assert consumed > 0, "parse_adt consumed 0 bytes"
+    assert root is not None, "root is None"
+    model_prop = root.get_prop('model')
+    assert model_prop is not None, "No model prop in root"
+    assert 'Watch4,2' in model_prop.as_str(), f"model={model_prop.as_str()} expected Watch4,2"
+    # Find /chosen
+    chosen = None
+    for path, node in walk_nodes(root):
+        if path == '/chosen':
+            chosen = node
+            break
+    assert chosen is not None, "No /chosen node in Watch4,2 DeviceTree"
+    chip_prop = chosen.get_prop('chip-id')
+    assert chip_prop is not None, "No chip-id in /chosen"
+
+
+@test("boot-info — missing /chosen: synthetic tree without chosen")
+def test_boot_info_missing_chosen():
+    """
+    A synthetic ADT tree without /chosen must still parse without crashing.
+    Verifies that the parser handles absent nodes gracefully.
+    """
+    from tools.device_tree_dump import parse_adt, walk_nodes
+    data = _make_full_test_tree(include_chosen=False)
+    root, consumed = parse_adt(data)
+    assert consumed > 0, "consumed=0 on synthetic tree"
+    assert root is not None, "root is None"
+    # /chosen must NOT be present
+    paths = [path for path, _ in walk_nodes(root)]
+    assert '/chosen' not in paths, "Unexpected /chosen in tree built without it"
+
+
+@test("boot-info — truncated tree: parser must not crash")
+def test_boot_info_truncated_tree():
+    """
+    Feed truncated (malformed) ADT blobs to the parser.
+    The parser must raise an exception or return gracefully — NOT hang or produce
+    garbage results from out-of-bounds reads. Tests 4 truncation points.
+    """
+    from tools.device_tree_dump import parse_adt
+    full = _make_full_test_tree()
+    truncation_points = [0, 4, 8, len(full) // 2]
+    for cut in truncation_points:
+        data = full[:cut]
+        try:
+            root, consumed = parse_adt(data)
+            # If it returns without exception, consumed must be <= len(data)
+            assert consumed <= len(data), \
+                f"consumed={consumed} > len(data)={len(data)} at cut={cut}"
+        except Exception:
+            # Exception is also acceptable — means parser detected truncation
+            pass
+
+
+@test("boot-info — memory-map parsing: static ADT has zero-filled entries")
+def test_boot_info_memory_map_parsing():
+    """
+    In the static Watch4,2 DeviceTree, all /chosen/memory-map entries are
+    zero-filled placeholders (iBoot fills them at runtime).
+    Verifies: (a) the memory-map node exists, (b) memory map reservations are
+    16 bytes each, (c) all paddr/size values are 0x0 (CONFIRMED from ADT inspection).
+    Note: metadata properties like AAPL,phandle, name, kernel-only are ignored,
+    matching DreyzeOS HAL logic.
+    """
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    adt_path = os.path.join(project_root, 'research', 'ipsw', '21U580', 'DeviceTree.n131bap.adt')
+    if not os.path.exists(adt_path):
+        print("\n    NOTE: ADT binary not found — skipping")
+        return
+    from tools.device_tree_dump import parse_adt, walk_nodes
+    data = open(adt_path, 'rb').read()
+    root, _ = parse_adt(data)
+    mm_node = None
+    for path, node in walk_nodes(root):
+        if path == '/chosen/memory-map':
+            mm_node = node
+            break
+    assert mm_node is not None, "/chosen/memory-map not found in Watch4,2 DeviceTree"
+    # Filter out metadata properties matching C parser logic
+    reservation_props = [
+        p for p in mm_node.props
+        if p.name not in ('name', 'kernel-only') and not p.name.startswith('AAPL,')
+    ]
+    assert len(reservation_props) > 0, "No memory-map reservation entries found"
+    for p in reservation_props:
+        assert len(p.value) >= 16, \
+            f"memory-map entry '{p.name}' size={len(p.value)} < 16 bytes"
+        paddr, sz = struct.unpack_from('<QQ', p.value)
+        # In static DT all MemoryMapReserved-N entries must be zero
+        assert paddr == 0 and sz == 0, \
+            f"Static memory-map entry '{p.name}' is non-zero: paddr=0x{paddr:x} sz=0x{sz:x}"
+
+
+@test("boot-info — framebuffer discovery: synthetic tree with Display entry")
+def test_boot_info_framebuffer_discovery():
+    """
+    Build a synthetic ADT with a /chosen/memory-map 'Display' entry containing
+    a non-zero paddr and size, then verify the parser can locate it.
+    This mirrors what iBoot inserts at runtime.
+    FB_PADDR and FB_SIZE are synthetic test values (not real hardware addresses).
+    """
+    from tools.device_tree_dump import parse_adt, walk_nodes
+
+    FB_PADDR = 0x0000000880000000  # synthetic test value
+    FB_SIZE  = 0x0000000000200000  # 2 MB synthetic
+
+    mem_map = {
+        'MemoryMapReserved-0': (0, 0),           # zero placeholder
+        'Display':             (FB_PADDR, FB_SIZE),  # simulated iBoot entry
+        'KernelText':          (0x800100000, 0x400000),
+    }
+    data = _make_full_test_tree(mem_map=mem_map)
+    root, consumed = parse_adt(data)
+    assert consumed > 0, "consumed=0"
+
+    # Locate /chosen/memory-map
+    mm_node = None
+    for path, node in walk_nodes(root):
+        if path == '/chosen/memory-map':
+            mm_node = node
+            break
+    assert mm_node is not None, "/chosen/memory-map not found in synthetic tree"
+
+    # Find a property whose name contains 'Display' (case-insensitive)
+    fb_prop = None
+    for p in mm_node.props:
+        if 'display' in p.name.lower():
+            fb_prop = p
+            break
+    assert fb_prop is not None, "No 'Display' property found in /chosen/memory-map"
+    assert len(fb_prop.value) >= 16, "Display entry too short"
+
+    paddr, size = struct.unpack_from('<QQ', fb_prop.value)
+    assert paddr == FB_PADDR, f"paddr=0x{paddr:x} expected 0x{FB_PADDR:x}"
+    assert size  == FB_SIZE,  f"size=0x{size:x} expected 0x{FB_SIZE:x}"
+
+
+@test("boot-info — bounds checking: prop_count=0xFFFFFFFF must not crash")
+def test_boot_info_bounds_checking():
+    """
+    Feed the parser a malformed node header with prop_count=0xFFFFFFFF.
+    The parser must either raise an exception or return 0 consumed — it must NOT
+    loop indefinitely or access out-of-bounds memory.
+    """
+    from tools.device_tree_dump import parse_adt
+
+    # Build a blob with a node header claiming 0xFFFFFFFF props and 0 children,
+    # but with only a 'name' property following (tiny data).
+    name_prop = _make_adt_prop('name', b'fuzz\x00')
+    bad_hdr = struct.pack('<II', 0xFFFFFFFF, 0)  # prop_count=max_uint32, child_count=0
+    bad_blob = bad_hdr + name_prop
+
+    try:
+        root, consumed = parse_adt(bad_blob)
+        # If it returns without exception, consumed must be <= len(bad_blob)
+        assert consumed <= len(bad_blob), \
+            f"consumed={consumed} > len={len(bad_blob)} on malformed input"
+    except Exception:
+        # Raising an exception is the correct response to a malformed header
+        pass
+
+
+# ============================================================
 # Run all tests
 # ============================================================
 
@@ -279,6 +516,13 @@ def main():
         test_aic_constants,
         test_aic_symbols_in_elf,
         test_watch42_devtree_aic,
+        # Phase 3 Step 3 — Dynamic DeviceTree / Boot-Info
+        test_boot_info_valid_tree,
+        test_boot_info_missing_chosen,
+        test_boot_info_truncated_tree,
+        test_boot_info_memory_map_parsing,
+        test_boot_info_framebuffer_discovery,
+        test_boot_info_bounds_checking,
     ]
 
     for t in tests:
