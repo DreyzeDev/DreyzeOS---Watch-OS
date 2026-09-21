@@ -1,3 +1,11 @@
 build/
 __pycache__/
 *.pyc
+
+# Research firmware binaries
+research/**/*.im4p
+research/**/*.raw
+research/**/*.macho
+research/**/*.adt
+research/**/kernelcache*
+research/**/payload*

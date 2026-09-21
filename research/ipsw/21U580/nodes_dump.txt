@@ -1,0 +1,456 @@
+
+==========================================
+NODE: /chosen/memory-map
+==========================================
+  MemoryMapReserved-14: ''
+  MemoryMapReserved-5: ''
+  MemoryMapReserved-11: ''
+  MemoryMapReserved-0: ''
+  MemoryMapReserved-6: ''
+  AAPL,phandle: 0x00000008 (8)
+  MemoryMapReserved-15: ''
+  MemoryMapReserved-1: ''
+  MemoryMapReserved-7: ''
+  MemoryMapReserved-12: ''
+  MemoryMapReserved-2: ''
+  MemoryMapReserved-8: ''
+  MemoryMapReserved-3: ''
+  MemoryMapReserved-9: ''
+  MemoryMapReserved-10: ''
+  MemoryMapReserved-13: ''
+  MemoryMapReserved-4: ''
+  name: 'memory-map'
+  kernel-only: 'true'
+
+==========================================
+NODE: /chosen/carveout-memory-map
+==========================================
+  name: 'carveout-memory-map'
+  AAPL,phandle: 0x00000009 (9)
+
+==========================================
+NODE: /cpus
+==========================================
+  #address-cells: 0x00000001 (1)
+  #size-cells: 0x00000000 (0)
+  name: 'cpus'
+  AAPL,phandle: 0x00000014 (20)
+  CHILD -> cpu0
+  CHILD -> cpu1
+
+==========================================
+NODE: /cpus/cpu0
+==========================================
+  AAPL,phandle: 0x00000015 (21)
+  cpu-id: 0x00000000 (0)
+  fixed-frequency: 0x0000000000000000
+  bus-frequency: 0x0000000000000000
+  cpu-version: 0x00000000 (0)
+  memory-frequency: 0x0000000000000000
+  name: 'cpu0'
+  l2-cache-size: 0x00200000 (2097152)
+  interrupt-parent: 0x0000001c (28)
+  function-error_handler: <12 bytes: 1b0000004872724500000000...>
+  reg-private: 0x0000000208010000
+  l2-cache-id: 0x00000000 (0)
+  compatible: 'apple,tempest'
+  interrupts: <12 bytes: a00100002f000000a1010000...>
+  peripheral-frequency: 0x0000000000000000
+  state: 0x00676e696e6e7572
+  function-ipi_dispatch: <12 bytes: 1c00000044495049a0010000...>
+  clock-frequency: 0x0000000000000000
+  function-enable_core: <12 bytes: 1e00000065726f4301000000...>
+  cpu-impl-reg: <16 bytes: 00000508020000000010000000000000...>
+  timebase-frequency: 0x0000000000000000
+  function-ipi_dispatch_other: <12 bytes: 1c00000044495049a1010000...>
+  function-cpu_idle: 0x637075490000001e
+  coresight-reg: <16 bytes: 00000108020000000000040000000000...>
+  device_type: 0x00757063 (7696483)
+  reg: 
+
+==========================================
+NODE: /cpus/cpu1
+==========================================
+  reg-private: 0x0000000208110000
+  state: 0x00676e6974696177
+  function-cpu_idle: 0x637075490000001e
+  compatible: 'apple,tempest'
+  interrupt-parent: 0x0000001c (28)
+  interrupts: <12 bytes: a201000032000000a3010000...>
+  cpu-id: 0x00000001 (1)
+  cpu-impl-reg: <16 bytes: 00001508020000000010000000000000...>
+  reg: 
+  AAPL,phandle: 0x00000016 (22)
+  device_type: 0x00757063 (7696483)
+  function-ipi_dispatch_other: <12 bytes: 1c00000044495049a3010000...>
+  coresight-reg: <16 bytes: 00001108020000000000040000000000...>
+  l2-cache-id: 0x00000000 (0)
+  l2-cache-size: 0x00200000 (2097152)
+  function-error_handler: <12 bytes: 1b0000004872724501000000...>
+  function-ipi_dispatch: <12 bytes: 1c00000044495049a2010000...>
+  function-enable_core: <12 bytes: 1e00000065726f4302000000...>
+  name: 'cpu1'
+
+==========================================
+NODE: /memory
+==========================================
+  reg: base=0x0000000000000000 size=0x0
+  name: 'memory'
+  AAPL,phandle: 0x00000018 (24)
+  device_type: 'memory'
+
+==========================================
+NODE: /pram
+==========================================
+  reg: base=0x0000000000000000 size=0x0
+  name: 'pram'
+  AAPL,phandle: 0x00000019 (25)
+  device_type: 'pram'
+
+==========================================
+NODE: /vram
+==========================================
+  reg: base=0x0000000000000000 size=0x0
+  name: 'vram'
+  AAPL,phandle: 0x0000001a (26)
+  device_type: 'vram'
+
+==========================================
+NODE: /arm-io/aic
+==========================================
+  #interrupt-cells: 0x00000001 (1)
+  #main-cpus: 0x00000002 (2)
+  compatible: 'aic,1'
+  interrupt-controller: 'master'
+  aic-version: 0x00000002 (2)
+  #shared-timestamps: 0x00000010 (16)
+  reg: base=0x000000002d180000 size=0x8000
+  AAPL,phandle: 0x0000001c (28)
+  device_type: 'interrupt-controller'
+  #address-cells: 0x00000000 (0)
+  ipid-mask: <52 bytes: 0f0000000000000000000000000000000000000000000000...>
+  target-destinations: <16 bytes: 2f000000010000003200000002000000...>
+  name: 0x00636961 (6515041)
+
+==========================================
+NODE: /arm-io/aic-timebase
+==========================================
+  reg: base=0x000000002d188000 size=0x1000
+  name: 'aic-timebase'
+  AAPL,phandle: 0x0000001d (29)
+  device_type: 'timer'
+
+==========================================
+NODE: /arm-io/uart0
+==========================================
+  compatible: 'uart-1,samsung'
+  clock-ids: 0x0000000400000146
+  interrupt-parent: 0x0000001c (28)
+  interrupts: 0x00000106 (262)
+  AAPL,phandle: 0x00000021 (33)
+  clock-gates: 0x00000017 (23)
+  reg: base=0x000000002e500000 size=0x4000
+  device_type: 'uart'
+  no-flow-control: ''
+  uart-version: 0x00000001 (1)
+  boot-console: ''
+  name: 'uart0'
+
+==========================================
+NODE: /arm-io/dockchannel-uart
+==========================================
+  interrupt-parent: 0x0000001c (28)
+  device_type: 'dockchannel'
+  AAPL,phandle: 0x00000024 (36)
+  interrupts: 0x000000a7 (167)
+  max-aop-clk: 0x0a037a00 (168000000)
+  reg: base=0x000000003d128000 size=0x10000, base=0x000000003d10c000 size=0x4000
+  name: 'dockchannel-uart'
+  enable-sw-drain: 0x00000001 (1)
+
+==========================================
+NODE: /arm-io/dockchannel-rtp
+==========================================
+  interrupt-parent: 0x0000001c (28)
+  compatible: 'dockchannel,t8002'
+  reg: base=0x000000004d080000 size=0x1000, base=0x000000004d08c000 size=0x1000, base=0x000000004d0b0000 size=0x1000, base=0x000000004d0b4000 size=0x1000, base=0x000000004d0a8000 size=0x1000, base=0x000000004d0ac000 size=0x1000
+  channel-number: 0x00000000 (0)
+  interrupts: 0x0000004c (76)
+  channel-name: 'channel0'
+  AAPL,phandle: 0x00000026 (38)
+  device_type: 'dockchannel-rtp'
+  fifo-size: 0x00000100 (256)
+  name: 'dockchannel-rtp'
+  CHILD -> rtp-transport
+
+==========================================
+NODE: /arm-io/dockchannel-rtp/rtp-transport/multi-touch
+==========================================
+  image-tag: 0x6d746677 (1836344951)
+  AAPL,phandle: 0x00000028 (40)
+  hid-fw-personality: 'A3T531B,1'
+  function-cs: <16 bytes: 590000004f4950474d00000002000000...>
+  fcm-type: 0x00000000 (0)
+  multi-touch-calibration: 'syscfg/MtCl'
+  physical-device-config: 0x00000000 (0)
+  orb-activation-thresholds: <20 bytes: f5000000f50000002c0100005e0100002c010000...>
+  orb-f-calibration: 'syscfg/OFCl'
+  name: 'multi-touch'
+  function-reset: <16 bytes: 5f00000034574b706430506700000100...>
+  orb-i-calibration: 'syscfg/OICo'
+  maintain-power: ''
+  orb-animation-thresholds: <20 bytes: 9100000091000000c8000000fa000000c8000000...>
+  fcm-arcoated-type: 0x00000000 (0)
+  charger-state-interested: ''
+  fcm-inkcolor-type: 0x00000000 (0)
+  orb-o-calibration: 'syscfg/OOCl'
+  aagp-name: 'aod1'
+  swd-flash-update: 0x00000001 (1)
+  device_type: 'multi-touch'
+  should-sleep: ''
+
+==========================================
+NODE: /arm-io/dockchannel-rtp/rtp-transport/optical
+==========================================
+  board-rev: 0x00000000 (0)
+  device-name: 0x00030001 (196609)
+  name: 0x006c61636974706f
+  AAPL,phandle: 0x0000002d (45)
+  device_type: 0x006c61636974706f
+
+==========================================
+NODE: /arm-io/gpio
+==========================================
+  #interrupt-cells: 0x00000002 (2)
+  interrupt-controller: ''
+  compatible: 'gpio,t8006'
+  interrupt-parent: 0x0000001c (28)
+  interrupts: <28 bytes: 1e0000001f00000020000000210000002200000023000000...>
+  #gpio-int-groups: 0x00000007 (7)
+  reg: base=0x000000002d300000 size=0x2000
+  #gpio-pins: 0x0000008b (139)
+  AAPL,phandle: 0x0000002f (47)
+  device_type: 'interrupt-controller'
+  #address-cells: 0x00000000 (0)
+  role: 'AP'
+  name: 'gpio'
+
+==========================================
+NODE: /arm-io/usb-complex/usb-device
+==========================================
+  phy-interface: 0x00000008 (8)
+  publish-criteria: 0x00000003 (3)
+  configuration-string: 'muxNcm'
+  AAPL,phandle: 0x0000003c (60)
+  function-dock_parent: 0x61636350000000b5
+  ncm-control-ecid-mac: 0x00000001 (1)
+  product-string: 'Watch'
+  iommu-parent: 0x00000040 (64)
+  host-mac-address: 'macaddr/wifiaddr,syscfg/WMac/6,zeroes/6'
+  device-mac-address: 'macaddr/ethaddr,syscfg/EMac/6,zeroes/6'
+  num-of-eps: 0x0000000e (14)
+  name: 'usb-device'
+  interrupt-parent: 0x0000001c (28)
+  vendor-id: 0x000005ac (1452)
+  vendor-string: 'Apple Inc.'
+  compatible: 'usb-device,t8006'
+  interrupts: 0x0000013a (314)
+  product-id: 0x000012af (4783)
+  ahb-burst: 0x0000000e (14)
+  product-version: 0x00000402 (1026)
+  clock-mask: 0x00000004 (4)
+  function-usb_500_100: <12 bytes: b50000004752484300000000...>
+  fifo-depth: 0x00000820 (2080)
+  eps-dir-bitmap: 0x00000264 (612)
+  device_type: 'usb-device'
+  reg: base=0x0000000000100000 size=0x10000
+
+==========================================
+NODE: /arm-io/aop
+==========================================
+  compatible: 'iop,ascwrap-v2'
+  iommu-parent: 0x00000054 (84)
+  interrupt-parent: 0x0000001c (28)
+  interrupts: 'a'
+  clock-gates: ''
+  clock-ids: ''
+  reg: base=0x000000004c400000 size=0x60000, base=0x000000004c050000 size=0x4000, base=0x000000004d600000 size=0x160000, base=0x000000003d2b003c size=0x8
+  AAPL,phandle: 0x00000044 (68)
+  iop-version: 0x00000001 (1)
+  device_type: 0x00706f61 (7368545)
+  role: 0x00504f41 (5263169)
+  power-gates: ''
+  name: 0x00706f61 (7368545)
+  CHILD -> iop-aop-nub
+
+==========================================
+NODE: /arm-io/aop-gpio
+==========================================
+  wake-no-interrupt-group: 0x00000004 (4)
+  wake-events: <12 bytes: 065b06630664062604260000...>
+  #gpio-int-groups: 0x00000007 (7)
+  #address-cells: 0x00000000 (0)
+  supported-int-groups: <12 bytes: 040000000500000006000000...>
+  AAPL,phandle: 0x00000059 (89)
+  event_name-mask38: 'baseband'
+  name: 'aop-gpio'
+  interrupt-parent: 0x0000001c (28)
+  interrupt-controller: ''
+  compatible: 'gpio,t8006'
+  interrupts: 'Q'
+  #interrupt-cells: 0x00000002 (2)
+  event_name-mask91: 0x0072617473697274
+  #gpio-pins: 0x00000072 (114)
+  no-resume-restore: 0x00000001 (1)
+  event_name-mask100: 'codec'
+  role: 0x00504f41 (5263169)
+  event_name-mask99: 'stockholm'
+  device_type: 'interrupt-controller'
+  reg: base=0x000000004d008000 size=0x4000
+
+==========================================
+NODE: /arm-io/rtp
+==========================================
+  compatible: 'iop,ascwrap-v2'
+  clock-ids: ''
+  interrupt-parent: 0x0000001c (28)
+  interrupts: 'k'
+  clock-gates: ''
+  reg: base=0x000000004cc00000 size=0x60000, base=0x000000004c850000 size=0x4000, base=0x000000004d400000 size=0x100000, base=0x000000003d2b003c size=0x8
+  AAPL,phandle: 0x0000005a (90)
+  iop-version: 0x00000001 (1)
+  device_type: 0x00707472 (7369842)
+  role: 0x00505452 (5264466)
+  power-gates: ''
+  ignore-mailboxes: ''
+  name: 0x00707472 (7369842)
+  CHILD -> iop-rtp-nub
+
+==========================================
+NODE: /arm-io/disp0
+==========================================
+  swmpr-t-nclks: 0x000012c0 (4800)
+  max-avg-bpp: 0x000d999a (891290)
+  spuc-data: 'syscfg/SpuC'
+  clock-gates: <16 bytes: b0000000b1000000b2000000b3000000...>
+  dot-pitch: 0x00000000 (0)
+  frame-duration-nclks: 0x000613b4 (398260)
+  piodma-t-nclks: 0x00008c9e (35998)
+  display-default-color: 0x00000000 (0)
+  function-alss: 0x414c536100000048
+  spuc-lut-war: 0x00000001 (1)
+  function-lcd_enable: 0x6c63644500000077
+  display-timing-info: <32 bytes: 440100002000000004000000060000008a01000002000000...>
+  max-scaling-ratio: 0x00020000 (131072)
+  iommu-parent: 0x0000007500000074
+  te-clk240-delay: 0x000000aa (170)
+  warrior-panel: 0x00000002 (2)
+  AAPL,phandle: 0x00000072 (114)
+  name: 'disp0'
+  function-swmpr_enable: 0x736d705200000076
+  interrupt-parent: 0x0000001c (28)
+  start-t-nclks: 0x000001f0 (496)
+  compatible: 'disp0,t8006'
+  dbsr-lut: <84 bytes: 010000000000000000000000bf00000000000000c0000000...>
+  clock-ids: 0x0000013c0000013d
+  function-backlight_update: 0x626c6b5500000077
+  interrupts: <36 bytes: ca000000d0000000c7000000c8000000c9000000cb000000...>
+  disp-swmpr: 0x00000001 (1)
+  device_type: 'display-subsystem'
+  max-peak-bpp: 0x000d999a (891290)
+  power-gates: 0x000000b0 (176)
+  reg: base=0x0000000018000000 size=0x2f0000
+
+==========================================
+NODE: /arm-io/mipi-dsim
+==========================================
+  invert-interrupt-mask: ''
+  clock-gates: 0x000000b8 (184)
+  AAPL,phandle: 0x00000076 (118)
+  mipi-version: 0x00000007 (7)
+  swmpr-memory-index: 0x00000001 (1)
+  mipi-swmpr: 0x00000001 (1)
+  name: 'mipi-dsim'
+  interrupts_a0: 0x000000cf (207)
+  interrupt-parent: 0x0000001c (28)
+  function-device_reset: <12 bytes: 1e0000005453524134000000...>
+  phy-test: <144 bytes: 000000000000000000000000000000000000000000000000...>
+  compatible: 'mipi-dsim-1,synopsys'
+  clock-ids: 0x0000013b (315)
+  interrupts: 0x000000d4000000cf
+  apply-testcode: 0x00000001 (1)
+  #lanes: 0x00000001 (1)
+  phy-test-num: 0x00000000 (0)
+  device_type: 'mipi-dsim'
+  mipi-top-size: 0x0000005c (92)
+  reg: base=0x0000000018400000 size=0x90000, base=0x0000000018490000 size=0x10000
+  power-gates: 0x000000b8 (184)
+  CHILD -> lcd
+
+==========================================
+NODE: /arm-io/mipi-dsim/lcd
+==========================================
+  name: 0x0064636c (6579052)
+  power-to-reset-delay: 0x00000003 (3)
+  function-dvdd: <16 bytes: 5f00000034574b70334b427200000205...>
+  compatible: 'lcd,summit'
+  sleepout-to-displayon-delay: 0x00000035 (53)
+  vdd-to-vci-delay: 0x00000002 (2)
+  self-refresh-th: 0x000000ec (236)
+  AAPL,phandle: 0x00000077 (119)
+  video-mode: 0x00000000 (0)
+  function-refclk: <20 bytes: 5f00000034574b70383050670300000304000003...>
+  raw-panel-id: ''
+  function-reset: <20 bytes: 5f00000034574b70633050670500000306000003...>
+  device_type: 0x0064636c (6579052)
+  function-vdd: <16 bytes: 5f00000034574b70324b427200000105...>
+  sram-addresses: ''
+  function-vci: '_'
+  reset-polarity: 0x00000001 (1)
+  lcd-panel-id: 0x00000000 (0)
+
+==========================================
+NODE: /buttons
+==========================================
+  name: 0x00736e6f74747562
+  compatible: 0x00736e6f74747562
+  AAPL,phandle: 0x000000b4 (180)
+  supports-side-btn-click-speed: ''
+  function-set_dbl_click_ms: '_'
+  function-button_help: '_'
+  device_type: 0x00736e6f74747562
+  function-button_menu: '_'
+  button-names: 'help'
+
+==========================================
+NODE: /backlight
+==========================================
+  LminProduct: 0x000f0000 (983040)
+  function-backlight_enable: 0x626b6c4500000077
+  AAPL,phandle: 0x000000b8 (184)
+  use-Nits2DACTable: 0x00000001 (1)
+  plc-activate-threshold: 0x00000353 (851)
+  blue-coefficient: 0x00005999 (22937)
+  backlight-update-policy: 0x00000004 (4)
+  use-lut: 0x00000001 (1)
+  backlight-marketing-table: <84 bytes: 00000f00b03e1a0094d82800f3053b00f4e5500045946a00...>
+  red-coefficient: 0x00003333 (13107)
+  plc-lv-threshold: 0x000002a3 (675)
+  function-backlight_update-a0: 0x626c6b5500000077
+  name: 'backlight'
+  LmidProduct: 0x01272ed9 (19345113)
+  panel-gamma: 0x00000898 (2200)
+  display-backlight-calibration: 0x00000000 (0)
+  use-cabal: 0x00000001 (1)
+  compatible: 'backlight'
+  DBVMin: 0x00000098 (152)
+  LmaxProduct: 0x03e80000 (65536000)
+  function-backlight_update: 0x55506e7600000072
+  max-nit-value: 0x000003e8 (1000)
+  plc-dbv-threshold: 0x00000205 (517)
+  use-AAB-architecture: 0x00000001 (1)
+  green-coefficient: 0x00007333 (29491)
+  device_type: 'backlight'
+  DBVMax: 0x000003ff (1023)
+  override-boot-brightness: 0x00000186 (390)
+  backlight-id: 0xffffffff (4294967295)

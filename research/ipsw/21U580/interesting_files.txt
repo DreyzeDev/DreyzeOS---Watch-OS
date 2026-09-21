@@ -1,0 +1,17 @@
+AssetData/Info.plist	159177857	789	2131	8
+AssetData/boot/BuildManifest.plist	63626914	5616	86955	8
+AssetData/boot/Firmware/SE/Stockholm5.RELEASE.sefw.plist	9890967	163	205	8
+AssetData/boot/Firmware/all_flash/DeviceTree.n131bap.im4p	8588562	33193	33193	0
+AssetData/boot/Firmware/all_flash/LLB.n131b.RELEASE.im4p	7406226	1182234	1182234	0
+AssetData/boot/Firmware/all_flash/LLB.n131b.RELEASE.im4p.plist	8622216	248	331	8
+AssetData/boot/Firmware/all_flash/dali-ui.n131b.release.im4p.plist	7405866	248	331	8
+AssetData/boot/Firmware/all_flash/iBoot.n131b.RELEASE.im4p	6223528	1182234	1182234	0
+AssetData/boot/Firmware/all_flash/iBoot.n131b.RELEASE.im4p.plist	8621858	248	331	8
+AssetData/boot/Firmware/all_flash/sep-firmware.n131b.RELEASE.im4p.plist	2484755	313	474	8
+AssetData/boot/Firmware/dfu/iBEC.n131b.RELEASE.im4p.plist	2381583	248	331	8
+AssetData/boot/Firmware/dfu/iBSS.n131b.RELEASE.im4p.plist	2381232	248	331	8
+AssetData/boot/Restore.plist	15917	429	1030	8
+AssetData/boot/kernelcache.release.watch4	48414194	15212633	15221732	8
+AssetData/payloadv2/fixup.manifest	578151738	1846896	1846896	0
+Info.plist	278	859	2239	8
+META-INF/com.apple.ZipMetadata.plist	55	141	173	8

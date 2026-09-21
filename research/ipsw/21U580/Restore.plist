@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<key>DeviceMap</key>
+	<array>
+		<dict>
+			<key>BDID</key>
+			<integer>10</integer>
+			<key>BoardConfig</key>
+			<string>n131bap</string>
+			<key>CPID</key>
+			<integer>32774</integer>
+			<key>Platform</key>
+			<string>t8006</string>
+			<key>SCEP</key>
+			<integer>0</integer>
+			<key>SDOM</key>
+			<integer>1</integer>
+		</dict>
+	</array>
+	<key>ProductBuildVersion</key>
+	<string>21U580</string>
+	<key>ProductVersion</key>
+	<string>10.6.1</string>
+	<key>SupportedProductTypeIDs</key>
+	<dict>
+		<key>DFU</key>
+		<array>
+			<integer>167804934</integer>
+		</array>
+		<key>Recovery</key>
+		<array>
+			<integer>167804934</integer>
+		</array>
+	</dict>
+	<key>SupportedProductTypes</key>
+	<array>
+		<string>Watch4,2</string>
+	</array>
+	<key>SystemRestoreImageFileSystems</key>
+	<dict>
+		<key>090-98864-086.dmg</key>
+		<string>APFS</string>
+	</dict>
+</dict>
+</plist>

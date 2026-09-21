@@ -1,0 +1,241 @@
+=== ALL SPI NODES ===
+
+=== ALL I2C NODES ===
+  /arm-io/i2c1 : compat=i2c,t8006 reg=[(771833856, 4096)]
+  /arm-io/i2c1/tristar : compat=tristar,cbtl1610 reg=[(10737418240026, 0)]
+  /arm-io/i2c3 : compat=i2c,t8006 reg=[(771866624, 4096)]
+  /arm-io/i2c3/audio-speaker0 : compat=audio-control,d2481 reg=[(10737418240049, 0)]
+  /arm-io/i2c3/ad5860 : compat=halle-sensor,ad5860 reg=[(10737418240008, 0)]
+
+=== ALL SIO / SERIAL / UART NODES ===
+  /arm-io/uart0 : compat=uart-1,samsung reg=[(776994816, 16384)]
+  /arm-io/uart2 : compat=uart-1,samsung reg=[(777027584, 16384)]
+  /arm-io/uart2/stockholm : compat=nfc,primary,gpio reg=[]
+  /arm-io/dockchannel-uart : compat=N/A reg=[(1024622592, 65536), (1024507904, 16384)]
+  /arm-io/sio : compat=iop,ascwrap-v2 reg=[(792723456, 65536), (788856832, 16384)]
+  /arm-io/sio/iop-sio-nub : compat=iop-nub,rtbuddy-v2 reg=[]
+  /arm-io/sio/iop-sio-nub/sio-dma : compat=sio-dma-controller reg=[]
+  /arm-io/dart-sio : compat=dart,t8020 reg=[(771784704, 16384)]
+  /arm-io/dart-sio/mapper-sio : compat=iommu-mapper reg=[]
+  /arm-io/dart-sio/mapper-aes : compat=iommu-mapper reg=[]
+  /arm-io/uart1 : compat=uart-1,samsung reg=[(777011200, 16384)]
+  /arm-io/uart1/gps : compat=gps,bcm4773 reg=[]
+
+=== ALL CHOSEN NODES & MEMORY MAP ===
+  /chosen
+    development-cert: 0x0 (0)
+    disable-transport-rm: 0x0 (0)
+    amfi-only-platform-code: 0x0 (0)
+    coverglass-color: 'syscfg/CLCG'
+    boot-type: 'local'
+    board-id: 0x0 (0)
+    dram-vendor: ''
+    consistent-debug-root: 0x0
+    dram-vendor-id: 0x0 (0)
+    mac-address-bluetooth0: 'macaddr/btaddr,syscfg/BMac/6'
+    nvram-bank-size: 0x0 (0)
+    unique-chip-id: 0x0
+    software-behavior: 'syscfg/SwBh/0x10,zeroes/0x10'
+    backing-color: 'syscfg/CLBG'
+    amfi-allows-trust-cache-load: 0x0 (0)
+    max-env-var-name-size: 0x0 (0)
+    mix-n-match-prevention-status: 0x0 (0)
+    certificate-security-mode: 0x0 (0)
+    display-rotation: 0x0 (0)
+    unique-device-id: ''
+    crypto-hash-method: 'sha2-384'
+    marketing-software-behavior: 'syscfg/MkBS'
+    secure-boot: 0x0 (0)
+    housing-color: 'syscfg/CLHS'
+    gid-aes-key: 0x0 (0)
+    disable-av-content-protection: 0x0 (0)
+    image4-supported: ''
+    isp-horizon: 0x0 (0)
+    boot-nonce: 0x0
+    display-corner-radius: 0x0 (0)
+    nvram-bank-count: 0x0 (0)
+    nvram-current-bank: 0x0 (0)
+    cover-glass-material: 'syscfg/CGMt'
+    uid-aes-key: 0x0 (0)
+    boot-manifest-hash: ''
+    max-env-var-data-size: 0x0 (0)
+    display-boot-rotation: 0x0 (0)
+    max-env-partition: 0x0 (0)
+    chip-id: 0x0 (0)
+    name: 'chosen'
+    ephemeral-storage: 0x0 (0)
+    osenvironment: ''
+    mac-address-ethernet0: 'macaddr/ethaddr,syscfg/EMac/6'
+    enclosure-material: 'syscfg/EnMt'
+    debug-enabled: 0x0 (0)
+    system-trusted: 0x0 (0)
+    AAPL,phandle: 0x2 (2)
+    effective-production-status-sep: 0x0 (0)
+    backing-glass-material: 'syscfg/BGMt'
+    mac-address-ethernet1: 'macaddr/ethaddr1,syscfg/EMc2/6'
+    protected-data-access: 0x1 (1)
+    effective-security-mode-ap: 0x0 (0)
+    effective-production-status-ap: 0x0 (0)
+    repair-status: 'syscfg/rpcp'
+    mac-address-wifi0: 'macaddr/wifiaddr,syscfg/WMac/6'
+    use-recovery-securityd: 0x0 (0)
+    marketing-hardware-behavior: 'syscfg/MkBH'
+    software-bundle-version: 'syscfg/SBVr/0x10,zeroes/0x10'
+    die-id: 0x0
+    allow-ap-nonce-retrieval: ''
+    disable-accessory-firmware: 0x0 (0)
+    certificate-production-status: 0x0 (0)
+    production-cert: 0x0 (0)
+    #address-cells: 0x2 (2)
+    effective-security-mode-sep: 0x0 (0)
+    sepfw-load-at-boot: 0x1 (1)
+    display-scale: 0x0 (0)
+  /chosen/manifest-properties
+    UnusedIntegerProperty10: 0x0
+    UnusedBooleanProperty3: 0x0 (0)
+    UnusedIntegerProperty6: 0x0
+    UnusedBooleanProperty18: 0x0 (0)
+    UnusedBooleanProperty11: 0x0 (0)
+    UnusedIntegerProperty15: 0x0
+    UnusedIntegerProperty2: 0x0
+    UnusedBooleanProperty6: 0x0 (0)
+    UnusedIntegerProperty9: 0x0
+    UnusedBooleanProperty16: 0x0 (0)
+    UnusedIntegerProperty13: 0x0
+    UnusedBooleanProperty2: 0x0 (0)
+    UnusedIntegerProperty5: 0x0
+    UnusedBooleanProperty9: 0x0 (0)
+    UnusedBooleanProperty14: 0x0 (0)
+    UnusedIntegerProperty18: 0x0
+    UnusedIntegerProperty1: 0x0
+    UnusedIntegerProperty11: 0x0
+    UnusedBooleanProperty5: 0x0 (0)
+    UnusedIntegerProperty8: 0x0
+    UnusedBooleanProperty19: 0x0 (0)
+    AAPL,phandle: 0x3 (3)
+    UnusedBooleanProperty12: 0x0 (0)
+    UnusedIntegerProperty16: 0x0
+    UnusedBooleanProperty1: 0x0 (0)
+    UnusedIntegerProperty4: 0x0
+    UnusedBooleanProperty8: 0x0 (0)
+    name: 'manifest-properties'
+    UnusedBooleanProperty17: 0x0 (0)
+    UnusedBooleanProperty10: 0x0 (0)
+    UnusedIntegerProperty0: 0x0
+    UnusedIntegerProperty14: 0x0
+    UnusedBooleanProperty4: 0x0 (0)
+    UnusedIntegerProperty7: 0x0
+    UnusedBooleanProperty15: 0x0 (0)
+    UnusedIntegerProperty19: 0x0
+    UnusedIntegerProperty12: 0x0
+    UnusedBooleanProperty0: 0x0 (0)
+    UnusedBooleanProperty7: 0x0 (0)
+    UnusedIntegerProperty3: 0x0
+    UnusedBooleanProperty13: 0x0 (0)
+    UnusedIntegerProperty17: 0x0
+  /chosen/manifest-object-properties
+    UnusedIntegerProperty10: 0x0
+    UnusedBooleanProperty3: 0x0 (0)
+    UnusedIntegerProperty6: 0x0
+    UnusedBooleanProperty18: 0x0 (0)
+    UnusedBooleanProperty11: 0x0 (0)
+    UnusedIntegerProperty15: 0x0
+    UnusedIntegerProperty2: 0x0
+    UnusedBooleanProperty6: 0x0 (0)
+    UnusedIntegerProperty9: 0x0
+    UnusedBooleanProperty16: 0x0 (0)
+    UnusedIntegerProperty13: 0x0
+    UnusedBooleanProperty2: 0x0 (0)
+    UnusedIntegerProperty5: 0x0
+    UnusedBooleanProperty9: 0x0 (0)
+    UnusedBooleanProperty14: 0x0 (0)
+    UnusedIntegerProperty18: 0x0
+    UnusedIntegerProperty1: 0x0
+    UnusedIntegerProperty11: 0x0
+    UnusedBooleanProperty5: 0x0 (0)
+    UnusedIntegerProperty8: 0x0
+    UnusedBooleanProperty19: 0x0 (0)
+    AAPL,phandle: 0x4 (4)
+    UnusedBooleanProperty12: 0x0 (0)
+    UnusedIntegerProperty16: 0x0
+    UnusedBooleanProperty1: 0x0 (0)
+    UnusedIntegerProperty4: 0x0
+    UnusedBooleanProperty8: 0x0 (0)
+    name: 'manifest-object-properties'
+    UnusedBooleanProperty17: 0x0 (0)
+    UnusedBooleanProperty10: 0x0 (0)
+    UnusedIntegerProperty0: 0x0
+    UnusedIntegerProperty14: 0x0
+    UnusedBooleanProperty4: 0x0 (0)
+    UnusedIntegerProperty7: 0x0
+    UnusedBooleanProperty15: 0x0 (0)
+    UnusedIntegerProperty19: 0x0
+    UnusedIntegerProperty12: 0x0
+    UnusedBooleanProperty0: 0x0 (0)
+    UnusedBooleanProperty7: 0x0 (0)
+    UnusedIntegerProperty3: 0x0
+    UnusedBooleanProperty13: 0x0 (0)
+    UnusedIntegerProperty17: 0x0
+  /chosen/boot-object-manifests
+    name: 'boot-object-manifests'
+    AAPL,phandle: 0x5 (5)
+  /chosen/secure-boot-hashes
+    name: 'secure-boot-hashes'
+    AAPL,phandle: 0x6 (6)
+  /chosen/dynamic-object-map
+    name: 'dynamic-object-map'
+    AAPL,phandle: 0x7 (7)
+  /chosen/memory-map
+    MemoryMapReserved-14: ''
+    MemoryMapReserved-5: ''
+    MemoryMapReserved-11: ''
+    MemoryMapReserved-0: ''
+    MemoryMapReserved-6: ''
+    AAPL,phandle: 0x8 (8)
+    MemoryMapReserved-15: ''
+    MemoryMapReserved-1: ''
+    MemoryMapReserved-7: ''
+    MemoryMapReserved-12: ''
+    MemoryMapReserved-2: ''
+    MemoryMapReserved-8: ''
+    MemoryMapReserved-3: ''
+    MemoryMapReserved-9: ''
+    MemoryMapReserved-10: ''
+    MemoryMapReserved-13: ''
+    MemoryMapReserved-4: ''
+    name: 'memory-map'
+    kernel-only: 'true'
+  /chosen/carveout-memory-map
+    name: 'carveout-memory-map'
+    AAPL,phandle: 0x9 (9)
+  /chosen/lock-regs
+    name: 'lock-regs'
+    AAPL,phandle: 0xa (10)
+  /chosen/lock-regs/amcc
+    name: 'amcc'
+    AAPL,phandle: 0xb (11)
+  /chosen/lock-regs/amcc/amcc-ctrr-a
+    name: 'amcc-ctrr-a'
+    AAPL,phandle: 0xc (12)
+  /chosen/lock-regs/amcc/amcc-ctrr-b
+    name: 'amcc-ctrr-b'
+    AAPL,phandle: 0xd (13)
+  /chosen/lock-regs/amcc/amcc-ctrr-c
+    name: 'amcc-ctrr-c'
+    AAPL,phandle: 0xe (14)
+  /chosen/lock-regs/amcc/amcc-ctrr-d
+    name: 'amcc-ctrr-d'
+    AAPL,phandle: 0xf (15)
+  /chosen/iBoot
+    load-kernel-start: 0x0 (0)
+    debug-wait-start: 0x0 (0)
+    AAPL,phandle: 0x10 (16)
+    name: 'iBoot'
+    start-time: 0x0 (0)
+    populate-registry-time: 0x0 (0)
+  /chosen/memory-report
+    name: 'memory-report'
+    AAPL,phandle: 0x11 (17)
+  /chosen/memory-report/zeroization-report
+    name: 'zeroization-report'
+    AAPL,phandle: 0x12 (18)
