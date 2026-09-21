@@ -2,7 +2,7 @@
  * DreyzeOS — Kernel Main
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
- * PHASE 4 — Step 2.6: Stable Loader ABI & T8006 Loader Evidence Research
+ * PHASE 4 — Step 2.7: T8006 Loader / RAM Handoff Contract Research
  *
  * This is the C entry point for the DreyzeOS kernel.
  * Called from boot/entry.S after:
@@ -90,7 +90,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_info(DREYZEOS_VERSION_STRING);
     klog_info("Target:   " DREYZEOS_TARGET);
     klog_info("Arch:     " DREYZEOS_ARCH);
-    klog_info("Phase:    PHASE 4 - Step 2.6: Stable Loader ABI");
+    klog_info("Phase:    PHASE 4 - Step 2.7: Loader Handoff Research");
     klog_info("Branch:   " DREYZEOS_CANONICAL_BRANCH);
     klog_info("Git SHA:  " GIT_COMMIT_SHA);
     klog_info("========================================");
@@ -134,7 +134,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_hex("  __stack_top    ", (uint64_t)(uintptr_t)__stack_top);
 
     /* ================================================================
-     * STAGE 2 — Boot Metadata Status (Phase 4 Step 2.6)
+     * STAGE 2 — Boot Metadata Status (Phase 4 Step 2.7)
      *
      * The production handoff is intentionally unverified.  The initializer
      * preserves x0/x1 and supplies static fallback metadata without touching
@@ -246,7 +246,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
 
     klog_info("");
     klog_info("========================================");
-    klog_info("PHASE 4 Step 2.6 COMPLETE: Stable ABI Audit Passed.");
+    klog_info("PHASE 4 Step 2.7 COMPLETE: Loader Handoff Research Updated.");
     klog_info("All early boot invariants verified.");
     klog_info("NO NAND writes. NO FB writes. NO unmasked interrupts.");
     klog_info("System entering branch-loop halt; WFI is not assumed safe before loader contract verification.");

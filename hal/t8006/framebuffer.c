@@ -76,7 +76,8 @@ int framebuffer_init(const boot_framebuffer_info_t *info)
 
     /* Populate active descriptor */
     g_fb.base_paddr       = info->base_paddr;
-    g_fb.base_vaddr       = (uintptr_t)info->base_paddr; /* Identity mapped at EL1 */
+    /* A physical address is never promoted to a virtual pointer by default. */
+    g_fb.base_vaddr       = 0;
     g_fb.size             = size;
     g_fb.width            = info->width;
     g_fb.height           = info->height;
@@ -102,12 +103,26 @@ const framebuffer_t *framebuffer_get_info(void)
 
 void framebuffer_set_mapping_verified(bool verified)
 {
+    /* No production path may open the gate without an explicit virtual base. */
+    if (verified && (!g_fb.is_configured || g_fb.base_vaddr == 0)) {
+        g_fb.mapping_verified = false;
+        g_fb.is_write_allowed = false;
+        return;
+    }
+
     g_fb.mapping_verified = verified;
     if (!verified) {
         /* Automatically revoke write permission if mapping verification is lost */
         g_fb.is_write_allowed = false;
     }
 }
+
+#ifdef HOST_TEST
+void framebuffer_set_virtual_base_for_test(uintptr_t base_vaddr)
+{
+    g_fb.base_vaddr = base_vaddr;
+}
+#endif
 
 bool framebuffer_is_mapping_verified(void)
 {
@@ -123,7 +138,8 @@ void framebuffer_enable_writes(bool enable)
          * 1. Framebuffer is configured
          * 2. Framebuffer mapping is explicitly VERIFIED (mapping_verified == true)
          */
-        if (!g_fb.is_configured || !g_fb.mapping_verified) {
+        if (!g_fb.is_configured || g_fb.base_vaddr == 0 ||
+            !g_fb.mapping_verified) {
             g_fb.is_write_allowed = false;
             klog_warn("[FB-INTERLOCK] BLOCKED: Cannot enable writes - mapping UNVERIFIED!");
             return;
@@ -141,7 +157,8 @@ void framebuffer_enable_writes(bool enable)
 void framebuffer_put_pixel(uint32_t x, uint32_t y, uint32_t color)
 {
     /* Hard safety interlock: must be configured AND mapping verified AND write allowed */
-    if (!g_fb.is_configured || !g_fb.mapping_verified || !g_fb.is_write_allowed) {
+    if (!g_fb.is_configured || g_fb.base_vaddr == 0 ||
+        !g_fb.mapping_verified || !g_fb.is_write_allowed) {
         return;
     }
 
@@ -179,7 +196,8 @@ void framebuffer_put_pixel(uint32_t x, uint32_t y, uint32_t color)
 
 void framebuffer_fill(uint32_t color)
 {
-    if (!g_fb.is_configured || !g_fb.mapping_verified || !g_fb.is_write_allowed) {
+    if (!g_fb.is_configured || g_fb.base_vaddr == 0 ||
+        !g_fb.mapping_verified || !g_fb.is_write_allowed) {
         return;
     }
 
@@ -218,7 +236,8 @@ void framebuffer_clear(void)
 
 void framebuffer_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint32_t color)
 {
-    if (!g_fb.is_configured || !g_fb.mapping_verified || !g_fb.is_write_allowed) {
+    if (!g_fb.is_configured || g_fb.base_vaddr == 0 ||
+        !g_fb.mapping_verified || !g_fb.is_write_allowed) {
         return;
     }
 
@@ -270,7 +289,8 @@ void framebuffer_draw_rect(uint32_t x, uint32_t y, uint32_t w, uint32_t h, uint3
 
 void framebuffer_draw_test_pattern(void)
 {
-    if (!g_fb.is_configured || !g_fb.mapping_verified || !g_fb.is_write_allowed) {
+    if (!g_fb.is_configured || g_fb.base_vaddr == 0 ||
+        !g_fb.mapping_verified || !g_fb.is_write_allowed) {
         return;
     }
 

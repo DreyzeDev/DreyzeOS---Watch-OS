@@ -3,10 +3,10 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.6: Stable Loader ABI & T8006 Loader Evidence Research
+**Phase**: 4 — Step 2.7: T8006 Loader / RAM Handoff Contract Research
 **Canonical Branch**: `master`  
-**Phase-Start Baseline Commit**: `c1ed127f244f28ce6b5570c61cb48f024a17a6d6`
-**Host Test Status**: 41/41 PASS (Python + Native C Harness; C harness 7/7)
+**Step-Start Baseline Commit**: `6dec534db25ebf7df32b7f3c9b9886197bd2381d`
+**Host Test Status**: 42/42 PASS (Python + Native C Harness; C harness 8/8)
 **Build Status**: ELF=PASS, BIN=PASS, 0 Compiler Warnings  
 **Hardware Execution Gate**: **NOT READY (BLOCKED)**
 
@@ -19,8 +19,8 @@
 - **Internal Board Identifier**: `N131bAP` / `n131bap`
 - **SoC Identifier**: Apple S4 / `T8006` (`0x8006`)
 - **CPU Architecture**: ARMv8-A AArch64 (64-bit kernel execution)
-- **Primary DRAM Physical Base**: `0x800000000` (CONFIRMED from DeviceTree `/memory`)
-- **Primary DRAM Size**: 1024 MiB / 1 GiB (`0x40000000`)
+- **Primary DRAM Physical Base**: UNKNOWN/BLOCKED; static `/memory` is `0x0+0x0`
+- **Primary DRAM Size**: UNKNOWN/BLOCKED at runtime; 1 GiB is a research quantity only
 - **Display Resolution**: 368 × 448 pixels (OLED scanout)
 
 ---
@@ -33,7 +33,7 @@
   - `DREYZEOS_CANONICAL_BRANCH`: `"master"`
   - `DREYZE_FB_TEST_PATTERN`: Compile-time test switch state (`0` by default)
   - `DREYZEOS_VERSION_STRING`: `"DreyzeOS 0.1.0-research"`
-- **Binary Image Size**: 49,240 bytes (48.1 KB)
+- **Binary Image Size**: 53,336 bytes (52.1 KB)
 
 ---
 
@@ -42,8 +42,8 @@
 | Fact | Evidence | Source |
 |:---|:---|:---|
 | **CPU Architecture** | AArch64 mode confirmed | Kernelcache Mach-O header `0x100000C` (ARM64) |
-| **Primary DRAM Base** | `0x800000000` (32GB boundary) | Static ADT node `/memory` `reg` property |
-| **Primary DRAM Size** | `0x40000000` (1 GiB) | Static ADT node `/memory` `reg` property |
+| **Static `/memory` entry** | `base=0,size=0` | Exact static ADT artifact `nodes_dump.txt`; not the live RAM map |
+| **Live DRAM base and size** | No exact value established | iBoot/runtime population is absent from the reviewed static artifact |
 | **UART0 Physical Base** | `0x2E500000` | Static ADT node `/arm-io/uart0` `reg` property |
 | **UART0 Interrupt ID** | 262 (`0x106`) | Static ADT node `/arm-io/uart0` `interrupts` property |
 | **AIC Physical Base** | `0x2D180000` | Exact Watch4,2/n131bap ADT `/arm-io/aic` `reg`; `0x2E300000` was a stale report error |
@@ -104,12 +104,16 @@ The following items prevent safe hardware execution today:
 - **Section Layout**:
   - `0x100000000`: `.text.boot` (entry point `_start` at offset 0, followed by `_exception_vectors_base` aligned to 2048B)
   - `0x1000010c0`: `.text` (compiled C routines)
-  - `0x100005000`: `.rodata` (4KB page-aligned, read-only permissions `R__`)
-  - `0x100008000`: `.data` (4KB page-aligned, read-write permissions `RW_`)
-  - `0x100008038`: `.klog_buffer` (16KB circular kernel log ring buffer)
-  - `0x10000c058`: `.bss` (zeroed at entry)
-  - `0x1000508d0`: `.stack` (16KB stack, placed strictly **after** `__bss_end` to eliminate BSS clear corruption)
+  - `0x100006000`: `.rodata` (4KB page-aligned, read-only permissions `R__`)
+  - `0x100009000`: `.data` (4KB page-aligned, read-write permissions `RW_`)
+  - `0x100009038`: `.klog_buffer` (16KB circular kernel log ring buffer)
+  - `0x10000d060`: `.bss` (zeroed at entry)
+  - `0x100051950`: `.stack` (16KB stack, placed strictly **after** `__bss_end` to eliminate BSS clear corruption)
 - **ELF Program Headers**: Explicitly partitioned into `text` (`R_E`), `rodata` (`R__`), and `data` (`RW_`), resulting in **0 linker RWX segment warnings**.
+- **Linked-entry evidence**: `objdump -d` shows x0/x1 capture, `CurrentEL`
+  validation, DAIF masking, stack setup, VBAR installation, and the direct
+  `bl kernel_main` sequence at the link-time VMA. This is a static audit, not
+  proof that the VMA is mapped by a T8006 loader.
 
 ---
 
@@ -191,7 +195,10 @@ typedef struct {
 - **Safety Interlock**:
   - `mapping_verified = false` by default.
   - `is_write_allowed = false` by default.
-  - `framebuffer_enable_writes(true)` is rejected unless `mapping_verified == true`.
+  - A physical base is never copied into `base_vaddr`; the production gate
+    rejects verification while no explicit virtual base exists.
+  - `framebuffer_enable_writes(true)` is rejected unless a non-zero virtual
+    base and `mapping_verified == true` both exist.
   - `framebuffer_put_pixel`, `framebuffer_fill`, and `framebuffer_draw_rect` perform 64-bit integer overflow protection and drop writes if mapping is unverified.
 - **Stage 5 Semantics**:
   - If no video detected: logs `HEADLESS` mode.
@@ -261,7 +268,7 @@ Execution on real hardware may only proceed once **ALL** of the following condit
 
 | Requirement | Status | Verification / Evidence |
 |:---|:---:|:---|
-| **Exact RAM load address confirmed** | **BLOCKED** | Placeholder `0x100000000` in linker script |
+| **Exact RAM load address confirmed** | **BLOCKED** | Placeholder `0x100000000` in linker script; static `/memory` is zero-filled |
 | **Execution VA/PA mapping** | **BLOCKED** | Loader MMU/translation regime is not identified |
 | **Entry point model verified** | **CONFIRMED** | `_start` at image offset 0; delivery entry contract remains UNKNOWN |
 | **Loader selected and handoff ABI** | **BLOCKED** | No loader/shim is selected or evidenced; XNU `x0=boot_args` is not a DreyzeOS contract |
@@ -277,7 +284,7 @@ Execution on real hardware may only proceed once **ALL** of the following condit
 | **DeviceTree recursion/overflow safety** | **CONFIRMED** | Max depth 32, fuzz tested; future handoff ranges add overflow-safe pointer containment |
 | **UART timeout protection** | **CONFIRMED** | Cycle timeout in TX loop |
 | **CPU interrupt delivery disabled** | **CONFIRMED** | DAIF=0xF after entry.S; AIC line mask state remains UNKNOWN because MMIO is untouched |
-| **Framebuffer writes hard-locked** | **CONFIRMED** | `mapping_verified = false` gate |
+| **Framebuffer writes hard-locked** | **CONFIRMED** | No identity promotion; non-zero VA plus mapping gate required |
 | **No NAND writes** | **CONFIRMED** | Freestanding, 0 flash write routines |
 | **Expected recovery path documented** | **CONFIRMED** | Crown + Side Button expected reset documented |
 | **Build provenance recorded** | **CONFIRMED** | Git SHA + canonical branch embedded |
@@ -298,7 +305,7 @@ XNU/iBoot-specific inputs before the kernel parses metadata.
 | boot_args | verified readable range containing the complete object | **DESIGN** |
 | DeviceTree | separate verified readable range containing the complete nested object | **DESIGN** |
 | Raw x0/x1 | retained for diagnostics only when unverified | **DESIGN** |
-| MMIO mappings | separate MMIO/UART/AIC facts | **DESIGN** |
+| MMIO mappings | mapping-state-known bit plus general MMIO and UART/AIC validity bits | **DESIGN** |
 | Payload physical destination | no T8006 loader/shim evidence | **UNKNOWN** |
 | Payload execution VA | current `0x100000000` is a linker placeholder | **BLOCKED** |
 | Safe maximum payload size | overlap with loader/ADT/framebuffer/reserved RAM unknown | **UNKNOWN** |
@@ -310,16 +317,28 @@ The fixed V1 wire object is exactly 128 bytes. Its offsets are `magic 0x00`,
 0x40`, `raw_x1 0x48`, `boot_args_range 0x50`, and `device_tree_range 0x68`.
 Each range is 24 bytes: `base u64`, `length u64`, `flags u32`, `reserved u32`.
 V1 validation requires the magic, version, `size >= 128`, known flags, zero
-reserved fields, and a boolean-valued MMU field. A larger size is accepted but
-the unknown tail is ignored. The `VERIFIED` flag is only an assertion from an
-already-trusted bootstrap; it is not a root of trust, signature, or proof that
-the descriptor pointer is readable. Range conversion and full-object
-containment are checked before every host parser copy or scan.
+reserved fields, and a boolean-valued MMU field. V1 also rejects contradictory
+known-state combinations: known entry EL must be EL1, a known payload location
+must have non-zero non-wrapping PA/VA ranges, and any MMIO/UART/AIC validity bit
+requires `MAPPING_STATE_KNOWN`; UART/AIC validity additionally requires the
+general MMIO-valid bit. These are structural checks, not hardware proofs. A
+larger size is accepted but the unknown tail is ignored. The `VERIFIED` flag
+is only an assertion from an already-trusted bootstrap; it is not a root of
+trust, signature, or proof that the descriptor pointer is readable. Range
+conversion and full-object containment are checked before every host parser
+copy or scan.
 
 The range helpers reject zero-length or unreadable ranges, addition overflow,
 `UINTPTR_MAX` wraparound, outside pointers, and partial overlaps. Exact-end
 containment is accepted only when the complete non-empty object fits. A boolean
 such as “nested pointer verified” is intentionally not part of the parser API.
+
+The host-only PIC stage-0 model in `tests/pic_stage0_host.c` is DESIGN
+evidence only: it copies a pre-proven V1 prefix, checks explicit CPU and
+executable-mapping inputs, computes a target entry address, and deliberately
+does not relocate, jump, access MMIO, or execute a payload. V1 still does not
+represent SP, DAIF, TTBR/TCR/MAIR, cache state, or executable/readable mapping
+proof; those remain UNKNOWN/BLOCKED loader inputs.
 
 Research references are architectural context only: [m1n1](https://github.com/AsahiLinux/m1n1)
 documents explicit payload chaining on Apple Silicon, and

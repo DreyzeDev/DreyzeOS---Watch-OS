@@ -17,15 +17,15 @@ until proven otherwise.
 | Reading device information (model, UDID) | NONE | N/A | No | No | No | CONFIRMED | Normal operation |
 | Entering DFU mode | LOW | YES (exit DFU) | Yes (returns to watchOS) | No | No | LIKELY | Standard Apple procedure |
 | Entering Recovery mode | LOW | YES (restore) | Yes | No | No | LIKELY | Standard Apple procedure |
-| Reading kernelcache via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN for S4 | Depends on watchOS version compatibility |
-| Reading DeviceTree via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN for S4 | Same constraints as kernelcache |
+| Reading kernelcache via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Public source targets Watch4,1; no device run |
+| Reading DeviceTree via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Same constraints as kernelcache |
 | RAM-only code injection via PongoOS | MEDIUM | YES (reboot) | Yes | Unlikely | NO | UNKNOWN for T8006 | Requires checkm8 or similar |
-| checkm8 DFU exploit on T8006 | UNKNOWN | LIKELY YES | Yes | Low | NO | UNKNOWN — T8006 checkm8 status unclear | **DO NOT attempt without research** |
+| checkm8 DFU exploit on T8006 | BLOCKED | N/A | N/A | N/A | NO | CONFIRMED not a checkm8 target | Separate usbliter8 research was not executed |
 | Modifying system partition | EXTREME | NO | Yes → bootloop | HIGH | YES | **NEVER** | PROHIBITED by project rules |
 | Overwriting iBoot | EXTREME | NO (brick) | N/A | CERTAIN | YES | **NEVER** | PROHIBITED — permanent brick |
 | Overwriting SecureROM area | EXTREME | NO (permanent) | N/A | CERTAIN | YES | **NEVER** | PROHIBITED — permanent brick |
 | Writing to NAND flash | HIGH | Partial only | N/A | HIGH | YES | **NEVER** | PROHIBITED by project rules |
-| Loading unsigned code via RAM exploit | MEDIUM | YES (reboot) | Yes | Low | NO | UNKNOWN | Phase 5 goal — requires Phase 4 research |
+| Loading unsigned code via RAM exploit | MEDIUM | YES (reboot) | Yes | Low | NO | UNKNOWN/BLOCKED | Requires a proven loader/handoff contract |
 | Poking unknown MMIO addresses | HIGH | Maybe | Likely | Possible | No | **NEVER without research** | Can freeze or crash device |
 | Reading from unknown MMIO | MEDIUM | YES | Possible | Low | No | UNKNOWN | Less dangerous than writing |
 | Disabling WDT (watchdog timer) | MEDIUM | YES (reboot) | Possibly | Low | No | UNKNOWN | Common in OS research |

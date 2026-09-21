@@ -192,8 +192,8 @@ This document tracks the development phases from initial research to a working G
 |-----|---------|
 | CONFIRMED | Verified from documentation, source code, or experiment |
 | LIKELY | Strongly inferred from related data, not directly confirmed |
+| DESIGN | Host-side proposal, not hardware evidence |
 | UNKNOWN | Not yet determined — placeholder used in code |
-| EXPERIMENTAL | Hypothesis being tested |
 | BLOCKED | Cannot proceed until dependency is resolved |
 
 ---

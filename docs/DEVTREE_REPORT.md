@@ -10,8 +10,13 @@
 
 ## 1. Executive Summary
 
-This document represents the **first verified, empirically discovered hardware memory map for the Apple S4 (T8006)**.
-All MMIO addresses listed below were extracted directly from the Apple DeviceTree for the exact board configuration (`N131bAP`), matching Apple Watch Series 4 44mm GPS (Watch4,2) running watchOS 10.6.1 (21U580).
+This document represents a **static DeviceTree physical-reg evidence report**
+for the Apple S4 (T8006), not a live MMU map. All MMIO addresses listed below
+were extracted directly from the Apple DeviceTree for the exact board
+configuration (`N131bAP`), matching Apple Watch Series 4 44mm GPS (Watch4,2)
+running watchOS 10.6.1 (21U580). The report does not prove that these
+physical ranges are mapped at DreyzeOS entry, and the static `/memory` node is
+zero-filled.
 
 **Key Architectural Revelations**:
 1. **CPU Cores**: Dual-core `apple,tempest` (A12-generation energy-efficient cores, 2MB L2 cache, CoreSight debug).
@@ -27,7 +32,9 @@ All MMIO addresses listed below were extracted directly from the Apple DeviceTre
 Every range is labeled with its verification status:
 - **CONFIRMED**: Extracted directly from `DeviceTree.n131bap.adt` `reg` property.
 - **LIKELY**: Highly supported by XNU/iBoot convention and adjacent nodes.
+- **DESIGN**: Host-side proposal, not hardware evidence.
 - **UNKNOWN**: Dynamically populated at boot time by iBoot.
+- **BLOCKED**: Cannot be used until the missing runtime contract is proven.
 
 | Subsystem | Node Path | Compatible | Base Address | Size | Status | Notes |
 |:---|:---|:---|:---|:---|:---:|:---|

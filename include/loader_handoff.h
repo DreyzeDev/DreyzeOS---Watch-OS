@@ -32,9 +32,11 @@ typedef struct __packed {
 #define DREYZE_HANDOFF_FLAG_ENTRY_EL_KNOWN         (1ULL << 1)
 #define DREYZE_HANDOFF_FLAG_PAYLOAD_LOCATION_KNOWN (1ULL << 2)
 #define DREYZE_HANDOFF_FLAG_MMU_STATE_KNOWN        (1ULL << 3)
-#define DREYZE_HANDOFF_FLAG_MMIO_MAPPING_VALID     (1ULL << 4)
-#define DREYZE_HANDOFF_FLAG_UART_MAPPING_VALID     (1ULL << 5)
-#define DREYZE_HANDOFF_FLAG_AIC_MAPPING_VALID      (1ULL << 6)
+#define DREYZE_HANDOFF_FLAG_MMIO_MAPPING_VALID     (1ULL << 4) /* general */
+#define DREYZE_HANDOFF_FLAG_UART_MAPPING_VALID     (1ULL << 5) /* needs bit 4 */
+#define DREYZE_HANDOFF_FLAG_AIC_MAPPING_VALID      (1ULL << 6) /* needs bit 4 */
+/* Mapping facts are meaningful only after the loader assessed mapping state. */
+#define DREYZE_HANDOFF_FLAG_MAPPING_STATE_KNOWN    (1ULL << 7)
 
 /*
  * Stable Loader Handoff ABI V1.

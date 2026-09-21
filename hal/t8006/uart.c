@@ -10,9 +10,10 @@
  *   DeviceTree Property: boot-console
  *
  * Architecture Notes:
- *   - The bootloader (iBoot) sets up UART0 as the primary boot-console.
- *   - Baud rate (typically 115200) and clock gates (gate 0x17) are already
- *     initialized by iBoot prior to kernel handover.
+ *   - The DeviceTree marks UART0 as a boot-console, but this does not prove
+ *     that a DreyzeOS loader leaves clocks or the TX route usable.
+ *   - Baud rate and clock gates (including any gate 0x17 convention) remain
+ *     UNKNOWN until a loader contract or controlled runtime evidence exists.
  *   - The driver safely polls status registers with timeout protection
  *     to prevent hangs if executed in environments without clock/power.
  */

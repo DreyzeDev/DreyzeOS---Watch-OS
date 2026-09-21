@@ -1,4 +1,4 @@
-# T8006 Loader Evidence Research — Phase 4 Step 2.6
+# T8006 Loader / RAM Handoff Contract Research — Phase 4 Step 2.7
 
 **Target**: Apple Watch Series 4 / Watch4,2 / Apple S4 / T8006
 **Scope**: static source and public-artifact review only
@@ -14,6 +14,11 @@ contains a `t8020_t8006_shellcode` tree, and documents post-exploit raw-iBoot
 boot control. That is **CONFIRMED** as public T8006/S4/S5 research, but it is
 not evidence for DreyzeOS payload PA/VA, entry EL, MMU state, descriptor
 delivery, or a safe arbitrary-RAM handoff.
+
+The static snapshots reviewed for this step are usbliter8
+`479dbbf4ad80e4a454e0779d1b4d1ec5eb0d7bd5` and Peepo
+`6d20d676f7c2d1620ba4764f7500baa906d67b64`. No device, DFU session, exploit,
+USB transfer, payload delivery, or hardware execution was performed.
 
 [Peepo](https://github.com/datalocaltmp/Peepo/blob/main/README.md) is separate
 **CONFIRMED** T8006 research: it documents kernel R/W and process-memory dumps
@@ -66,7 +71,14 @@ bytes and contains no `bool`, `size_t`, or `uintptr_t` fields:
 
 Each range is `base u64`, `length u64`, `flags u32`, `reserved u32`; the only
 V1 range flag is `READABLE`. Descriptor flags include `VERIFIED`, known-state
-bits for EL/payload/MMU, and independent MMIO/UART/AIC mapping facts.
+bits for EL/payload/MMU, a mapping-state-known bit, and MMIO/UART/AIC validity
+facts whose relationships are structurally checked.
+
+V1 flag assignments are: bit 0 VERIFIED, bit 1 ENTRY_EL_KNOWN, bit 2
+PAYLOAD_LOCATION_KNOWN, bit 3 MMU_STATE_KNOWN, bit 4 MMIO_MAPPING_VALID, bit 5
+UART_MAPPING_VALID, bit 6 AIC_MAPPING_VALID, and bit 7
+MAPPING_STATE_KNOWN. The fixed descriptor size remains 128 bytes; adding bit 7
+does not change any field offset.
 
 Validation rules:
 
@@ -81,10 +93,79 @@ Validation rules:
 5. A range is usable only after fixed-width values are representable in native
    types, the READABLE flag is set, length is non-zero, addition cannot wrap,
    and the complete object fits inside the range.
-6. `VERIFIED` is not a signature and does not by itself prove pointer safety.
+6. If `ENTRY_EL_KNOWN` is set, `entry_el` must be EL1. If
+   `PAYLOAD_LOCATION_KNOWN` is set, PA/VA/size must describe non-zero,
+   non-empty, non-wrapping ranges.
+7. Any MMIO/UART/AIC validity bit requires `MAPPING_STATE_KNOWN`; UART/AIC
+   validity additionally requires `MMIO_MAPPING_VALID`. A known negative
+   state is representable by setting `MAPPING_STATE_KNOWN` without a validity
+   bit.
+8. `VERIFIED` is not a signature and does not by itself prove pointer safety.
    The current setter is host-test-only, copies the fixed prefix without
    normalizing bad fields, and production still preserves raw x0/x1 without
    dereferencing them.
+
+## Static source archaeology — usbliter8
+
+The reviewed usbliter8 sources are an exploit-specific SecureROM control path,
+not a generic AArch64 payload loader. The exact facts below are CONFIRMED as
+source facts; their usefulness as a DreyzeOS handoff is UNKNOWN/BLOCKED.
+
+| Source artifact | Exact fact from source | DreyzeOS interpretation |
+|---|---|---|
+| [t8020_t8006_shellcode/start.S](https://github.com/JoshAtticus/usbliter8/blob/main/t8020_t8006_shellcode/start.S) | Uses handler_off = 0x3C00 and ret_tramp_off = 0x3F00; clears SCTLR_EL1.M, installs sp = NEW_SP, copies a return trampoline/handler, writes a PTE, executes tlbi vmalle1 and ic iallu, then re-enables SCTLR_EL1.M. | CONFIRMED exploit trampoline behavior; not a DreyzeOS entry contract. |
+| [targets/t8006/offsets.h](https://github.com/JoshAtticus/usbliter8/blob/main/t8020_t8006_shellcode/targets/t8006/offsets.h) | T8006 constants include NEW_SP=0x1801D8BC0, TRAMP_BASE=0x1801C8000, ROM_TRAMP=0x100007A00, BOOT_TRAMP_PTEP=0x1801B4390, BOOT_TRAMP_PTE=0x1801C86E3, DMA_BUF_LO=0x801D9600, USB_DMA_DEST=0x230100B14, USB_REQ_HANDLER_CB_ADDR=0x1801C03F8, and RETURN_TO_EL0_ADDR=0x10000C370. | CONFIRMED hardcoded exploit/ROM/heap addresses; no address is a DreyzeOS payload PA or VA. |
+| start.S return path | Restores the original ROM trampoline and SCTLR_EL1, sets ELR_EL1=RETURN_TO_EL0_ADDR, SPSR_EL1=0x100, then executes eret. | The target return is a ROM task at EL0; it is not evidence for DreyzeOS EL1 entry. |
+| [usb_req_handler/handler.c](https://github.com/JoshAtticus/usbliter8/blob/main/usb_req_handler/handler.c) | Custom boot calls platform_set_remote_boot(), stores JUMP_AWAY/PACIB to MAIN_TASK_STACK_LR, and chains non-custom requests to the original handler. | Raw iBoot control path; no descriptor, stack, or kernel ABI. |
+| [exploit.c](https://github.com/JoshAtticus/usbliter8/blob/main/exploit.c) | T8006 setup uses overwrite size 0xB04 bytes and shellcode transfer size 0x400 bytes; generated T8006 shellcode is 816 bytes and handler is 116 bytes. | These are exploit transfer/layout sizes, not a maximum safe DreyzeOS payload or relocation bound. |
+| usbliter8ctl DFU path | Raw iBoot is sent with TRANSFER_SIZE=0x800 chunks, followed by custom boot and DFU abort. | CONFIRMED raw-iBoot delivery behavior; it does not define a DreyzeOS RAM deposit address. |
+
+The source therefore establishes a control primitive around a particular
+SecureROM heap, ROM trampoline, task stack, and USB callback environment. It
+does not expose a stable contract for payload PA, payload VA, entry PC, SP,
+DAIF, TTBR0/TTBR1, TCR, MAIR, cache state, executable mappings, or a
+readable DreyzeOS descriptor. Running it would cross the explicit hardware
+boundary and was not attempted.
+
+## Static source archaeology — Peepo
+
+[Peepo/Peepo Watch App/darksword.m](https://github.com/datalocaltmp/Peepo/blob/main/Peepo%20Watch%20App/darksword.m)
+provides a separate kernel post-exploitation research path:
+
+| Source fact | Status | Boundary |
+|---|:---:|---|
+| DS_PAGE_SHIFT=14 and 16 KiB page-table assumptions | CONFIRMED source fact | Useful architecture context; not a loader ABI. |
+| DS_DRAM_LO=0x807000000, DS_DRAM_HI=0x840000000 | CONFIRMED source constants/comments | A runtime-safe physmap window hypothesis for that exploit; not proof of DreyzeOS RAM placement or Watch4,2 applicability. |
+| gPhysmapOff = tte - ttep from live translation-table objects | CONFIRMED source algorithm | Runtime-derived and therefore unavailable without the forbidden exploit/device run. |
+| peepo_dump_kernelcache cap/fallback 0x2800000 | CONFIRMED source behavior | Kernelcache dump cap/fallback, not a DreyzeOS payload-size limit. |
+| README target claim | CONFIRMED public documentation for Watch4,1/T8006 on selected watchOS 10.6.x builds | The project target is Watch4,2; applicability remains UNKNOWN/BLOCKED and was not tested. |
+
+Peepo could potentially provide runtime-derived kernel/physmap observations
+after exploit execution, but it cannot be used here as static proof of an
+entry mapping. No Peepo code was built, installed, or executed.
+
+## DreyzeOS ELF and flat-image evidence
+
+The current host build at baseline 6dec534db25ebf7df32b7f3c9b9886197bd2381d
+was rebuilt and inspected:
+
+| Artifact | Observed value | Status |
+|---|---|:---:|
+| ELF entry / _start | 0x100000000 | CONFIRMED link-time fact |
+| .text.boot | 0x100000000, size 0x10bc, executable | CONFIRMED |
+| .text | 0x1000010c0, size 0x4028 | CONFIRMED |
+| .rodata / .data | 0x100006000 / 0x100009000 | CONFIRMED |
+| .bss / .stack | 0x10000d060 / 0x100051950 | CONFIRMED |
+| Program LOAD segments | R-E, R, RW; no RWX segment | CONFIRMED |
+| readelf -r | no relocations | CONFIRMED static-link fact |
+| objdump -d | adr/adrp link-time references, direct in-image bl, and absolute global addresses | CONFIRMED non-PIC evidence |
+| Flat BIN size | 53,336 bytes | CONFIRMED host build fact |
+
+The absence of relocations means the linker already resolved references; it
+does not make DreyzeOS.bin position-independent. Moving the flat image without
+matching the linked VMA can invalidate entry addresses, C globals, literal
+references, and direct branches. The new host test checks the linked
+instruction order and this non-PIC property from the disassembly.
 
 ## PIC stage-0 analysis
 
@@ -101,11 +182,55 @@ hardware applicability **BLOCKED**.
 
 A small position-independent stage-0 could start from the loader's actual PC,
 establish a known stack, locate or copy the fixed ABI prefix, validate it, and
-relocate/enter a larger kernel at a descriptor-provided VA. This reduces the
-dependency on one preselected image address, but it cannot remove the need for
-an executable/readable initial mapping, a known entry EL, a usable stack, and a
-defined cache/MMU regime. It also cannot infer a safe payload PA or claim that
-T8006 supplies the descriptor. **Status: DESIGN**.
+relocate/enter a larger kernel at a descriptor-provided VA. The repository now
+contains tests/pic_stage0_host.c, a host-only decision model that copies only a
+pre-proven 128-byte prefix, validates the V1 descriptor, requires explicit
+EL1/stack/DAIF/translation/cache/executable-mapping facts, and computes a
+target entry address without executing it. This reduces the dependency on one
+preselected image address, but it cannot remove the need for an
+executable/readable initial mapping or infer a safe payload PA. **Status:
+DESIGN; host model CONFIRMED by host tests; hardware applicability
+UNKNOWN/BLOCKED**.
+
+### Option C — fully position-independent kernel
+
+A fully PIC kernel would remove more link-time VA assumptions, but it would
+still require a valid entry PC, stack, EL1 state, readable code/data mapping,
+translation/cache contract, and a safe way to find the descriptor. It would
+also require a larger ABI and test surface. No such implementation is
+selected for this step. **Status: DESIGN; hardware applicability
+UNKNOWN/BLOCKED**.
+
+### Option comparison
+
+| Option | Main advantage | What remains mandatory | Decision |
+|---|---|---|---|
+| A — fixed non-PIC | Smallest current image; simple linker contract | Exact load VMA/PA, executable mapping, EL1, SP, MMU/TTBR/cache state | Keep as current research artifact; hardware **BLOCKED** |
+| B — PIC stage-0 + fixed kernel | Reduces initial placement dependency; can validate V1 before transition | Initial executable map, descriptor prefix, target PA/VA, entry offset, SP, DAIF, translation/cache state | Preferred future direction; host-only model added |
+| C — fully PIC | Minimizes link-time VA assumptions | Same CPU/mapping contract plus a larger relocation/PIC implementation | Not selected; unnecessary before loader evidence |
+
+The smallest useful next artifact is therefore a real loader/shim contract that
+matches Option B's input assertions. The host model must not be mistaken for
+that artifact.
+
+## Handoff contract completeness matrix
+
+| Contract item | V1 representation or test | Status before hardware |
+|---|---|:---:|
+| Descriptor prefix readability | External pre-proof plus 128-byte host copy model | DESIGN / UNKNOWN |
+| Descriptor identity and version | magic, version, size, reserved fields | DESIGN; structural validator CONFIRMED |
+| Payload PA/VA/size | three u64 fields plus known flag and overflow checks | DESIGN; values UNKNOWN/BLOCKED |
+| Entry PC | target VA plus host model entry offset; no V1 entry-PC field | DESIGN; hardware UNKNOWN/BLOCKED |
+| Entry EL | entry_el plus ENTRY_EL_KNOWN, restricted to EL1 | DESIGN; hardware UNKNOWN/BLOCKED |
+| Initial SP | not represented in V1; explicit stage-0 input only | UNKNOWN/BLOCKED |
+| DAIF | not represented in V1; explicit stage-0 input only | UNKNOWN/BLOCKED |
+| SCTLR/TCR/TTBR0/TTBR1/MAIR | only mmu_enabled in V1; registers are not handed over | UNKNOWN/BLOCKED |
+| I/D-cache state | not represented in V1 | UNKNOWN |
+| Executable/readable mapping | not represented in V1; explicit stage-0 proof input only | UNKNOWN/BLOCKED |
+| boot_args / DeviceTree | separately bounded readable ranges | DESIGN; runtime delivery UNKNOWN |
+| MMIO/UART/AIC mapping | mapping-state-known plus validity flags | DESIGN; runtime UNKNOWN/BLOCKED |
+| Maximum transfer/payload size | no source proves a DreyzeOS bound | UNKNOWN |
+| Physical delivery vector | usbliter8 source exists; exact Watch4,2 deployment unproven | UNKNOWN/BLOCKED |
 
 ## Closest primitive and remaining blocker
 

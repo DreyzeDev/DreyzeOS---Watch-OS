@@ -6,7 +6,7 @@
  *   CONFIRMED    — verified directly from Apple DeviceTree (DeviceTree.n131bap.adt)
  *   LIKELY       — strongly inferred from similar Apple SoCs or XNU kernelcache
  *   UNKNOWN      — dynamically populated at runtime by iBoot
- *   EXPERIMENTAL — hypothesis being tested
+ *   DESIGN       — research-only input, not a hardware proof
  *   BLOCKED      — requires specialized coprocessor interaction
  *
  * ============================================================
@@ -39,11 +39,12 @@
  * ============================================================
  *
  * Apple Watch Series 4 RAM: 1 GB total (LPDDR4)
- * Status: 1GB size CONFIRMED; physical base LIKELY 0x800000000 (standard for A11/A12/S4)
- * Note: /memory node in static DeviceTree has reg [0x0+0x0], dynamically populated by iBoot.
+ * Status: static /memory is [0x0+0x0]; live base and usable range are
+ * UNKNOWN/BLOCKED. The constants below are research fallbacks only and are
+ * never a loader handoff proof.
  */
-#define T8006_DRAM_BASE                 0x0000000800000000ULL  /* LIKELY — A12/S4 32GB line */
-#define T8006_DRAM_SIZE                 (1ULL * 1024 * 1024 * 1024) /* 1 GB — CONFIRMED */
+#define T8006_DRAM_BASE                 0x0000000800000000ULL  /* UNKNOWN/BLOCKED research fallback */
+#define T8006_DRAM_SIZE                 (1ULL * 1024 * 1024 * 1024) /* DESIGN quantity, not live map proof */
 #define DREYZEOS_PLACEHOLDER_LOAD_ADDR  0x0000000100000000ULL  /* Linker placeholder */
 
 /* ============================================================

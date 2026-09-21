@@ -80,6 +80,11 @@ const framebuffer_t *framebuffer_get_info(void);
 void framebuffer_set_mapping_verified(bool verified);
 bool framebuffer_is_mapping_verified(void);
 
+#ifdef HOST_TEST
+/* Test-only mapping injection; production has no guessed identity mapping. */
+void framebuffer_set_virtual_base_for_test(uintptr_t base_vaddr);
+#endif
+
 /* Explicitly enable or disable hardware writes to the framebuffer */
 void framebuffer_enable_writes(bool enable);
 

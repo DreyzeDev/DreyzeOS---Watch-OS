@@ -6,8 +6,8 @@
 |-----|---------|
 | **CONFIRMED** | Verified from documentation, teardown, source code, or experiment |
 | **LIKELY** | Strongly inferred from related data, not directly confirmed |
+| **DESIGN** | Host-side proposal, not hardware evidence |
 | **UNKNOWN** | Not yet determined — placeholder used in code |
-| **EXPERIMENTAL** | Hypothesis being tested |
 | **BLOCKED** | Cannot proceed until dependency is resolved |
 
 ---
@@ -134,10 +134,12 @@ launchd → watchOS userspace (ARM64_32)
 
 ## 4. Memory Map
 
-**Status: ALL ADDRESSES UNKNOWN** — Apple does not publish T8006 technical reference manual.
+**Status: static physical-reg evidence exists for selected MMIO nodes, but
+live MMU mappings and the DRAM map remain UNKNOWN/BLOCKED** — Apple does not
+publish a T8006 technical reference manual.
 
 ```
-Physical Address Space — T8006 (SPECULATIVE, NOT CONFIRMED)
+Physical Address Space — T8006 (generic research sketch, not a live map)
 =============================================================
 0x0000_0000_0000_0000  Boot ROM / SecureROM         UNKNOWN size/addr
    ...
@@ -147,9 +149,10 @@ Physical Address Space — T8006 (SPECULATIVE, NOT CONFIRMED)
 0x0000_000C_0000_0000  DRAM end (1GB from base)     UNKNOWN
 =============================================================
 
-NOTE: All addresses above are SPECULATIVE extrapolations from A10/A11 platforms.
-      They must be confirmed from DeviceTree dumps before use.
-      DO NOT USE in production code.
+NOTE: The sketch above is not a source for current constants. Static
+      DeviceTree evidence is maintained in DEVTREE_REPORT.md; it does not
+      prove virtual mappings or live DRAM placement. Do not use the sketch
+      for production code.
 ```
 
 ### Known from Teardown (Memory Quantities Only)
@@ -163,15 +166,15 @@ NOTE: All addresses above are SPECULATIVE extrapolations from A10/A11 platforms.
 
 | Peripheral | Base Address | Status |
 |-----------|-------------|--------|
-| UART0 | UNKNOWN_T8006_UART_BASE | UNKNOWN |
-| Display Controller | UNKNOWN_T8006_DISPLAY_BASE | UNKNOWN |
+| UART0 | 0x2e500000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
+| Display Controller | 0x18000000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
 | Framebuffer | Allocated by iBoot, in DeviceTree `chosen` | CONFIRMED method / UNKNOWN value |
-| Interrupt Controller (AIC) | UNKNOWN_T8006_AIC_BASE | UNKNOWN |
-| PMGR (Power Manager) | UNKNOWN_T8006_PMGR_BASE | UNKNOWN |
+| Interrupt Controller (AIC) | 0x2d180000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
+| PMGR (Power Manager) | 0x2d000000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
 | SPI0 | UNKNOWN_T8006_SPI0_BASE | UNKNOWN |
 | SPI1 | UNKNOWN_T8006_SPI1_BASE | UNKNOWN |
 | I2C0 | UNKNOWN_T8006_I2C0_BASE | UNKNOWN |
-| GPIO | UNKNOWN_T8006_GPIO_BASE | UNKNOWN |
+| GPIO | 0x2d300000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
 
 ---
 

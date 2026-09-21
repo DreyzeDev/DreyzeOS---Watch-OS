@@ -24,6 +24,7 @@
 #include "../hal/t8006/aic.h"
 #include "../hal/t8006/platform.h"
 #include "../include/log.h"
+#include "pic_stage0_host.h"
 
 /* ============================================================
  * Test Harness Stubs for Host Execution
@@ -202,7 +203,13 @@ static void test_framebuffer_mapping_interlock(void)
     uint32_t *pixels = (uint32_t *)fb_mem;
     assert(pixels[10 * width + 10] == 0); /* Still zero! */
 
-    /* 4. When mapping is explicitly verified: writes can be enabled */
+    /* 4. A verification bit alone cannot promote PA to VA. */
+    framebuffer_set_mapping_verified(true);
+    assert(framebuffer_is_mapping_verified() == false);
+    assert(fb_desc->is_write_allowed == false);
+
+    /* Host-only model supplies a concrete VA; production has no such setter. */
+    framebuffer_set_virtual_base_for_test((uintptr_t)fb_mem);
     framebuffer_set_mapping_verified(true);
     assert(framebuffer_is_mapping_verified() == true);
 
@@ -399,6 +406,38 @@ static void test_handoff_descriptor_and_ranges(void)
     assert(loader_handoff_get()->magic != DREYZE_HANDOFF_MAGIC);
     assert(loader_handoff_is_verified() == false);
 
+    /* V1 rejects contradictory known-state combinations. */
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    descriptor.flags |= DREYZE_HANDOFF_FLAG_ENTRY_EL_KNOWN;
+    descriptor.entry_el = 0;
+    assert(loader_handoff_descriptor_validate(&descriptor) == false);
+    descriptor.entry_el = 1;
+    assert(loader_handoff_descriptor_validate(&descriptor) == true);
+
+    descriptor.flags |= DREYZE_HANDOFF_FLAG_PAYLOAD_LOCATION_KNOWN;
+    descriptor.payload_pa = 0x800000000ULL;
+    descriptor.payload_va = 0x100000000ULL;
+    descriptor.payload_size = 0;
+    assert(loader_handoff_descriptor_validate(&descriptor) == false);
+    descriptor.payload_size = 0x1000;
+    assert(loader_handoff_descriptor_validate(&descriptor) == true);
+    descriptor.payload_pa = UINT64_MAX - 0x7FFULL;
+    assert(loader_handoff_descriptor_validate(&descriptor) == false);
+
+    make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
+                             (uintptr_t)&ba, sizeof(ba),
+                             (uintptr_t)nested_tree, sizeof(nested_tree));
+    descriptor.flags |= DREYZE_HANDOFF_FLAG_MMIO_MAPPING_VALID;
+    assert(loader_handoff_descriptor_validate(&descriptor) == false);
+    descriptor.flags |= DREYZE_HANDOFF_FLAG_MAPPING_STATE_KNOWN;
+    assert(loader_handoff_descriptor_validate(&descriptor) == true);
+    descriptor.flags |= DREYZE_HANDOFF_FLAG_UART_MAPPING_VALID;
+    assert(loader_handoff_descriptor_validate(&descriptor) == true);
+    descriptor.flags &= ~DREYZE_HANDOFF_FLAG_MMIO_MAPPING_VALID;
+    assert(loader_handoff_descriptor_validate(&descriptor) == false);
+
     make_verified_descriptor(&descriptor, (uintptr_t)&ba, 0,
                              (uintptr_t)&ba, sizeof(ba),
                              (uintptr_t)nested_tree, sizeof(nested_tree));
@@ -537,9 +576,10 @@ int main(void)
     test_devtree_bounds_and_boot_args();
     test_handoff_descriptor_and_ranges();
     test_pre_hardware_mmio_gate();
+    pic_stage0_host_run_self_tests();
 
     printf("==================================================\n");
-    printf("All C-Level Host Tests PASSED (7/7) ✓\n");
+    printf("All C-Level Host Tests PASSED (8/8) ✓\n");
     printf("==================================================\n\n");
 
     return 0;

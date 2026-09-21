@@ -38,7 +38,7 @@
      * Compile-time safety guard: `DREYZE_FB_TEST_PATTERN` (defaults to `0`).
    - Implementation [`hal/t8006/framebuffer.c`](file:///C:/Users/pc/Desktop/DreyzeOS/hal/t8006/framebuffer.c):
      * `framebuffer_init()`: Validates input descriptor, checks non-zero base address and dimensions, validates that `row_bytes >= width * bpp`, and guards against 64-bit integer overflow when computing `row_bytes * height`.
-     * **Safety Interlock**: Initializes `is_write_allowed = false` by default so hardware writes are blocked unless explicitly unlocked.
+     * **Safety Interlock**: Initializes `base_vaddr = 0`, `mapping_verified = false`, and `is_write_allowed = false`; hardware writes remain blocked without a concrete virtual mapping.
      * `framebuffer_put_pixel()`: Rejects out-of-bounds `(x, y)` coordinates. Computes `offset = y * row_bytes + x * bpp` with 64-bit overflow validation. Enforces `offset + bpp <= size` before any memory access.
      * `framebuffer_fill()` and `framebuffer_clear()`: Safe raster fills utilizing row stride.
      * `framebuffer_draw_rect()`: Clips bounding boxes against visible display edges before drawing.
@@ -49,7 +49,7 @@
    - Updated [`kernel/kernel.c`](file:///C:/Users/pc/Desktop/DreyzeOS/kernel/kernel.c):
      * Calls `framebuffer_init()` and `framebuffer_diag()` if boot discovery located a valid framebuffer.
      * **Default Boot Behavior**: Writes remain disabled (`DREYZE_FB_TEST_PATTERN=0`). No automatic test pattern writes are performed.
-     * Compile-time conditional: `#if DREYZE_FB_TEST_PATTERN` unlocks writes and executes `framebuffer_draw_test_pattern()` only when explicitly opted in for future controlled tests.
+     * Compile-time conditional: `#if DREYZE_FB_TEST_PATTERN` requests the future test path, but it cannot bypass the concrete-VA and mapping gates.
 
 4. **Host-Side Software Framebuffer & Verification Suite**:
    - Added [`SoftwareFramebuffer`](file:///C:/Users/pc/Desktop/DreyzeOS/tests/test_runner.py) test model to `tests/test_runner.py`:
@@ -71,7 +71,7 @@
 | `video.v_depth` offset | `+0x50` | `kernelcache.macho` disasm (`ldp x9, x10, [x19, #0x48]`) | **CONFIRMED** |
 | Boot console pixel format string | `"BBBBBBBBGGGGGGGGRRRRRRRR"` | `kernelcache.macho` disasm (`0x823ea2c`: `adrp x1, 0x7098000; add x1, x1, #0x8c6`) | **CONFIRMED** |
 | Channel byte order (Little Endian) | Byte 0: B, Byte 1: G, Byte 2: R, Byte 3: A/X | Inferred from AArch64 little-endian memory layout + format string | **CONFIRMED** |
-| Runtime Framebuffer Base | Dynamic | Discovered at runtime via `boot_args` or `/chosen/memory-map` | **CONFIRMED (Runtime)** |
+| Runtime Framebuffer Base | Dynamic | Parser/design path via `boot_args` or `/chosen/memory-map`; no hardware run | **UNKNOWN/BLOCKED** |
 | Panel physical resolution | 368 × 448 | Apple Watch Series 4 44mm physical specification | **CONFIRMED** |
 | Display Controller (Apple Mobile Display M9) | Uninitialized by DreyzeOS | Out of scope — relying exclusively on bootloader setup | **NOT APPLICABLE** |
 | MIPI DSI Clocks / Regs | Unmodified | Out of scope — intentionally untouched | **NOT APPLICABLE** |

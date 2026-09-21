@@ -29,7 +29,8 @@ a gap of approximately 8 years. It ports the **DarkSword** exploit chain to watc
 #### Supported Targets
 | Target | Status |
 |--------|--------|
-| Apple Watch Series 4 (all variants) | CONFIRMED |
+| Apple Watch Watch4,1 / T8006 | CONFIRMED in the public project README |
+| Apple Watch Watch4,2 / this project target | UNKNOWN/BLOCKED; not claimed or tested by the reviewed README |
 | watchOS 10.6.1 | CONFIRMED |
 | watchOS 10.6.2 | CONFIRMED |
 | Other Watch models (Series 5/6/SE) | LIKELY (same XNU vulnerability) |
@@ -39,10 +40,10 @@ a gap of approximately 8 years. It ports the **DarkSword** exploit chain to watc
 | Data | Extractable? | Risk |
 |------|-------------|------|
 | Process memory dumps | YES | Low (read-only) |
-| Kernel memory (any address) | YES | Medium (wrong addr = panic) |
+| Kernel memory (any address) | Public source claims kernel R/W | UNKNOWN/BLOCKED for this target until an authorized run |
 | kernelcache from memory | LIKELY | Medium |
 | DeviceTree from memory | LIKELY | Medium |
-| MMIO register values | YES (via kernel VA) | High (wrong addr = crash) |
+| MMIO register values | Possible through a live kernel VA | UNKNOWN/BLOCKED; no device run performed |
 | IOKit device registry | YES | Medium |
 | Hardware MMIO base addresses | YES (from IOKit) | Low |
 
@@ -54,7 +55,8 @@ a gap of approximately 8 years. It ports the **DarkSword** exploit chain to watc
 5. **Cannot permanently modify** watchOS
 
 #### Value for DreyzeOS Project
-Peepo is **extremely valuable for Phase 3 hardware research**:
+Peepo is a potentially valuable future research path, but it is not a
+DreyzeOS loader and has not been executed in this project:
 - With a physical Watch running watchOS 10.6.1/10.6.2, we can:
   - Walk the IOKit registry to find all MMIO base addresses
   - Dump the DeviceTree from kernel memory
@@ -62,7 +64,7 @@ Peepo is **extremely valuable for Phase 3 hardware research**:
   - Potentially dump the kernelcache for analysis
 - This would provide the "CONFIRMED" data needed for Phases 5-7
 
-**Recommended approach**: Write a custom Peepo script that:
+Any future, separately authorized research could write a custom Peepo script that:
 1. Establishes kernel R/W
 2. Finds the IODeviceTree registry root
 3. Walks all nodes and extracts `reg` properties (MMIO base + size)
@@ -129,13 +131,15 @@ T8006 UART_BASE: UNKNOWN — must be extracted from DeviceTree.
 
 ### Boot Chain Research
 
-#### iBoot Register Convention (CONFIRMED)
-Based on XNU source and multiple sources:
+#### XNU/iBoot Register Convention (CONFIRMED only for the cited XNU path)
+Based on the researched XNU source and kernelcache:
 - `x0` at kernel entry = physical address of Apple DeviceTree
 - `x1` = unclear / unused in some versions
 - `sp` = top of initial stack (may be iBoot's own stack)
 
-This is **why our entry.S saves x0 immediately** — it's the DeviceTree pointer.
+This is an XNU-specific convention, not a DreyzeOS loader contract. DreyzeOS
+saves x0 immediately for diagnostics but does not dereference it while the
+handoff descriptor is unverified.
 
 #### KASLR (Kernel Address Space Layout Randomization)
 - **CONFIRMED**: watchOS uses KASLR since watchOS 4+
@@ -143,7 +147,7 @@ This is **why our entry.S saves x0 immediately** — it's the DeviceTree pointer
 - This makes hardcoded kernel addresses impossible
 - PongoOS kpatchfinder (KPF) works around this by pattern-matching opcodes
 
-#### DeviceTree Boot Flow
+#### XNU DeviceTree Boot Flow (not a DreyzeOS handoff proof)
 ```
 iBoot:
 1. Loads DeviceTree blob (from kernelcache/IPSW)
@@ -205,13 +209,13 @@ Any apps running on DreyzeOS would choose their ABI independently.
 - **Method**: Peepo → kernel R/W → map DreyzeOS code into kernel memory → jump to it
 - **Risk**: Medium (kernel panic recoverable via reboot)
 - **Completeness**: Partial — runs after watchOS, shares kernel VA space
-- **Status**: EXPERIMENTAL — not confirmed for DreyzeOS specifically
+- **Status**: UNKNOWN/BLOCKED — not confirmed for DreyzeOS specifically
 - **Windows path**: Peepo must run FROM the Watch (watchOS app or SSH) — Windows part = prep/build only
 
 #### Option B: T8004 (Series 3) + checkm8 path
 - **Requires**: Apple Watch Series 3 (T8004) — DIFFERENT device
 - **Method**: checkm8 exploit → PongoOS → bare metal
-- **Status**: EXPERIMENTAL — would need PongoOS Watch port
+- **Status**: UNKNOWN/BLOCKED — would need a PongoOS Watch port
 - **NOT applicable** to Series 4 (T8006 not checkm8 vulnerable)
 
 #### Option C: iBus + Future BootROM Research
@@ -221,7 +225,7 @@ Any apps running on DreyzeOS would choose their ABI independently.
 
 #### Option D: IPSW DeviceTree + QEMU Emulation
 - **Method**: Extract real T8006 DeviceTree from IPSW → build QEMU model → run DreyzeOS in QEMU
-- **Status**: EXPERIMENTAL — QEMU does not currently model T8006
+- **Status**: DESIGN — QEMU does not currently model T8006
 - **Value**: Allows testing kernel code without real hardware
 - **Windows path**: Fully possible on WSL2
 - **Recommendation**: Pursue this for Phase 5 simulator

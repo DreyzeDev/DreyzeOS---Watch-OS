@@ -43,7 +43,8 @@
      * Dual-mode ABI auto-detection (`platform_boot_info_init`):
        1. Validates `arg0` as direct ADT pointer via `devtree_validate_header`.
        2. If not ADT, inspects `arg0` as `xnu_arm64_boot_args_t` pointer (checks valid `phys_base` and `mem_size`, loads ADT pointer from `devicetree_p`).
-       3. If neither or invalid, gracefully falls back to confirmed static S4/T8006 defaults without crashing.
+       3. If neither or invalid, gracefully falls back to research-only S4/T8006
+          defaults without crashing; fallback values are not runtime proof.
      * Safe recursive node walking with depth limits (`MAX_NODE_DEPTH = 16`) and pointer bounds checking against `tree_limit`.
      * Dynamic DRAM detection from `/memory` (`reg` property) or `boot_args` (`phys_base`, `mem_size`).
      * Dynamic reservation parsing from `/chosen/memory-map` (16-byte pairs: `uint64_t paddr`, `uint64_t size`).
@@ -71,9 +72,9 @@
 | `boot_args.devicetree_length` offset | `+0x68` | XNU `arm64/boot.h` (uint32_t length) | **CONFIRMED** |
 | `/chosen/memory-map` format | `[u64 paddr, u64 size]` (16 B) | Static ADT inspection + XNU `pe_gen.c` references | **CONFIRMED** |
 | Pixel format (Apple boot display) | `BGRA32` / `BGR24` | `kernelcache.macho` string `"BBBBBBBBGGGGGGGGRRRRRRRR"` | **CONFIRMED** |
-| T8006 Fallback DRAM Base | `0x800000000` | DeviceTree memory ranges / XNU mappings | **CONFIRMED** |
-| T8006 Fallback DRAM Size | `0x40000000` (1 GB) | Watch4,2 static configuration | **CONFIRMED** |
-| Runtime Framebuffer Base | Dynamic | Extracted from `boot_args.video` or `/chosen/memory-map` | **CONFIRMED (Runtime)** |
+| T8006 Fallback DRAM Base | `0x800000000` | Research fallback; static `/memory` is `0x0+0x0` | **UNKNOWN/BLOCKED** |
+| T8006 Fallback DRAM Size | `0x40000000` (1 GB) | Product/research quantity; live map not established | **UNKNOWN/BLOCKED** |
+| Runtime Framebuffer Base | Dynamic | Parser/design path from `boot_args.video` or `/chosen/memory-map`; no hardware run | **UNKNOWN/BLOCKED** |
 | Panel Resolution | 368 x 448 | Watch4,2 44mm physical panel spec (not assumed for FB layout) | **CONFIRMED** |
 
 ---

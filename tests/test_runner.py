@@ -1039,7 +1039,7 @@ def test_boot_stage_error_separate_from_last_successful():
         f"BOOT_STAGE_ERROR must fit in uint8_t, got {BOOT_STAGE_ERROR}"
 
 # ============================================================
-# Tests: Phase 4 Step 2.6 — Stable Loader ABI & T8006 Loader Evidence
+# Tests: Phase 4 Step 2.7 — T8006 Loader / RAM Handoff Contract Research
 # ============================================================
 
 @test("C-level host test harness execution")
@@ -1061,13 +1061,14 @@ def test_c_host_tests_execution():
         os.path.join(root_dir, "hal", "t8006", "aic.c"),
         os.path.join(root_dir, "hal", "t8006", "framebuffer.c"),
         os.path.join(root_dir, "lib", "string.c"),
+        os.path.join(root_dir, "tests", "pic_stage0_host.c"),
         "-o", c_bin
     ]
     wsl_cmd = (
         "gcc -DHOST_TEST -I. -Iinclude -Ilib "
         "tests/test_host_c.c kernel/boot_stage.c kernel/log.c hal/t8006/device_tree.c "
         "hal/t8006/mmio_gate.c hal/t8006/handoff_gate.c hal/t8006/platform.c hal/t8006/uart.c hal/t8006/aic.c "
-        "hal/t8006/framebuffer.c lib/string.c "
+        "hal/t8006/framebuffer.c lib/string.c tests/pic_stage0_host.c "
         "-o build/test_host_c && ./build/test_host_c"
     )
     result = run_command_cross(compile_cmd, f"cd /mnt/c/Users/pc/Desktop/DreyzeOS && {wsl_cmd}")
@@ -1159,6 +1160,49 @@ def test_entry_system_register_audit():
     halt_block = text[unsupported: text.find("\n\n", unsupported)]
     assert "wfi" not in halt_block.lower(), \
         "Unsupported-EL fallback must not depend on WFI"
+
+
+@test("entry/ELF — linked startup order and non-PIC addressing are explicit")
+def test_entry_disassembly_and_pic_contract():
+    """Audit linked instructions and prove the current image is link-bound."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(root_dir, "build", "DreyzeOS.elf")
+    dis = run_command_cross(
+        ["aarch64-linux-gnu-objdump", "-d", elf_path],
+        "aarch64-linux-gnu-objdump -d /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"
+    )
+    assert dis.returncode == 0, f"objdump failed: {dis.stderr}"
+    text = dis.stdout
+    start = text.find("<__kernel_start>:")
+    if start < 0:
+        start = text.find("<_start>:")
+    unsupported = text.find("<_unsupported_el_halt>:")
+    assert start >= 0 and unsupported > start
+
+    block = text[start:unsupported]
+    normalized = " ".join(block.lower().split())
+    required_order = [
+        "mov x20, x0",
+        "mov x21, x1",
+        "mrs x22, currentel",
+        "cmp x22",
+        "b.ne",
+        "msr daifset",
+        "mov sp",
+        "msr vbar_el1",
+        "bl",
+    ]
+    positions = [normalized.find(fragment) for fragment in required_order]
+    assert all(position >= 0 for position in positions), \
+        f"Missing linked entry instruction in: {normalized}"
+    assert positions == sorted(positions), \
+        f"Linked entry order changed: {positions}"
+
+    # The current image has no relocation machinery and contains link-time
+    # ADR/ADRP references; it is deliberately not movable to an arbitrary PA.
+    assert "adrp" in text.lower(), "Expected link-time page-relative references"
+    assert "DREYZEOS_LOAD_BASE" in text, \
+        "ELF disassembly no longer exposes the fixed link-time base"
 
 
 @test("entry/docs — CurrentEL EL0 and loader ABI claims are truthful")
@@ -1340,10 +1384,11 @@ def main():
         test_boot_stage_progression,
         test_boot_stage_failsafe_preserves_last_successful,
         test_boot_stage_error_separate_from_last_successful,
-        # Phase 4 Step 2.6 — Stable Loader ABI & T8006 Loader Evidence
+        # Phase 4 Step 2.7 — T8006 Loader / RAM Handoff Contract Research
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,
+        test_entry_disassembly_and_pic_contract,
         test_entry_contract_documentation,
         test_pre_hardware_mmio_gate_harness,
         test_cpu_state_symbols_and_safety,

@@ -3,7 +3,7 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **watchOS**: 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.6: Stable Loader ABI & T8006 Loader Evidence Research
+**Phase**: 4 — Step 2.7: T8006 Loader / RAM Handoff Contract Research
 **Status**: Pre-hardware (host-side validation complete, real device test BLOCKED)
 
 ---
@@ -32,7 +32,7 @@ Before DreyzeOS can be safely executed on real hardware, the following blockers 
 | Property | Value | Evidence | Status |
 |:---|:---:|:---|:---:|
 | **RAM payload load address** | `0x100000000` | Linker placeholder (4GB boundary) | **BLOCKED** |
-| **Physical RAM base (DRAM)** | `0x800000000` | DeviceTree `/memory` node | **CONFIRMED** |
+| **Physical RAM base (DRAM)** | UNKNOWN/BLOCKED | Static `/memory` is `base=0,size=0`; no live map | **UNKNOWN/BLOCKED** |
 | **Virtual entry address** | UNKNOWN | iBoot entry mapping unverified | **BLOCKED** |
 | **Identity mapping at handoff** | UNKNOWN / BLOCKED | No T8006 loader evidence proves a flat map | **UNKNOWN/BLOCKED** |
 | **Relocation requirements** | Static / non-PIC | Statically linked at `0x100000000` (0 relocs) | **BLOCKED** |
@@ -107,7 +107,7 @@ This is a host-testable ABI design, not a hardware contract:
 | MMU state | `mmu_enabled` plus `mmu_state_known` | **DESIGN** |
 | boot_args buffer | concrete readable `[base, base + length)` range | **DESIGN** |
 | DeviceTree buffer | independent concrete readable range | **DESIGN** |
-| MMIO mappings | descriptor flag bits for MMIO/UART/AIC | **DESIGN** |
+| MMIO mappings | mapping-state-known bit plus general MMIO and UART/AIC validity bits | **DESIGN** |
 | T8006 loader implementation | no loader/shim selected or executed | **UNKNOWN/BLOCKED** |
 
 #### Stable wire ABI V1
@@ -137,14 +137,18 @@ following layout at compile time:
 
 Validation rules are: exact magic, supported version V1, `size >= 128`, no
 unknown V1 flags, zero reserved fields, and `mmu_enabled` equal to 0 or 1.
-An oversized descriptor is accepted for forward compatibility, but V1 ignores
-its tail. Range conversion separately rejects non-readable, zero-length,
-overflowing, non-representable, or otherwise invalid ranges. The `VERIFIED`
-bit is not a cryptographic root of trust: the memory containing the descriptor
-must already be readable under the loader's contract. A real bootstrap must
-prove the descriptor prefix, copy it into kernel-owned memory, and only then
-use independently validated ranges. The current production path does none of
-this; the setter is host-test-only.
+Known entry EL must be EL1; known payload PA/VA ranges must be non-zero,
+non-empty, and non-wrapping. MMIO/UART/AIC validity bits require
+`MAPPING_STATE_KNOWN`; UART/AIC additionally require general MMIO validity.
+These are structural consistency rules, not hardware proofs. An oversized
+descriptor is accepted for forward compatibility, but V1 ignores its tail.
+Range conversion separately rejects non-readable, zero-length, overflowing,
+non-representable, or otherwise invalid ranges. The `VERIFIED` bit is not a
+cryptographic root of trust: the memory containing the descriptor must already
+be readable under the loader's contract. A real bootstrap must prove the
+descriptor prefix, copy it into kernel-owned memory, and only then use
+independently validated ranges. The current production path does none of this;
+the setter is host-test-only.
 
 `verified_range_contains_object()` rejects zero-length objects, unreadable
 ranges, overflow, outside pointers, and partial overlap. Exact-end containment
@@ -234,6 +238,8 @@ The framebuffer subsystem features a **two-level safety interlock**:
 
 1. **Mapping Gate (`mapping_verified`)**:
    - `mapping_verified = false` by default.
+   - A physical framebuffer base is never promoted to `base_vaddr`; a
+     concrete virtual base is required before the gate can open.
    - `framebuffer_enable_writes(true)` is strictly REJECTED if `mapping_verified != true`.
    - `framebuffer_put_pixel` drops writes silently unless mapping is verified.
 2. **Compile-Time Switch (`DREYZE_FB_TEST_PATTERN`)**:
@@ -302,4 +308,4 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 
 ---
 
-*Last updated: Phase 4 Step 2.6 — stable fixed-width ABI and public loader evidence research. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*
+*Last updated: Phase 4 Step 2.7 — T8006 loader/RAM handoff contract research. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*

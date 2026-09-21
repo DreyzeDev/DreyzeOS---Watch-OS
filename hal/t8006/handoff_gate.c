@@ -11,7 +11,8 @@ static loader_handoff_descriptor_t g_loader_handoff;
      DREYZE_HANDOFF_FLAG_MMU_STATE_KNOWN | \
      DREYZE_HANDOFF_FLAG_MMIO_MAPPING_VALID | \
      DREYZE_HANDOFF_FLAG_UART_MAPPING_VALID | \
-     DREYZE_HANDOFF_FLAG_AIC_MAPPING_VALID)
+     DREYZE_HANDOFF_FLAG_AIC_MAPPING_VALID | \
+     DREYZE_HANDOFF_FLAG_MAPPING_STATE_KNOWN)
 
 static bool range_end_is_safe(uintptr_t base, size_t length)
 {
@@ -86,12 +87,46 @@ bool loader_handoff_range_to_native(const loader_handoff_range_v1_t *wire,
 bool loader_handoff_descriptor_validate(
     const loader_handoff_descriptor_t *descriptor)
 {
+    uint64_t mapping_valid_flags;
+
     if (!descriptor || descriptor->magic != DREYZE_HANDOFF_MAGIC ||
         descriptor->version != DREYZE_HANDOFF_VERSION ||
         descriptor->size < DREYZE_HANDOFF_V1_SIZE ||
         (descriptor->flags & ~DREYZE_HANDOFF_KNOWN_FLAGS) != 0 ||
         descriptor->reserved0 != 0 || descriptor->reserved1 != 0 ||
         descriptor->mmu_enabled > 1) {
+        return false;
+    }
+
+    /* V1 entry is deliberately restricted to the DreyzeOS EL1 contract. */
+    if ((descriptor->flags & DREYZE_HANDOFF_FLAG_ENTRY_EL_KNOWN) != 0 &&
+        descriptor->entry_el != 1U) {
+        return false;
+    }
+
+    /* A known payload location must describe two non-wrapping, non-empty
+     * address ranges. This is structural consistency, not a mapping proof. */
+    if ((descriptor->flags & DREYZE_HANDOFF_FLAG_PAYLOAD_LOCATION_KNOWN) != 0 &&
+        (descriptor->payload_pa == 0 || descriptor->payload_va == 0 ||
+         descriptor->payload_size == 0 ||
+         descriptor->payload_size > (uint64_t)-1 - descriptor->payload_pa ||
+         descriptor->payload_size > (uint64_t)-1 - descriptor->payload_va)) {
+        return false;
+    }
+
+    mapping_valid_flags = descriptor->flags &
+        (DREYZE_HANDOFF_FLAG_MMIO_MAPPING_VALID |
+         DREYZE_HANDOFF_FLAG_UART_MAPPING_VALID |
+         DREYZE_HANDOFF_FLAG_AIC_MAPPING_VALID);
+
+    /* Mapping validity bits cannot be asserted without an explicit mapping
+     * assessment. UART/AIC validity also requires the general MMIO range. */
+    if ((mapping_valid_flags != 0 &&
+         (descriptor->flags & DREYZE_HANDOFF_FLAG_MAPPING_STATE_KNOWN) == 0) ||
+        ((descriptor->flags &
+          (DREYZE_HANDOFF_FLAG_UART_MAPPING_VALID |
+           DREYZE_HANDOFF_FLAG_AIC_MAPPING_VALID)) != 0 &&
+         (descriptor->flags & DREYZE_HANDOFF_FLAG_MMIO_MAPPING_VALID) == 0)) {
         return false;
     }
 
