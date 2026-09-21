@@ -21,8 +21,10 @@ SIZE    := $(CROSS)size
 BUILDDIR := build
 
 # ============================================================
+# Framebuffer test pattern compile-time switch (default 0: disabled)
+DREYZE_FB_TEST_PATTERN ?= 0
+
 # Compiler flags — freestanding AArch64 bare-metal (GCC)
-# ============================================================
 CFLAGS := \
 	-march=armv8-a \
 	-ffreestanding \
@@ -37,6 +39,7 @@ CFLAGS := \
 	-Wno-unused-parameter \
 	-O2 \
 	-g \
+	-DDREYZE_FB_TEST_PATTERN=$(DREYZE_FB_TEST_PATTERN) \
 	-I. \
 	-Iinclude \
 	-Ilib
@@ -69,7 +72,8 @@ HAL_SRCS := \
 	hal/t8006/platform.c \
 	hal/t8006/device_tree.c \
 	hal/t8006/uart.c \
-	hal/t8006/aic.c
+	hal/t8006/aic.c \
+	hal/t8006/framebuffer.c
 
 LIB_SRCS := \
 	lib/string.c \

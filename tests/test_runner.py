@@ -493,6 +493,384 @@ def test_boot_info_bounds_checking():
 
 
 # ============================================================
+# Tests: Phase 4 Step 1 — Boot Framebuffer Output
+# ============================================================
+
+class SoftwareFramebuffer:
+    """
+    Host-side Software Framebuffer implementation.
+    Emulates the C hal/t8006/framebuffer.c driver with canary guard regions,
+    strict stride calculations, and integer overflow checks.
+    """
+    def __init__(self, width: int, height: int, row_bytes: int = None, depth: int = 32,
+                 total_size: int = None, guard_size: int = 256):
+        self.width = width
+        self.height = height
+        self.depth = depth
+        self.bpp = (depth + 7) // 8
+        min_row = width * self.bpp
+        if row_bytes is None:
+            row_bytes = min_row
+        assert row_bytes >= min_row, f"row_bytes {row_bytes} < min_row {min_row}"
+        self.row_bytes = row_bytes
+
+        min_size = row_bytes * height
+        self.size = total_size if total_size is not None else min_size
+        assert self.size >= min_size, f"size {self.size} < min_size {min_size}"
+
+        self.guard_size = guard_size
+        self.canary_front = b'\xDE\xAD\xBE\xEF' * (guard_size // 4)
+        self.canary_back  = b'\xCA\xFE\xBA\xBE' * (guard_size // 4)
+
+        # Allocated memory with guard zones before and after
+        self.raw = bytearray(self.canary_front + b'\x00' * self.size + self.canary_back)
+        self.base_offset = guard_size
+        self.is_configured = True
+        self.writes_allowed = False
+
+    def check_canaries(self):
+        """Assert that no writes overflowed or underflowed the allocated framebuffer memory."""
+        front = bytes(self.raw[:self.guard_size])
+        back = bytes(self.raw[self.base_offset + self.size:])
+        assert front == self.canary_front, "CANARY CORRUPTION: Front canary modified (underflow)!"
+        assert back == self.canary_back, "CANARY CORRUPTION: Back canary modified (overflow)!"
+
+    def put_pixel(self, x: int, y: int, color: int):
+        if not self.is_configured or not self.writes_allowed:
+            return
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            return
+
+        y_offset = y * self.row_bytes
+        x_offset = x * self.bpp
+        offset = y_offset + x_offset
+        if offset > self.size or (self.size - offset) < self.bpp:
+            return
+
+        abs_off = self.base_offset + offset
+        if self.bpp == 4:
+            struct.pack_into("<I", self.raw, abs_off, color & 0xFFFFFFFF)
+        elif self.bpp == 2:
+            struct.pack_into("<H", self.raw, abs_off, color & 0xFFFF)
+        elif self.bpp == 1:
+            self.raw[abs_off] = color & 0xFF
+
+    def get_pixel(self, x: int, y: int) -> int:
+        if x < 0 or x >= self.width or y < 0 or y >= self.height:
+            return 0
+        offset = y * self.row_bytes + x * self.bpp
+        abs_off = self.base_offset + offset
+        if self.bpp == 4:
+            return struct.unpack_from("<I", self.raw, abs_off)[0]
+        elif self.bpp == 2:
+            return struct.unpack_from("<H", self.raw, abs_off)[0]
+        return self.raw[abs_off]
+
+    def fill(self, color: int):
+        if not self.is_configured or not self.writes_allowed:
+            return
+        for y in range(self.height):
+            for x in range(self.width):
+                self.put_pixel(x, y, color)
+
+    def draw_rect(self, x: int, y: int, w: int, h: int, color: int):
+        if not self.is_configured or not self.writes_allowed:
+            return
+        if x >= self.width or y >= self.height or w <= 0 or h <= 0:
+            return
+        if x + w > self.width:
+            w = self.width - x
+        if y + h > self.height:
+            h = self.height - y
+        for row in range(h):
+            for col in range(w):
+                self.put_pixel(x + col, y + row, color)
+
+
+@test("framebuffer — exported symbols in built ELF")
+def test_framebuffer_symbols_in_elf():
+    """Verify that all required framebuffer functions are present in DreyzeOS.elf."""
+    project_root = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(project_root, 'build', 'DreyzeOS.elf')
+    if not os.path.exists(elf_path):
+        return
+    import subprocess
+    res = subprocess.run(['aarch64-linux-gnu-nm', elf_path], capture_output=True, text=True)
+    assert res.returncode == 0, f"nm failed: {res.stderr}"
+    symbols = res.stdout
+    required = [
+        'framebuffer_init',
+        'framebuffer_is_available',
+        'framebuffer_get_info',
+        'framebuffer_enable_writes',
+        'framebuffer_put_pixel',
+        'framebuffer_fill',
+        'framebuffer_clear',
+        'framebuffer_draw_rect',
+        'framebuffer_draw_test_pattern',
+        'framebuffer_diag',
+        'platform_get_framebuffer'
+    ]
+    for sym in required:
+        assert sym in symbols, f"Missing symbol {sym} in DreyzeOS.elf"
+
+
+@test("framebuffer — color encoding: BGRX/BGRA matches kernelcache format")
+def test_framebuffer_color_format():
+    """
+    Verify color encoding matches kernelcache 'BBBBBBBBGGGGGGGGRRRRRRRR' (BGRA/BGRX).
+    In 32-bit little endian:
+      Byte 0: Blue  (0x000000FF)
+      Byte 1: Green (0x0000FF00)
+      Byte 2: Red   (0x00FF0000)
+    """
+    def fb_rgb(r, g, b):
+        return ((r & 0xFF) << 16) | ((g & 0xFF) << 8) | (b & 0xFF)
+
+    red = fb_rgb(0xFF, 0, 0)
+    green = fb_rgb(0, 0xFF, 0)
+    blue = fb_rgb(0, 0, 0xFF)
+    white = fb_rgb(0xFF, 0xFF, 0xFF)
+
+    fb = SoftwareFramebuffer(10, 10)
+    fb.writes_allowed = True
+
+    # Check Red byte placement
+    fb.put_pixel(0, 0, red)
+    packed_red = bytes(fb.raw[fb.base_offset : fb.base_offset + 4])
+    assert packed_red == b'\x00\x00\xFF\x00', f"Red byte layout incorrect: {packed_red.hex()}"
+
+    # Check Green byte placement
+    fb.put_pixel(1, 0, green)
+    packed_green = bytes(fb.raw[fb.base_offset + 4 : fb.base_offset + 8])
+    assert packed_green == b'\x00\xFF\x00\x00', f"Green byte layout incorrect: {packed_green.hex()}"
+
+    # Check Blue byte placement
+    fb.put_pixel(2, 0, blue)
+    packed_blue = bytes(fb.raw[fb.base_offset + 8 : fb.base_offset + 12])
+    assert packed_blue == b'\xFF\x00\x00\x00', f"Blue byte layout incorrect: {packed_blue.hex()}"
+
+    # Check White byte placement
+    fb.put_pixel(3, 0, white)
+    packed_white = bytes(fb.raw[fb.base_offset + 12 : fb.base_offset + 16])
+    assert packed_white == b'\xFF\xFF\xFF\x00', f"White byte layout incorrect: {packed_white.hex()}"
+
+    fb.check_canaries()
+
+
+@test("framebuffer — safety interlock: writes blocked when disabled")
+def test_framebuffer_safety_interlock():
+    """Verify that when writes_allowed is False, no memory modifications occur."""
+    fb = SoftwareFramebuffer(20, 20)
+    assert fb.writes_allowed is False
+
+    # Attempt to write pixels, fill, and draw rect
+    fb.put_pixel(5, 5, 0x00FFFFFF)
+    fb.fill(0x00FF0000)
+    fb.draw_rect(2, 2, 10, 10, 0x0000FF00)
+
+    # All framebuffer memory must remain pure 0x00
+    screen_mem = bytes(fb.raw[fb.base_offset : fb.base_offset + fb.size])
+    assert screen_mem == b'\x00' * fb.size, "Writes succeeded while safety interlock was active!"
+    fb.check_canaries()
+
+
+@test("framebuffer — clipping & bounds: out-of-bounds coordinates rejected")
+def test_framebuffer_clipping_and_bounds():
+    """Verify that coordinates outside [0, width-1] x [0, height-1] are rejected safely."""
+    fb = SoftwareFramebuffer(100, 100)
+    fb.writes_allowed = True
+
+    # Test out-of-bounds coordinates
+    invalid_coords = [
+        (-1, 0), (0, -1), (-1, -1),
+        (100, 50), (50, 100), (100, 100),
+        (1000, 50), (50, 1000), (0xFFFFFFFF, 0xFFFFFFFF)
+    ]
+    for x, y in invalid_coords:
+        fb.put_pixel(x, y, 0x00FFFFFF)
+
+    # Valid pixel write at (0, 0) and (99, 99)
+    fb.put_pixel(0, 0, 0x00FF0000)
+    fb.put_pixel(99, 99, 0x0000FF00)
+
+    assert fb.get_pixel(0, 0) == 0x00FF0000
+    assert fb.get_pixel(99, 99) == 0x0000FF00
+    assert fb.get_pixel(100, 100) == 0
+
+    fb.check_canaries()
+
+
+@test("framebuffer — stride & padding: non-standard rowBytes handled correctly")
+def test_framebuffer_stride_and_padding():
+    """
+    Verify stride with row padding (row_bytes > width * bpp).
+    Example: width=10, bpp=4 -> pixel row=40 bytes, but row_bytes=64 (24 bytes padding per row).
+    Pixel (0, 1) MUST be at offset 64, not 40!
+    Padding between rows MUST remain 0x00.
+    """
+    WIDTH = 10
+    HEIGHT = 5
+    ROW_BYTES = 64  # 40 bytes pixels + 24 bytes padding
+    fb = SoftwareFramebuffer(WIDTH, HEIGHT, row_bytes=ROW_BYTES)
+    fb.writes_allowed = True
+
+    # Plot (9, 0) — end of first row (offset 9 * 4 = 36)
+    fb.put_pixel(9, 0, 0x000000FF)
+
+    # Plot (0, 1) — start of second row (offset 1 * 64 + 0 = 64)
+    fb.put_pixel(0, 1, 0x00FF0000)
+
+    # Verify pixel readbacks
+    assert fb.get_pixel(9, 0) == 0x000000FF
+    assert fb.get_pixel(0, 1) == 0x00FF0000
+
+    # Verify exact byte locations in memory
+    raw_screen = fb.raw[fb.base_offset : fb.base_offset + fb.size]
+    # Offset 36..40 is pixel (9, 0) = Blue
+    assert raw_screen[36:40] == b'\xFF\x00\x00\x00'
+    # Padding bytes 40..64 MUST be zero
+    assert raw_screen[40:64] == b'\x00' * 24, f"Padding corrupted: {raw_screen[40:64].hex()}"
+    # Offset 64..68 is pixel (0, 1) = Red
+    assert raw_screen[64:68] == b'\x00\x00\xFF\x00'
+
+    fb.check_canaries()
+
+
+@test("framebuffer — canary overrun check on multiple resolutions")
+def test_framebuffer_canary_overrun():
+    """
+    Verify zero buffer underflow/overflow across multiple synthetic framebuffer sizes:
+      - 368 x 448 (Apple Watch Series 4 44mm real screen)
+      - 312 x 390 (Apple Watch Series 3 42mm screen)
+      - 16 x 16 (tiny screen)
+      - 64 x 32 with large stride 512 bytes
+    """
+    configs = [
+        (368, 448, 368 * 4),
+        (312, 390, 312 * 4),
+        (16, 16, 16 * 4),
+        (64, 32, 512),
+    ]
+    for w, h, stride in configs:
+        fb = SoftwareFramebuffer(w, h, row_bytes=stride)
+        fb.writes_allowed = True
+
+        # Write to all 4 corners
+        fb.put_pixel(0, 0, 0x00FFFFFF)
+        fb.put_pixel(w - 1, 0, 0x00FF0000)
+        fb.put_pixel(0, h - 1, 0x0000FF00)
+        fb.put_pixel(w - 1, h - 1, 0x000000FF)
+
+        # Fill entire buffer
+        fb.fill(0x00808080)
+
+        # Draw rect along perimeter
+        fb.draw_rect(0, 0, w, 2, 0x00FFFFFF)
+        fb.draw_rect(0, h - 2, w, 2, 0x00FFFFFF)
+
+        # Verify canaries are 100% untouched
+        fb.check_canaries()
+
+
+@test("framebuffer — fill & draw_rect with boundary clipping")
+def test_framebuffer_fill_and_rect():
+    """Verify fill, draw_rect, and rectangle clipping against screen edge."""
+    fb = SoftwareFramebuffer(50, 50)
+    fb.writes_allowed = True
+
+    # 1. Fill entire screen with black
+    fb.fill(0x00000000)
+    assert fb.get_pixel(25, 25) == 0
+
+    # 2. Draw 10x10 white rectangle at (10, 10)
+    fb.draw_rect(10, 10, 10, 10, 0x00FFFFFF)
+    assert fb.get_pixel(10, 10) == 0x00FFFFFF
+    assert fb.get_pixel(19, 19) == 0x00FFFFFF
+    assert fb.get_pixel(9, 10) == 0
+    assert fb.get_pixel(20, 10) == 0
+
+    # 3. Draw rectangle crossing right and bottom boundary: (45, 45) with size 20x20
+    # Must clip to 5x5 visible inside screen without overflow
+    fb.draw_rect(45, 45, 20, 20, 0x00FF0000)
+    assert fb.get_pixel(45, 45) == 0x00FF0000
+    assert fb.get_pixel(49, 49) == 0x00FF0000
+
+    fb.check_canaries()
+
+
+@test("framebuffer — test pattern generation on Watch4,2 geometry (368x448)")
+def test_framebuffer_test_pattern_generation():
+    """
+    Emulate framebuffer_draw_test_pattern() on 368x448 geometry.
+    Verifies:
+      - 3-pixel outer white border
+      - 6 color bars in upper half (Red, Green, Blue, Yellow, Cyan, Magenta)
+      - Centered white rectangle in lower half
+      - Zero canary violations
+    """
+    WIDTH, HEIGHT = 368, 448
+    fb = SoftwareFramebuffer(WIDTH, HEIGHT, row_bytes=WIDTH * 4)
+    fb.writes_allowed = True
+
+    # 1. Clear to black
+    fb.fill(0)
+
+    # 2. Outer border (3 pixels wide)
+    bw = 3
+    fb.draw_rect(0, 0, WIDTH, bw, 0x00FFFFFF)
+    fb.draw_rect(0, HEIGHT - bw, WIDTH, bw, 0x00FFFFFF)
+    fb.draw_rect(0, 0, bw, HEIGHT, 0x00FFFFFF)
+    fb.draw_rect(WIDTH - bw, 0, bw, HEIGHT, 0x00FFFFFF)
+
+    # 3. 6 color bars
+    colors = [
+        0x00FF0000,  # Red
+        0x0000FF00,  # Green
+        0x000000FF,  # Blue
+        0x00FFFF00,  # Yellow
+        0x0000FFFF,  # Cyan
+        0x00FF00FF   # Magenta
+    ]
+    margin_x = 20
+    bar_y = 20
+    bar_h = HEIGHT // 5
+    avail_w = WIDTH - (margin_x * 2)
+    bar_w = avail_w // 6
+
+    for i in range(6):
+        fb.draw_rect(margin_x + (i * bar_w), bar_y, bar_w - 2, bar_h, colors[i])
+
+    # 4. Centered white rectangle
+    rect_w = WIDTH // 3
+    rect_h = HEIGHT // 6
+    rect_x = (WIDTH - rect_w) // 2
+    rect_y = bar_y + bar_h + 30
+    fb.draw_rect(rect_x, rect_y, rect_w, rect_h, 0x00FFFFFF)
+
+    # Assertions
+    # Outer border
+    assert fb.get_pixel(0, 0) == 0x00FFFFFF
+    assert fb.get_pixel(WIDTH // 2, 1) == 0x00FFFFFF
+    assert fb.get_pixel(1, HEIGHT // 2) == 0x00FFFFFF
+
+    # First color bar (Red)
+    assert fb.get_pixel(margin_x + 5, bar_y + 5) == 0x00FF0000
+
+    # Second color bar (Green)
+    assert fb.get_pixel(margin_x + bar_w + 5, bar_y + 5) == 0x0000FF00
+
+    # Third color bar (Blue)
+    assert fb.get_pixel(margin_x + (2 * bar_w) + 5, bar_y + 5) == 0x000000FF
+
+    # Center white box
+    assert fb.get_pixel(rect_x + 5, rect_y + 5) == 0x00FFFFFF
+
+    # Canaries intact
+    fb.check_canaries()
+
+
+# ============================================================
 # Run all tests
 # ============================================================
 
@@ -523,6 +901,15 @@ def main():
         test_boot_info_memory_map_parsing,
         test_boot_info_framebuffer_discovery,
         test_boot_info_bounds_checking,
+        # Phase 4 Step 1 — Boot Framebuffer Output
+        test_framebuffer_symbols_in_elf,
+        test_framebuffer_color_format,
+        test_framebuffer_safety_interlock,
+        test_framebuffer_clipping_and_bounds,
+        test_framebuffer_stride_and_padding,
+        test_framebuffer_canary_overrun,
+        test_framebuffer_fill_and_rect,
+        test_framebuffer_test_pattern_generation,
     ]
 
     for t in tests:

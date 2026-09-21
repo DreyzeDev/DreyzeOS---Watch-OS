@@ -16,6 +16,7 @@
 #include "../include/panic.h"
 #include "../include/boot_info.h"
 #include "../hal/t8006/platform.h"
+#include "../hal/t8006/framebuffer.h"
 
 /* Version information */
 #define DREYZEOS_VERSION_MAJOR  0
@@ -31,7 +32,7 @@
  * Kernel build phase tracking.
  * These constants document what is implemented at each build.
  */
-#define PHASE_RESEARCH_BUILD    3  /* Phase 3: Hardware Discovery & Drivers */
+#define PHASE_RESEARCH_BUILD    4  /* Phase 4: Boot Framebuffer Output */
 
 /*
  * kernel_main — primary kernel entry point.
@@ -69,7 +70,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1)
     klog_info(DREYZEOS_VERSION_STRING);
     klog_info("Target: " DREYZEOS_TARGET);
     klog_info("Arch:   " DREYZEOS_ARCH);
-    klog_info("Phase:  PHASE 3 — Hardware Discovery & Drivers");
+    klog_info("Phase:  PHASE 4 — Step 1: Boot Framebuffer Output");
     klog_info("========================================");
 
     /*
@@ -102,23 +103,46 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1)
     klog_hex("  stack_top   ", (uint64_t)(uintptr_t)__stack_top);
 
     /*
-     * Step 6: Platform initialization (STUB — no real hardware yet).
-     * When MMIO addresses are known, these will initialize real hardware.
+     * Step 6: Platform initialization.
      */
-    klog_info("HAL initialization (stub):");
+    klog_info("HAL initialization:");
     platform_init();
-    klog_info("  platform_init(): done (stub)");
+    klog_info("  platform_init(): done");
 
     /*
-     * Step 7: Research phase complete notice.
-     * In later phases:
-     *   - Phase 3: timer_init(), DeviceTree parsing
-     *   - Phase 7: display_init(), draw framebuffer
-     *   - Phase 8: crown_init(), button_init()
-     *   - Phase 9: touch_init()
+     * Step 7: Boot Framebuffer Subsystem.
+     * Initialize framebuffer abstraction from discovered boot parameters.
+     * Safety interlock: hardware writes remain disabled by default.
+     */
+    const boot_framebuffer_info_t *fb_info = platform_get_framebuffer();
+    if (fb_info && fb_info->is_valid) {
+        int fb_rc = framebuffer_init(fb_info);
+        if (fb_rc == 0) {
+            framebuffer_diag();
+
+#if DREYZE_FB_TEST_PATTERN
+            /*
+             * Explicitly enabled for controlled test only:
+             * Enable writes and draw the test pattern.
+             */
+            klog_info("  [FB] DREYZE_FB_TEST_PATTERN=1: Enabling writes & drawing test pattern...");
+            framebuffer_enable_writes(true);
+            framebuffer_draw_test_pattern();
+#else
+            klog_info("  [FB] Normal boot: Framebuffer writes DISABLED (DREYZE_FB_TEST_PATTERN=0)");
+#endif
+        } else {
+            klog_hex("  [FB] framebuffer_init failed with error code", (uint64_t)(int64_t)fb_rc);
+        }
+    } else {
+        klog_info("  [FB] No boot framebuffer discovered (headless/standalone mode)");
+    }
+
+    /*
+     * Step 8: Phase completion notice.
      */
     klog_info("");
-    klog_info("PHASE 3 BOOT COMPLETE: Hardware discovery & HAL drivers ready.");
+    klog_info("PHASE 4 Step 1 COMPLETE: Boot Framebuffer Output abstraction ready.");
     klog_info("Kernel halting safely via WFI loop. Waiting for user command.");
 
     /*
