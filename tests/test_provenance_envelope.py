@@ -158,6 +158,29 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         self.assertNotIn("ARTIFACT_RUNTIME_PROVEN_FACT_INVALID", report["errors"])
         self.assertEqual(report["requirements"]["EV-000"]["proof_state"], "NOT_PROVEN")
 
+    def test_sanitized_watch_report_record_does_not_prove_target_identity(self) -> None:
+        envelope_path = ROOT / "research" / "t8006_evidence" / "watchos_report_provenance_envelope.json"
+        envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
+        report = validate_envelope(envelope, envelope_path.parent, EXPECTED_TARGET)
+
+        self.assertEqual(report["status"], "UNKNOWN")
+        self.assertIsNone(report["target"]["metadata_match"])
+        self.assertFalse(report["target"]["identity_proven"])
+        self.assertEqual(report["requirements"]["EV-000"]["status"], "BLOCKED")
+        self.assertEqual(report["requirements"]["EV-000"]["proof_state"], "NOT_PROVEN")
+        artifact = report["artifacts"]["watchos_report_record"]
+        self.assertTrue(artifact["artifact_present"])
+        self.assertTrue(artifact["artifact_hash_verified"])
+        self.assertFalse(artifact["artifact_target_bound"])
+        self.assertFalse(artifact["artifact_runtime_proven"])
+
+        record = json.loads((ROOT / "research" / "t8006_evidence" / "observed_watchos_report.json").read_text(encoding="utf-8"))
+        self.assertEqual(record["raw_artifact"]["raw_size_bytes"], 636028)
+        self.assertEqual(record["report_facts"]["model_code"]["value"], "Watch4,2")
+        self.assertTrue(record["report_facts"]["private_correlation_identifier_present"]["value"])
+        self.assertFalse(record["provenance"]["private_identifiers_included"])
+        self.assertFalse(record["provenance"]["target_identity_proven"])
+
     def test_existing_verifier_cli_provenance_mode_exit_semantics(self) -> None:
         tool = ROOT / "tools" / "handoff_evidence_verifier.py"
         fixture = FIXTURES / "synthetic_complete.json"

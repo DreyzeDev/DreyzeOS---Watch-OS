@@ -125,8 +125,21 @@ existing `--bundle` mode and then `tools/t8006_evidence_gap.py`.
 
 Current project metadata remains `USER_OBSERVED / METADATA_CONFIRMED` as
 recorded in `research/t8006_evidence/user_observed_target_metadata.json`.
-It is not runtime target identity. No CPU, MMU, RAM, mapping, ownership, or
-control-transfer evidence is added by this format.
+It is not runtime target identity. A sanitized extraction of a user-reported,
+pre-existing NanoPhotos watchOS diagnostic report is now recorded in
+`research/t8006_evidence/observed_watchos_report.json` and referenced by
+`research/t8006_evidence/watchos_report_provenance_envelope.json`. The report
+bytes identify Watch4,2 / Watch OS 10.6.1 / 21U580 / ARM64_32 and contain
+AppleT8006-related stackshot symbols. The raw IPS and its private correlation
+values are not in Git. Its recorded SHA-256 verifies local byte equality only;
+the export origin is user-reported and not independently attested.
+
+The envelope hashes only the sanitized derivative and deliberately leaves
+`artifact_target_bound`, `artifact_runtime_proven`, and
+`identity_proven` false/unproven. The report does not establish current pairing,
+physical serial identity, future-capture identity, CPU/MMU/RAM state, payload
+ownership, or control transfer. No CPU-register, page-table, runtime-memory,
+mapping, or loader evidence is added by this report.
 
 ```text
 EV-000 = BLOCKED

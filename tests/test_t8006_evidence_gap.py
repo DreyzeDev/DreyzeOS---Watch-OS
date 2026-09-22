@@ -82,13 +82,28 @@ class T8006EvidenceGapTests(unittest.TestCase):
         self.assertEqual(requirement["observations"][0]["node"], "payload_pa_proven")
         self.assertFalse(requirement["target_proven"])
 
-    def test_requirement_reference_absent_from_nonempty_graph_is_rejected(self) -> None:
+    def test_requirement_reference_absent_from_nonempty_graph_is_blocked(self) -> None:
         report = synthetic_report()
         document = requirements_document()
         document["requirements"][0]["verifier_requirements"] = ["phantom_node"]
-        with self.assertRaises(GapInputError) as context:
-            verify_gap(report, document)
-        self.assertEqual(context.exception.code, "MISSING_VERIFIER_NODE")
+        result = verify_gap(report, document)
+        requirement = result["requirements"][0]
+        self.assertEqual(requirement["observed_status"], "BLOCKED")
+        self.assertEqual(requirement["observations"][0]["node"], "phantom_node")
+        self.assertEqual(requirement["observations"][0]["reason"], "verifier node is absent")
+
+    def test_partial_verifier_graph_reports_absent_mmu_nodes_as_blockers(self) -> None:
+        report = synthetic_report(status="UNKNOWN")
+        nodes = report["evidence_graph"]["nodes"]
+        for name in ("mmu_register_provenance", "mmu_snapshot_target_match", "payload_translation_consistency"):
+            nodes.pop(name)
+
+        result = verify_gap(report, requirements_document())
+        by_id = {item["id"]: item for item in result["requirements"]}
+        for identifier in ("EV-009", "EV-021", "EV-024"):
+            self.assertEqual(by_id[identifier]["observed_status"], "BLOCKED")
+            missing = [item for item in by_id[identifier]["observations"] if item["reason"] == "verifier node is absent"]
+            self.assertTrue(missing, identifier)
 
     def test_synthetic_full_model_is_not_hardware_proof(self) -> None:
         result = verify_gap(synthetic_report(), requirements_document())

@@ -1,0 +1,219 @@
+{
+  "schema": "dreyzeos.target_provenance_envelope.v1",
+  "source": {
+    "kind": "pre_existing_watchos_diagnostic_report",
+    "evidence_status": "UNKNOWN",
+    "runtime_evidence_source": null
+  },
+  "capture": {
+    "capture_id": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": null
+    },
+    "started_at_utc": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": null
+    },
+    "ended_at_utc": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": null
+    }
+  },
+  "target": {
+    "expected_metadata": {
+      "model": "Watch4,2",
+      "board": "N131bAP",
+      "soc": "T8006",
+      "firmware": "watchOS 10.6.1",
+      "build": "21U580",
+      "architecture": "aarch64"
+    },
+    "metadata": {
+      "model": {
+        "value": "Watch4,2",
+        "value_present": true,
+        "value_proven": true,
+        "source": "sanitized report record: IPS modelCode field"
+      },
+      "board": {
+        "value": null,
+        "value_present": false,
+        "value_proven": false,
+        "source": null
+      },
+      "soc": {
+        "value": null,
+        "value_present": false,
+        "value_proven": false,
+        "source": null
+      },
+      "firmware": {
+        "value": "watchOS 10.6.1",
+        "value_present": true,
+        "value_proven": true,
+        "source": "sanitized report record: version derived from IPS os_version"
+      },
+      "build": {
+        "value": "21U580",
+        "value_present": true,
+        "value_proven": true,
+        "source": "sanitized report record: build substring in IPS os_version"
+      },
+      "architecture": {
+        "value": null,
+        "value_present": false,
+        "value_proven": false,
+        "source": null
+      }
+    },
+    "metadata_match": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": "Report lacks board, SoC, and DreyzeOS architecture evidence; no complete target metadata match is claimed"
+    },
+    "identity_proven": {
+      "value": false,
+      "value_present": true,
+      "value_proven": false,
+      "source": "A report model string is not an external identity attestation"
+    },
+    "identity_attestation": {
+      "artifact_id": null,
+      "authority": null,
+      "method": null
+    },
+    "assertions": []
+  },
+  "producer": {
+    "name": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": null
+    },
+    "version": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": null
+    },
+    "host": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": null
+    }
+  },
+  "source_interface": {
+    "description": {
+      "value": "User-reported export of a pre-existing Analytics Data report; source attribution not independently attested",
+      "value_present": true,
+      "value_proven": false,
+      "source": "user statement"
+    },
+    "interface": {
+      "value": "iPhone Settings > Privacy & Security > Analytics & Improvements > Analytics Data",
+      "value_present": true,
+      "value_proven": false,
+      "source": "user statement"
+    },
+    "interaction_class": {
+      "value": "UNKNOWN",
+      "value_present": true,
+      "value_proven": false,
+      "source": "This envelope does not attest the original export interaction"
+    }
+  },
+  "coverage": {
+    "required_artifact_ids": [
+      "image",
+      "handoff_descriptor",
+      "mmu_snapshot"
+    ],
+    "declared_artifact_ids": [
+      "image",
+      "handoff_descriptor",
+      "mmu_snapshot",
+      "watchos_report_record"
+    ],
+    "covered_artifact_ids": [
+      "watchos_report_record"
+    ],
+    "coverage_complete": {
+      "value": false,
+      "value_present": true,
+      "value_proven": true,
+      "source": "Only the sanitized report record is present; all three EV-000 required artifacts are absent"
+    }
+  },
+  "artifacts": [
+    {
+      "artifact_id": "image",
+      "artifact_type": "DREYZEOS_ELF",
+      "bundle_ref": "image",
+      "required_for_ev000": true,
+      "path": null,
+      "sha256": null,
+      "artifact_present": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_hash_verified": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": false, "value_present": true, "value_proven": false, "source": "no capture session"}}
+    },
+    {
+      "artifact_id": "handoff_descriptor",
+      "artifact_type": "HANDOFF_DESCRIPTOR_V1",
+      "bundle_ref": "handoff_descriptor",
+      "required_for_ev000": true,
+      "path": null,
+      "sha256": null,
+      "artifact_present": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_hash_verified": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": false, "value_present": true, "value_proven": false, "source": "no capture session"}}
+    },
+    {
+      "artifact_id": "mmu_snapshot",
+      "artifact_type": "MMU_SNAPSHOT_MANIFEST",
+      "bundle_ref": "mmu_snapshot",
+      "required_for_ev000": true,
+      "path": null,
+      "sha256": null,
+      "artifact_present": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_hash_verified": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": "not supplied"},
+      "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": false, "value_present": true, "value_proven": false, "source": "no capture session"}}
+    },
+    {
+      "artifact_id": "watchos_report_record",
+      "artifact_type": "OTHER",
+      "bundle_ref": null,
+      "required_for_ev000": false,
+      "path": "observed_watchos_report.json",
+      "sha256": "e1e12a750d0eb1518f576c899f3dc91346ee11fcb0bd8d7afacc24436dad656e",
+      "artifact_present": {"value": true, "value_present": true, "value_proven": true, "source": "local envelope validation of sanitized report record"},
+      "artifact_hash_verified": {"value": true, "value_present": true, "value_proven": true, "source": "local SHA-256 comparison of sanitized report record"},
+      "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": "report record is a derivative and has no independently attested target binding"},
+      "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": "the original report source is not independently authenticated"},
+      "provenance_relationship": {
+        "capture_id": null,
+        "relationship": "sanitized derivative referencing the raw IPS SHA-256; raw IPS is intentionally not bundled",
+        "relationship_proven": {"value": false, "value_present": true, "value_proven": false, "source": "derivation notes only; no capture session or target attestation"}
+      }
+    }
+  ],
+  "conflict_detection": {
+    "scope": ["target_assertions", "bundle_target", "artifact_paths", "coverage"],
+    "declared_conflicts": [],
+    "status": "UNKNOWN"
+  }
+}

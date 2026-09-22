@@ -10,12 +10,20 @@ hardware capture procedure.
 
 ## Current conclusion
 
-The repository contains offline verification infrastructure, but it does not
-contain a target-bound runtime capture for Watch4,2 / N131bAP / T8006 /
-watchOS 10.6.1 (21U580). The public/static research review performed for this
-step produced **no new target-specific artifact** that closes a critical
-runtime gap. Existing synthetic MMU and handoff bundles are repository-owned
-`DESIGN` fixtures only.
+The repository contains offline verification infrastructure and one sanitized
+extraction from a user-reported, pre-existing watchOS Analytics diagnostic
+report. The raw file's local SHA-256 and size were verified before parsing.
+Its contents identify Watch4,2 / Watch OS 10.6.1 (21U580) / ARM64_32 and
+include AppleT8006CLPC, AppleT8006IO, and AppleT8006PMGR symbols in a
+stackshot. The sanitized record is
+[`observed_watchos_report.json`](observed_watchos_report.json); the raw IPS and
+private correlation values are not committed.
+
+This report is **not** an independently attested target-bound runtime capture:
+its export origin is user-reported, its model/build fields do not prove the
+physical Watch identity, and it contains no DreyzeOS CPU/MMU/RAM/loader
+evidence. EV-000 therefore remains **BLOCKED**. Existing synthetic MMU and
+handoff bundles remain repository-owned `DESIGN` fixtures only.
 
 The exact static ADT evidence remains:
 
@@ -60,7 +68,7 @@ create proof or access authority.
 
 | ID | NAME | CURRENT STATUS | CURRENT EVIDENCE | MISSING EVIDENCE | SOURCE NEEDED | VERIFIER NODE | CRITICAL FOR FIRST HANDOFF? | CLOSURE CONDITION |
 |---|---|---|---|---|---|---|---|---|
-| EV-000 | Target identity provenance | BLOCKED | Static project target metadata only; no target-bound capture | Independent binding of every artifact to the specified Watch4,2 target | Target-bound provenance record | `target_identity_proven` | YES | Metadata matches and identity is explicitly attested; synthetic remains DESIGN |
+| EV-000 | Target identity provenance | BLOCKED | User-observed metadata plus a sanitized pre-existing report describing Watch4,2 / 21U580; report origin and physical identity are not independently attested | Independent identity attestation and per-artifact binding for the required image, descriptor, and MMU snapshot | Target-bound provenance record | `target_identity_proven` | YES | Metadata matches and identity is explicitly attested; synthetic remains DESIGN |
 | EV-001 | Loader transfer protocol | BLOCKED | No selected DreyzeOS loader/shim | Non-persistent handoff protocol and control-transfer proof | Future loader/shim contract | `control_transfer` | YES | Bounded entry, documented transfer, no guessed branch primitive |
 | EV-002 | Runtime DRAM base/size | BLOCKED | Static `/memory` is `0,0`; historical 1 GiB is research context only | Runtime-authoritative base, size, provenance | Runtime memory-map capture | `runtime_memory_provenance` | YES | Both facts proven with `RUNTIME_VERIFIED` provenance |
 | EV-003 | Payload physical placement | BLOCKED | No target payload deposit record | PA, size, RAM containment, collision result | Loader placement record | `payload_pa_proven` | YES | Proven interval inside proven runtime RAM |

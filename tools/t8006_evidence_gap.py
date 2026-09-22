@@ -262,18 +262,10 @@ def evaluate_requirement(
 def verify_gap(report: Dict[str, Any], requirements_document: Dict[str, Any]) -> Dict[str, Any]:
     requirements, groups = validate_requirements(requirements_document)
     nodes = validate_report(report)
-    if nodes:
-        referenced = {
-            node
-            for requirement in requirements
-            for node in requirement["verifier_requirements"]
-        }
-        missing_nodes = sorted(referenced - set(nodes))
-        if missing_nodes:
-            raise GapInputError(
-                "MISSING_VERIFIER_NODE",
-                "requirements reference absent graph nodes: " + ", ".join(missing_nodes),
-            )
+    # A valid verifier report may omit nodes whose inputs were unavailable
+    # (for example, MMU-dependent nodes when no snapshot was supplied).
+    # node_state() treats each absent node as BLOCKED; this is fail-closed and
+    # lets the gap report explain missing evidence instead of rejecting it.
     source_status = report["bundle"]["evidence_status"]
     target_result = report["target"]
     metadata_match = require_bool(target_result.get("metadata_match"), "target.metadata_match")

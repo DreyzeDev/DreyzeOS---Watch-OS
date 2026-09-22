@@ -1,0 +1,145 @@
+{
+  "schema": "dreyzeos.watchos_diagnostic_observation.v1",
+  "record_kind": "sanitized_extraction",
+  "source_type": "pre-existing watchOS diagnostic/analytics report",
+  "raw_artifact": {
+    "file_name": "NanoPhotos-2026-09-21-025850.ips",
+    "raw_sha256": "a0c6367e3b796c7533bc7a188a153762ee153b3d941da16e04af006d2bda14b7",
+    "raw_size_bytes": 636028,
+    "sha256_verified_before_parsing": true,
+    "copied_into_repository": false,
+    "committed": false
+  },
+  "extraction": {
+    "method": "Local read-only JSON decoding of the supplied IPS file",
+    "json_objects_parsed": 2,
+    "parse_errors": 0,
+    "raw_file_modified": false
+  },
+  "report_facts": {
+    "bug_type": {
+      "value": 509,
+      "value_present": true,
+      "value_proven": true,
+      "source": "IPS JSON top-level bug_type fields"
+    },
+    "report_type": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": "No report_type/reportType field was present; bug_type is recorded separately"
+    },
+    "process_name": {
+      "value": "NanoPhotos",
+      "value_present": true,
+      "value_proven": true,
+      "source": "IPS app_name and procName fields"
+    },
+    "bundle_identifier": {
+      "value": "com.apple.NanoPhotos",
+      "value_present": true,
+      "value_proven": true,
+      "source": "IPS bundleID field"
+    },
+    "report_timestamp": {
+      "value": "2026-09-21 02:58:50.00 +0400",
+      "value_present": true,
+      "value_proven": true,
+      "source": "IPS timestamp field"
+    },
+    "stackshot_capture_time": {
+      "value": "2026-09-21 02:58:50.2301 +0400",
+      "value_present": true,
+      "value_proven": true,
+      "source": "IPS captureTime field"
+    },
+    "platform_identification": {
+      "value": "Watch OS",
+      "value_present": true,
+      "value_proven": true,
+      "source": "The literal Watch OS appears in os_version; no separate platform field was present"
+    },
+    "os_version_raw": {
+      "value": "Watch OS 10.6.1 (21U580)",
+      "value_present": true,
+      "value_proven": true,
+      "source": "IPS os_version field"
+    },
+    "watchos_version": {
+      "value": "10.6.1",
+      "value_present": true,
+      "value_proven": true,
+      "source": "Version substring in IPS os_version"
+    },
+    "build": {
+      "value": "21U580",
+      "value_present": true,
+      "value_proven": true,
+      "source": "Build substring in IPS os_version"
+    },
+    "model_code": {
+      "value": "Watch4,2",
+      "value_present": true,
+      "value_proven": true,
+      "source": "IPS modelCode field"
+    },
+    "cpu_type": {
+      "value": "ARM64_32",
+      "value_present": true,
+      "value_proven": true,
+      "scope": "Report process/runtime field; not a DreyzeOS loader CPU-state snapshot",
+      "source": "IPS cpuType field"
+    },
+    "stackshot_present": {
+      "value": true,
+      "value_present": true,
+      "value_proven": true,
+      "source": "IPS stackshot field"
+    },
+    "t8006_runtime_markers": {
+      "values": [
+        "AppleT8006CLPC",
+        "AppleT8006IO",
+        "AppleT8006PMGR"
+      ],
+      "value_present": true,
+      "value_proven": true,
+      "source": "Symbol strings found in the IPS stackshot"
+    },
+    "private_correlation_identifier_present": {
+      "value": true,
+      "value_present": true,
+      "value_proven": true,
+      "value_redacted": true,
+      "source": "At least one correlation identifier field is present in the raw IPS; values and field contents are omitted"
+    }
+  },
+  "provenance": {
+    "user_reports_source": "Exported from iPhone Settings > Privacy & Security > Analytics & Improvements > Analytics Data",
+    "source_origin_independently_attested": false,
+    "raw_hash_scope": "Confirms local byte equality with the expected SHA-256 only; does not authenticate the source device",
+    "report_content_status": "CONFIRMED",
+    "report_describes_watchos_runtime_at_timestamp": "PRESENT",
+    "artifact_target_bound": false,
+    "artifact_runtime_proven": false,
+    "target_identity_proven": false,
+    "current_pairing_proven": false,
+    "private_identifiers_included": false
+  },
+  "does_not_prove": [
+    "physical serial identity or that a future capture is from the same Watch",
+    "current pairing state",
+    "CPU registers, EL, SP, DAIF, SCTLR_EL1, TCR_EL1, TTBR0_EL1, TTBR1_EL1, MAIR_EL1, or cache state",
+    "page-table bytes or mappings",
+    "runtime DRAM map or reserved-memory ranges",
+    "payload placement, ownership, or executable mapping",
+    "descriptor readability or loader state",
+    "boot_args or DeviceTree runtime bounds",
+    "framebuffer range or mapping",
+    "control transfer or first-hardware-execution readiness"
+  ],
+  "hardware_status": {
+    "loader_contract": "BLOCKED",
+    "first_hardware_execution": "NOT READY"
+  }
+}
