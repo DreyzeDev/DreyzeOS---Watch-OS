@@ -1,0 +1,90 @@
+{
+  "schema": "dreyzeos.user_observed_target_metadata.v1",
+  "recorded_at_utc": "2026-09-22T20:35:09Z",
+  "source": {
+    "source_class": "USER_OBSERVED",
+    "attribution": "User reports directly reading the displayed values from the Apple Watch screen.",
+    "observation_time_supplied": false,
+    "image_retained": false,
+    "independently_observed_by_agent": false
+  },
+  "watch_metadata": {
+    "product_family": {
+      "value": "Apple Watch Series 4 GPS 44 mm",
+      "metadata_status": "METADATA_CONFIRMED",
+      "source_class": "USER_OBSERVED",
+      "runtime_proven": false
+    },
+    "model_number": {
+      "value": "A1978",
+      "metadata_status": "METADATA_CONFIRMED",
+      "source_class": "USER_OBSERVED",
+      "runtime_proven": false
+    },
+    "watchos_version": {
+      "value": "10.6.1",
+      "metadata_status": "METADATA_CONFIRMED",
+      "source_class": "USER_OBSERVED",
+      "runtime_proven": false
+    },
+    "build": {
+      "value": "21U580",
+      "metadata_status": "METADATA_CONFIRMED",
+      "source_class": "USER_OBSERVED",
+      "runtime_proven": false
+    },
+    "project_target_mapping": {
+      "model": "Watch4,2",
+      "board": "N131bAP",
+      "soc": "T8006",
+      "mapping_source": "User-provided target project mapping; not independently read from the screen or device interface in this task.",
+      "metadata_status": "USER_PROVIDED_MAPPING",
+      "runtime_proven": false
+    }
+  },
+  "companion_iphone_context": {
+    "model": "iPhone 14 Pro",
+    "ios_version": "26.5",
+    "source_class": "USER_REPORTED",
+    "metadata_status": "USER_REPORTED",
+    "runtime_proven": false,
+    "scope": "Companion context only; not Watch runtime or loader evidence."
+  },
+  "privacy": {
+    "serial_numbers_included": false,
+    "udids_included": false,
+    "account_identifiers_included": false,
+    "certificates_or_pairing_secrets_included": false
+  },
+  "evidence_boundary": {
+    "target_identity_proven": false,
+    "target_provenance_coverage_proven": false,
+    "runtime_proven": false,
+    "does_not_prove": [
+      "current_el",
+      "sp",
+      "daif",
+      "sctlr_el1",
+      "tcr_el1",
+      "ttbr0_el1",
+      "ttbr1_el1",
+      "mair_el1",
+      "cache_state",
+      "runtime_dram_map",
+      "page_table_bytes_or_mappings",
+      "payload_placement_or_ownership",
+      "descriptor_readability_or_trust",
+      "boot_args_or_devicetree_runtime_bounds",
+      "framebuffer_or_reserved_memory_ranges",
+      "control_transfer",
+      "loader_contract_readiness"
+    ],
+    "requirements_impact": {
+      "EV-000": "Still BLOCKED: user-observed product/software metadata does not bind every required capture artifact to the target or prove target identity/provenance coverage.",
+      "EV-024": "Still BLOCKED: no MMU snapshot is present to bind to target metadata.",
+      "other_requirements": "No EV requirement is closed by this metadata record alone; runtime and loader evidence remains unchanged."
+    },
+    "loader_contract": "BLOCKED",
+    "first_hardware_execution": "NOT READY"
+  }
+}
