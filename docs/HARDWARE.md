@@ -299,13 +299,14 @@ To get real MMIO addresses, the following approaches exist (in order of safety):
 
 **Status**: POSSIBLE on Windows with Ghidra (free) or IDA Pro (paid).
 
-### Method 3: Peepo Live Memory Dump (requires device + watchOS 10.6.1/10.6.2)
-1. Run Peepo on Watch with watchOS 10.6.x
-2. Get kernel R/W primitive
-3. Walk IOKit IODeviceTree registry in kernel memory
-4. Extract `reg` values from live device
+### Method 3: Peepo live-memory research
 
-**Status**: REQUIRES physical Apple Watch Series 4 with specific watchOS version.
+Public source describes possible dump-related outputs for selected targets,
+but the reviewed path is exploit-backed and state-changing. Exact Watch4,2
+compatibility, read-only behavior, completeness, provenance, and recovery are
+unverified. No live procedure is provided or authorized.
+
+**Status**: UNKNOWN/BLOCKED.
 
 ### Method 4: JTAG / Debug Cables
 1. Public descriptions reference an Apple internal debug cable (iBus with JTAG capability)

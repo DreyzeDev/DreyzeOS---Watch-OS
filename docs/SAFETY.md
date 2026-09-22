@@ -17,8 +17,8 @@ until proven otherwise.
 | Reading device information (model, UDID) | NONE | N/A | No | No | No | CONFIRMED | Normal operation |
 | Entering DFU mode | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | No | UNKNOWN | Public stock procedure is documented, but it was not executed or verified on this target |
 | Entering Recovery mode | UNKNOWN/BLOCKED | UNKNOWN | UNKNOWN | UNKNOWN | No | UNKNOWN | Stock recovery/restore documentation is context only; arbitrary experimental-state recovery was not verified on this target |
-| Reading kernelcache via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Public source targets Watch4,1; no device run |
-| Reading DeviceTree via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Same constraints as kernelcache |
+| Reading kernelcache via Peepo | HIGH_RISK_STATE_CHANGING | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN/BLOCKED for Watch4,2 | Public source targets Watch4,1; exploit-backed R/W and recovery are not proven |
+| Reading DeviceTree via Peepo | HIGH_RISK_STATE_CHANGING | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN/BLOCKED for Watch4,2 | Same constraints; a desired read artifact does not make acquisition read-only |
 | RAM-only code injection via PongoOS | UNKNOWN/BLOCKED | UNKNOWN | UNKNOWN | UNKNOWN | NO | UNKNOWN for T8006 | PongoOS is a different-SoC reference; no DreyzeOS run or recovery proof |
 | checkm8 DFU exploit on T8006 | BLOCKED | N/A | N/A | N/A | NO | CONFIRMED not a checkm8 target | Separate usbliter8 T8006 research was inspected statically only; no exploit execution |
 | Modifying system partition | EXTREME | NO | Yes → bootloop | HIGH | YES | **NEVER** | PROHIBITED by project rules |
@@ -47,22 +47,18 @@ Before ANY experiment on physical Apple Watch Series 4:
 
 ---
 
-## Apple Watch Series 4 DFU Restore Procedure
+## DFU and restore boundary
 
-The following is public stock-documentation context only; it was not executed in this audit and does not guarantee recovery from an arbitrary experimental state.
+Public stock documentation describes restart, DFU, and macOS-based restore
+paths, but this repository has not validated those paths from an arbitrary
+experimental state on the exact Watch4,2 / 21U580 target. The availability of
+DFU, the required host software, and successful restore are therefore
+`UNKNOWN`/`BLOCKED`, not recovery guarantees.
 
-If an experiment causes a bootloop or unrecoverable state:
-
-1. Force restart: Hold Digital Crown + Side Button for 10 seconds
-2. Enter DFU mode: Hold Side Button + Digital Crown simultaneously after restart
-3. Connect to Mac with Apple Configurator 2 or iTunes
-4. Select "Restore" (requires internet connection to download watchOS)
-
-> **MAC REQUIRED**: DFU restore of Apple Watch requires macOS with  
-> Apple Configurator 2 or iTunes. Windows cannot restore Apple Watch firmware.  
-> Reason: Apple's restore protocol for Watch requires signed IPSW loading  
-> via Apple servers, and the USB protocol used is only supported by  
-> Apple Configurator 2 / iTunes on macOS.
+This document intentionally does not provide a live DFU or restore procedure.
+No DFU entry, USB operation, exploit, or restore action is authorized by this
+research plan. Any future experiment must record a target-specific recovery
+assessment before approval.
 
 ---
 

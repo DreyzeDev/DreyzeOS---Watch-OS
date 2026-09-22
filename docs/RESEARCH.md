@@ -36,19 +36,19 @@ a gap of approximately 8 years. It ports the **DarkSword** exploit chain to watc
 | Other Watch models (Series 5/6/SE) | LIKELY (same XNU vulnerability) |
 | watchOS 11.x | UNKNOWN (likely patched) |
 
-#### What Can Be Extracted Safely
-| Data | Extractable? | Risk |
+#### Potential outputs and safety status
+| Data | Source-level capability | Status |
 |------|-------------|------|
-| Process memory dumps | YES | Low (read-only) |
-| Kernel memory (any address) | Public source claims kernel R/W | UNKNOWN/BLOCKED for this target until an authorized run |
-| kernelcache from memory | LIKELY | Medium |
-| DeviceTree from memory | LIKELY | Medium |
-| MMIO register values | Possible through a live kernel VA | UNKNOWN/BLOCKED; no device run performed |
-| IOKit device registry | YES | Medium |
-| Hardware MMIO base addresses | YES (from IOKit) | Low |
+| Process memory dumps | Present in public source context | `UNKNOWN` acquisition safety and target applicability |
+| Kernel memory (any address) | Public source claims kernel R/W | `UNKNOWN/BLOCKED` for this target until independently reviewed |
+| kernelcache from memory | Potential output | `UNKNOWN/BLOCKED`; recovery and completeness are unproven |
+| DeviceTree from memory | Potential output | `UNKNOWN/BLOCKED`; acquisition is not proven read-only |
+| MMIO register values | Potentially observable through a live kernel VA | `UNKNOWN/BLOCKED`; no device run performed |
+| IOKit device registry | Potential output | `UNKNOWN/BLOCKED` for exact target acquisition |
+| Hardware MMIO base addresses | Potential output | `UNKNOWN/BLOCKED`; static ADT remains the authoritative local source |
 
 #### Limitations
-1. **NOT a permanent jailbreak** — RAM only, reverts on reboot
+1. **NOT a permanent jailbreak** — the reviewed source describes volatile/RAM-only research state, but recovery behavior from an arbitrary state is not proven on this target
 2. **Frequent panics** — unstable, may need multiple attempts
 3. **Version specific** — only watchOS 10.6.1/10.6.2
 4. **Secure Enclave** data inaccessible (Health, passcode-protected data)
@@ -57,18 +57,11 @@ a gap of approximately 8 years. It ports the **DarkSword** exploit chain to watc
 #### Value for DreyzeOS Project
 Peepo is a potentially valuable future research path, but it is not a
 DreyzeOS loader and has not been executed in this project:
-- With a physical Watch running watchOS 10.6.1/10.6.2, we can:
-  - Walk the IOKit registry to find all MMIO base addresses
-  - Dump the DeviceTree from kernel memory
-  - Verify our memory_map.h values
-  - Potentially dump the kernelcache for analysis
-- This would provide the "CONFIRMED" data needed for Phases 5-7
-
-Any future, separately authorized research could write a custom Peepo script that:
-1. Establishes kernel R/W
-2. Finds the IODeviceTree registry root
-3. Walks all nodes and extracts `reg` properties (MMIO base + size)
-4. Dumps output to a file readable on the Watch's accessible filesystem
+Potential future research outputs could include IOKit metadata, a bounded
+DeviceTree copy, or kernelcache-related artifacts, but their acquisition would
+require a separately reviewed privileged method. The reviewed Peepo source does
+not establish a read-only path, exact Watch4,2 compatibility, target recovery,
+or a DreyzeOS handoff. No acquisition procedure is specified here.
 
 ---
 
@@ -204,13 +197,12 @@ Any apps running on DreyzeOS would choose their ABI independently.
 
 ### Option Analysis
 
-#### Option A: Peepo-based code injection
-- **Requires**: Physical Watch with watchOS 10.6.1/10.6.2
-- **Method**: Peepo → kernel R/W → map DreyzeOS code into kernel memory → jump to it
-- **Risk**: UNKNOWN/BLOCKED; recovery from arbitrary experimental state is not proven
-- **Completeness**: Partial — runs after watchOS, shares kernel VA space
-- **Status**: UNKNOWN/BLOCKED — not confirmed for DreyzeOS specifically
-- **Windows path**: Peepo must run FROM the Watch (watchOS app or SSH) — Windows part = prep/build only
+#### Option A: Peepo-based research path
+- **Source capability**: Public Peepo source contains exploit-backed kernel R/W and dump-related research paths.
+- **Target**: Watch4,1/T8006 is named by the reviewed source; Watch4,2/21U580 is not established.
+- **Risk**: HIGH_RISK_STATE_CHANGING; recovery from arbitrary experimental state is not proven.
+- **Evidence value**: Potential raw artifacts only; no initial CPU-register capture, complete table coverage, ownership, or DreyzeOS handoff is proven.
+- **Status**: UNKNOWN/BLOCKED — no live use is authorized and no acquisition procedure is specified.
 
 #### Option B: T8004 (Series 3) + checkm8 path
 - **Requires**: Apple Watch Series 3 (T8004) — DIFFERENT device
@@ -238,7 +230,9 @@ Any apps running on DreyzeOS would choose their ABI independently.
 3. **Populate HARDWARE.md** with real MMIO addresses from DeviceTree
 4. **Update memory_map.h** with confirmed values (replace UNKNOWN_*)
 5. **Analyze kernelcache** in Ghidra for additional hardware patterns
-6. **If device available**: Run Peepo to get live DeviceTree dump
+6. **If target evidence becomes available**: review its provenance and process
+   it through the privileged-research plan and offline verifier; no live Peepo
+   run is authorized by the current baseline
 
 ---
 

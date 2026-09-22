@@ -1,0 +1,525 @@
+{
+  "schema": "dreyzeos.t8006_privileged_risk_matrix.v1",
+  "step": "2.15",
+  "accepted_sha": "ff619bdb0770cf49cb1fd8d17979b1aac5856b44",
+  "plan_only": true,
+  "live_execution_authorized": false,
+  "first_privileged_experiment_candidate": "NONE",
+  "target": {
+    "model": "Watch4,2",
+    "board": "N131bAP",
+    "soc": "T8006",
+    "firmware": "watchOS 10.6.1",
+    "build": "21U580",
+    "architecture": "aarch64"
+  },
+  "status_vocabulary": [
+    "CONFIRMED",
+    "LIKELY",
+    "DESIGN",
+    "UNKNOWN",
+    "BLOCKED"
+  ],
+  "recovery_vocabulary": [
+    "RECOVERY_PROVEN",
+    "RECOVERY_EXPECTED",
+    "RECOVERY_UNKNOWN",
+    "PERSISTENCE_RISK"
+  ],
+  "methods": [
+    {
+      "id": "M-001",
+      "method": "DreyzeOS offline repository, IPSW, ADT, ELF and verifier analysis",
+      "target": "Watch4,2 static project context only",
+      "firmware": "21U580 static artifact context",
+      "source": {
+        "repository": "DreyzeDev/DreyzeOS---Watch-OS",
+        "revision": "ff619bdb0770cf49cb1fd8d17979b1aac5856b44",
+        "files": [
+          "docs/T8006_RUNTIME_EVIDENCE_METHODS.md",
+          "research/ipsw/21U580",
+          "tools/",
+          "research/t8006_evidence/"
+        ]
+      },
+      "requires_exploit": "NO",
+      "ram_write": "NO",
+      "page_table_write": "NO",
+      "cpu_state_change": "NO",
+      "control_flow_change": "NO",
+      "persistent_write": "NO",
+      "device_reset_possible": "NO",
+      "bootloop_possible": "NO",
+      "recovery_status": "RECOVERY_PROVEN",
+      "ev_ids": {
+        "observable": ["EV-024", "EV-027"],
+        "potentially_closable": [],
+        "proven": []
+      },
+      "risk_class": "LOWER_PRIVILEGED_RISK",
+      "unknowns": [
+        "No runtime target state",
+        "No target-bound acquisition provenance"
+      ],
+      "evidence": [
+        {
+          "status": "CONFIRMED",
+          "source": "research/ipsw/21U580 and docs/DEVTREE_REPORT.md",
+          "fact": "Static /memory is base=0,size=0 and static /vram does not provide a runtime framebuffer range."
+        },
+        {
+          "status": "CONFIRMED",
+          "source": "tools/handoff_evidence_verifier.py and tools/mmu_snapshot_analyzer.py",
+          "fact": "The repository tooling is host/offline analysis and contains no device capture path."
+        }
+      ]
+    },
+    {
+      "id": "M-002",
+      "method": "Pre-existing target-bound runtime artifact analyzed locally",
+      "target": "Watch4,2 only if external provenance is supplied",
+      "firmware": "21U580 only if externally attested",
+      "source": {
+        "repository": "DreyzeDev/DreyzeOS---Watch-OS",
+        "revision": "ff619bdb0770cf49cb1fd8d17979b1aac5856b44",
+        "files": [
+          "research/handoff_evidence/FORMAT.md",
+          "research/mmu_snapshots/FORMAT.md",
+          "tools/handoff_evidence_verifier.py"
+        ]
+      },
+      "requires_exploit": "UNKNOWN",
+      "ram_write": "UNKNOWN",
+      "page_table_write": "UNKNOWN",
+      "cpu_state_change": "UNKNOWN",
+      "control_flow_change": "UNKNOWN",
+      "persistent_write": "UNKNOWN",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": [
+          "EV-000",
+          "EV-002",
+          "EV-011",
+          "EV-012",
+          "EV-014",
+          "EV-016",
+          "EV-017",
+          "EV-024",
+          "EV-025",
+          "EV-026",
+          "EV-027"
+        ],
+        "potentially_closable": [
+          "EV-000",
+          "EV-002",
+          "EV-011",
+          "EV-012",
+          "EV-014",
+          "EV-016",
+          "EV-017",
+          "EV-024",
+          "EV-025",
+          "EV-026",
+          "EV-027"
+        ],
+        "proven": []
+      },
+      "risk_class": "UNKNOWN",
+      "unknowns": [
+        "Original acquisition method",
+        "Target identity and firmware binding",
+        "Device-side state changes",
+        "Completeness and ownership of supplied bytes"
+      ],
+      "evidence": [
+        {
+          "status": "DESIGN",
+          "source": "research/handoff_evidence/FORMAT.md and research/mmu_snapshots/FORMAT.md",
+          "fact": "The existing formats can represent hashes, provenance declarations, registers, table blobs and bounded ranges."
+        }
+      ]
+    },
+    {
+      "id": "M-003",
+      "method": "Normal model, UDID or recovery metadata query",
+      "target": "Watch4,2 appears in static device-table context",
+      "firmware": "UNKNOWN",
+      "source": {
+        "repository": "libimobiledevice/libirecovery",
+        "url": "https://github.com/libimobiledevice/libirecovery",
+        "revision": "93c117c29b1f6669bc4ceca8b84e1df06449fe33",
+        "files": ["src/libirecovery.c", "include/libirecovery.h"]
+      },
+      "requires_exploit": "NO",
+      "ram_write": "UNKNOWN",
+      "page_table_write": "UNKNOWN",
+      "cpu_state_change": "UNKNOWN",
+      "control_flow_change": "UNKNOWN",
+      "persistent_write": "UNKNOWN",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": ["EV-000"],
+        "potentially_closable": [],
+        "proven": []
+      },
+      "risk_class": "UNKNOWN",
+      "unknowns": [
+        "Runtime query side effects",
+        "Independent identity attestation",
+        "Any runtime CPU or memory evidence"
+      ],
+      "evidence": [
+        {
+          "status": "CONFIRMED",
+          "source": "libirecovery static device table at the pinned revision",
+          "fact": "Static tool metadata contains Watch4,2/N131bAP-related device information."
+        }
+      ]
+    },
+    {
+      "id": "M-004",
+      "method": "Peepo DarkSword kernel read/write research path",
+      "target": "Watch4,1/T8006 in reviewed source; Watch4,2 not established",
+      "firmware": "watchOS 10.6.1/10.6.2 in reviewed source",
+      "source": {
+        "repository": "datalocaltmp/Peepo",
+        "url": "https://github.com/datalocaltmp/Peepo",
+        "revision": "6d20d676f7c2d1620ba4764f7500baa906d67b64",
+        "files": ["README.md", "Peepo Watch App/darksword.m"],
+        "symbols": [
+          "early_kread64",
+          "early_kwrite64",
+          "ds_pmap_of",
+          "ds_setup_physmap",
+          "ds_va_to_phys",
+          "peepo_dump_kernelcache",
+          "peepo_dump_process"
+        ]
+      },
+      "requires_exploit": "YES",
+      "ram_write": "YES",
+      "page_table_write": "UNKNOWN",
+      "cpu_state_change": "UNKNOWN",
+      "control_flow_change": "UNKNOWN",
+      "persistent_write": "UNKNOWN",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": [
+          "EV-002",
+          "EV-011",
+          "EV-012",
+          "EV-014",
+          "EV-016",
+          "EV-017",
+          "EV-025",
+          "EV-026"
+        ],
+        "potentially_closable": [
+          "EV-002",
+          "EV-014",
+          "EV-016",
+          "EV-017",
+          "EV-025",
+          "EV-026"
+        ],
+        "proven": []
+      },
+      "risk_class": "HIGH_RISK_STATE_CHANGING",
+      "unknowns": [
+        "Exact Watch4,2 compatibility",
+        "Initial CPU register capture",
+        "Complete table-byte coverage",
+        "Arbitrary-state recovery",
+        "Persistent side effects"
+      ],
+      "evidence": [
+        {
+          "status": "CONFIRMED",
+          "source": "README.md and Peepo Watch App/darksword.m",
+          "fact": "The reviewed source obtains exploit-backed kernel read/write and contains dump-related paths."
+        },
+        {
+          "status": "CONFIRMED",
+          "source": "Peepo Watch App/darksword.m: ds_pmap_of, ds_setup_physmap, ds_va_to_phys",
+          "fact": "The source contains page-table-backed virtual-to-physical research reads and a partial physmap assumption."
+        }
+      ]
+    },
+    {
+      "id": "M-005",
+      "method": "usbliter8 T8006 SecureROM exploit path",
+      "target": "T8006-related source; exact Watch4,2 applicability not established",
+      "firmware": "UNKNOWN",
+      "source": {
+        "repository": "JoshAtticus/usbliter8",
+        "url": "https://github.com/JoshAtticus/usbliter8",
+        "revision": "479dbbf4ad80e4a454e0779d1b4d1ec5eb0d7bd5",
+        "files": [
+          "exploit.c",
+          "t8020_t8006_shellcode/start.S",
+          "t8020_t8006_shellcode/targets/t8006/offsets.h",
+          "usb_req_handler/handler.c",
+          "usb_req_handler/targets/t8006/offsets.h"
+        ],
+        "symbols": [
+          "t8006_create_overwrite",
+          "t8006_create_shellcode",
+          "t8020_t8006_exploit_run"
+        ]
+      },
+      "requires_exploit": "YES",
+      "ram_write": "YES",
+      "page_table_write": "YES",
+      "cpu_state_change": "YES",
+      "control_flow_change": "YES",
+      "persistent_write": "UNKNOWN",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": [],
+        "potentially_closable": [],
+        "proven": []
+      },
+      "risk_class": "PERSISTENT_WRITE_RISK",
+      "unknowns": [
+        "Exact Watch4,2/21U580 applicability",
+        "Persistent-state side effects",
+        "Failure, reset, and arbitrary-state recovery",
+        "Any complete DreyzeOS evidence artifact"
+      ],
+      "evidence": [
+        {
+          "status": "CONFIRMED",
+          "source": "exploit.c, t8020_t8006_shellcode/start.S, target offsets and USB handler sources",
+          "fact": "The reviewed path contains RAM operations, PTE/MMU/cache changes, handler state and control-flow changes."
+        }
+      ]
+    },
+    {
+      "id": "M-006",
+      "method": "iBUS, diagnostic adapter or DFU research path",
+      "target": "Exact Watch4,2 target path unverified",
+      "firmware": "21U580 compatibility unverified",
+      "source": {
+        "repository": "DreyzeDev/DreyzeOS---Watch-OS",
+        "revision": "ff619bdb0770cf49cb1fd8d17979b1aac5856b44",
+        "files": [
+          "docs/T8006_RUNTIME_EVIDENCE_METHODS.md",
+          "docs/T8006_LOADER_RESEARCH.md",
+          "docs/SAFETY.md"
+        ]
+      },
+      "requires_exploit": "UNKNOWN",
+      "ram_write": "UNKNOWN",
+      "page_table_write": "UNKNOWN",
+      "cpu_state_change": "UNKNOWN",
+      "control_flow_change": "UNKNOWN",
+      "persistent_write": "UNKNOWN",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": [],
+        "potentially_closable": [],
+        "proven": []
+      },
+      "risk_class": "UNKNOWN",
+      "unknowns": [
+        "Transport availability",
+        "Read/write semantics",
+        "Exact target and firmware compatibility",
+        "Recovery and persistence behavior"
+      ],
+      "evidence": [
+        {
+          "status": "UNKNOWN",
+          "source": "DreyzeOS Step 2.14 static method review",
+          "fact": "Public descriptions identify a candidate transport/research category but do not prove a read-only runtime interface."
+        }
+      ]
+    },
+    {
+      "id": "M-007",
+      "method": "UART or exposed boot-log observation",
+      "target": "Watch4,2 route and pinout unverified",
+      "firmware": "21U580 runtime behavior unverified",
+      "source": {
+        "repository": "DreyzeDev/DreyzeOS---Watch-OS",
+        "revision": "ff619bdb0770cf49cb1fd8d17979b1aac5856b44",
+        "files": [
+          "hal/t8006/uart.c",
+          "hal/t8006/aic.c",
+          "docs/T8006_RUNTIME_EVIDENCE_METHODS.md"
+        ]
+      },
+      "requires_exploit": "UNKNOWN",
+      "ram_write": "UNKNOWN",
+      "page_table_write": "UNKNOWN",
+      "cpu_state_change": "UNKNOWN",
+      "control_flow_change": "UNKNOWN",
+      "persistent_write": "UNKNOWN",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": [],
+        "potentially_closable": [],
+        "proven": []
+      },
+      "risk_class": "PRIVILEGED_STATE_CHANGING",
+      "unknowns": [
+        "Physical route and electrical levels",
+        "Whether enabling output requires MMIO or CPU changes",
+        "Whether logs contain any authoritative runtime evidence"
+      ],
+      "evidence": [
+        {
+          "status": "CONFIRMED",
+          "source": "DreyzeOS production gate code",
+          "fact": "UART/AIC access remains closed until a future verified mapping path; no live UART route is established."
+        }
+      ]
+    },
+    {
+      "id": "M-008",
+      "method": "JTAG, SWD or external debugger",
+      "target": "No exact Watch4,2 debug interface evidence",
+      "firmware": "UNKNOWN",
+      "source": {
+        "repository": "DreyzeDev/DreyzeOS---Watch-OS",
+        "revision": "ff619bdb0770cf49cb1fd8d17979b1aac5856b44",
+        "files": ["docs/T8006_RUNTIME_EVIDENCE_METHODS.md"]
+      },
+      "requires_exploit": "UNKNOWN",
+      "ram_write": "UNKNOWN",
+      "page_table_write": "UNKNOWN",
+      "cpu_state_change": "UNKNOWN",
+      "control_flow_change": "UNKNOWN",
+      "persistent_write": "UNKNOWN",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": [
+          "EV-006",
+          "EV-007",
+          "EV-008",
+          "EV-009",
+          "EV-010",
+          "EV-011",
+          "EV-012",
+          "EV-014",
+          "EV-016",
+          "EV-017",
+          "EV-024",
+          "EV-025",
+          "EV-026"
+        ],
+        "potentially_closable": [],
+        "proven": []
+      },
+      "risk_class": "PRIVILEGED_STATE_CHANGING",
+      "unknowns": [
+        "Debug authorization and physical access",
+        "Halt/reset behavior",
+        "Write capability and page-table effects",
+        "Exact target recovery"
+      ],
+      "evidence": [
+        {
+          "status": "UNKNOWN",
+          "source": "Step 2.14 method review",
+          "fact": "A generic debugger could expose registers or memory, but no target-specific non-invasive contract was found."
+        }
+      ]
+    },
+    {
+      "id": "M-009",
+      "method": "DreyzeOS early-entry self-capture",
+      "target": "DreyzeOS future entry only; target handoff is unproven",
+      "firmware": "Not applicable to acquisition",
+      "source": {
+        "repository": "DreyzeDev/DreyzeOS---Watch-OS",
+        "revision": "ff619bdb0770cf49cb1fd8d17979b1aac5856b44",
+        "files": ["boot/entry.S", "kernel/cpu_state.c", "include/cpu_state.h"]
+      },
+      "requires_exploit": "NO",
+      "ram_write": "YES",
+      "page_table_write": "NO",
+      "cpu_state_change": "YES",
+      "control_flow_change": "YES",
+      "persistent_write": "NO",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": ["EV-009", "EV-010"],
+        "potentially_closable": [],
+        "proven": []
+      },
+      "risk_class": "PRIVILEGED_STATE_CHANGING",
+      "unknowns": [
+        "Whether hardware entry is ever reached",
+        "Initial state before entry.S modifications",
+        "Runtime recovery from an entry failure"
+      ],
+      "evidence": [
+        {
+          "status": "CONFIRMED",
+          "source": "boot/entry.S and kernel/cpu_state.c",
+          "fact": "The production entry path preserves selected inputs, masks DAIF, assigns the stack and changes architectural state before normal kernel code."
+        }
+      ]
+    },
+    {
+      "id": "M-010",
+      "method": "Existing crash, sysdiagnose or public diagnostic artifact analyzed locally",
+      "target": "No target-bound artifact currently present",
+      "firmware": "Unknown until artifact provenance exists",
+      "source": {
+        "repository": "DreyzeDev/DreyzeOS---Watch-OS",
+        "revision": "ff619bdb0770cf49cb1fd8d17979b1aac5856b44",
+        "files": [
+          "research/handoff_evidence/FORMAT.md",
+          "tools/handoff_evidence_verifier.py",
+          "docs/T8006_RUNTIME_EVIDENCE_METHODS.md"
+        ]
+      },
+      "requires_exploit": "UNKNOWN",
+      "ram_write": "UNKNOWN",
+      "page_table_write": "UNKNOWN",
+      "cpu_state_change": "UNKNOWN",
+      "control_flow_change": "UNKNOWN",
+      "persistent_write": "UNKNOWN",
+      "device_reset_possible": "UNKNOWN",
+      "bootloop_possible": "UNKNOWN",
+      "recovery_status": "RECOVERY_UNKNOWN",
+      "ev_ids": {
+        "observable": ["EV-014", "EV-026", "EV-027"],
+        "potentially_closable": [],
+        "proven": []
+      },
+      "risk_class": "UNKNOWN",
+      "unknowns": [
+        "Artifact acquisition method",
+        "Target identity",
+        "Completeness and authenticity",
+        "Any device-side state change"
+      ],
+      "evidence": [
+        {
+          "status": "DESIGN",
+          "source": "Existing offline evidence formats and verifier",
+          "fact": "A local artifact can be bounded and checked without following device pointers, but its acquisition history must remain separate."
+        }
+      ]
+    }
+  ]
+}

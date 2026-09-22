@@ -70,7 +70,9 @@ This document tracks the development phases from initial research to a working G
 - [ ] Document interrupt controller — GIC or Apple AIC, base or UNKNOWN
 - [ ] Document PMGR (power manager) — base or UNKNOWN
 - [ ] Create `hal/t8006/memory_map.h` with all known/unknown addresses
-- [ ] Run Peepo on real device (if available) to get DeviceTree dump
+- [ ] Review a target-bound privileged acquisition method under
+      `docs/T8006_PRIVILEGED_RESEARCH_PLAN.md`; no live Peepo run is authorized
+      by the current baseline
 - [ ] Parse DeviceTree → document real addresses
 
 ### Deliverables
@@ -87,7 +89,8 @@ This document tracks the development phases from initial research to a working G
 ### Research Questions
 - Does checkm8 / checkra1n work on Apple Watch Series 4 / T8006?
 - Can PongoOS be adapted for T8006?
-- Can Peepo provide a safe code injection path?
+- Can Peepo expose useful target evidence without a proven read-only or
+  recovery-safe acquisition path?
 - Is there a USB boot mode usable for code loading?
 - Can a watchOS app sandbox be escaped safely for research?
 
