@@ -154,7 +154,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_hex("  Raw x1             ", handoff->raw_x1);
     if (!loader_handoff_is_verified()) {
         klog_info("  Handoff status     : HANDOFF_UNAVAILABLE");
-        klog_info("  Metadata status    : BOOT_METADATA_FALLBACK (no pointer dereference)");
+        klog_info("  Metadata status    : BOOT_METADATA_STATIC_FALLBACK (no runtime DRAM map; no pointer dereference)");
     } else {
         klog_info("  Handoff status     : VERIFIED");
     }
@@ -177,17 +177,18 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
      * STAGE 3 — Memory Map Evidence Evaluated
      * ================================================================
      */
-    if (binfo->dram_phys_base == 0 || binfo->dram_size == 0) {
-        boot_stage_failsafe("Stage 3: DRAM physical base or size is 0");
-    }
-
     klog_info("[BOOT] Stage 3: Memory map evidence evaluation:");
     if (binfo->metadata_status == BOOT_METADATA_RUNTIME_VERIFIED) {
-        klog_info("  [MEM] DRAM parameters are RUNTIME VERIFIED by handoff descriptor");
+        if (binfo->dram_phys_base == 0 || binfo->dram_size == 0) {
+            klog_warn("  [MEM] MEMORY_MAP_UNAVAILABLE: runtime metadata incomplete");
+            boot_stage_failsafe("Stage 3: runtime DRAM metadata incomplete");
+        } else {
+            klog_info("  [MEM] DRAM parameters are RUNTIME VERIFIED by handoff descriptor");
+        }
     } else if (binfo->metadata_status == BOOT_METADATA_STATIC_FALLBACK) {
-        klog_warn("  [MEM] DRAM parameters are STATIC FALLBACK (research build) - NOT a validated runtime map!");
+        klog_warn("  [MEM] MEMORY_MAP_UNAVAILABLE: STATIC_RESEARCH_METADATA_ONLY");
     } else {
-        klog_warn("  [MEM] DRAM parameters are UNAVAILABLE");
+        klog_warn("  [MEM] MEMORY_MAP_UNAVAILABLE");
     }
     klog_info("  [MEM] Physical memory dereference BLOCKED until MMU verified");
     boot_stage_set(BOOT_STAGE_MEM_MAP);

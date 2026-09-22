@@ -67,7 +67,8 @@ void platform_init(void)
 /*
  * timer_init — stub.
  * Phase 6: Initialize Apple PMGR timer or ARM generic timer.
- * ARM generic timer frequency: LIKELY 24MHz (standard for Apple SoCs).
+ * CNTFRQ_EL0 is the authoritative runtime frequency source; no static
+ * T8006 frequency is asserted here.
  */
 void timer_init(void)
 {

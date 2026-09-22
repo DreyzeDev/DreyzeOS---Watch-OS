@@ -68,6 +68,7 @@ pic_stage0_host_status_t pic_stage0_host_prepare(
         DREYZE_HANDOFF_FLAG_PAYLOAD_LOCATION_KNOWN |
         DREYZE_HANDOFF_FLAG_MMU_STATE_KNOWN;
     uintptr_t target_entry;
+    uintptr_t payload_va;
 
     if (!input || !output) {
         return PIC_STAGE0_HOST_REJECT_NULL;
@@ -114,14 +115,21 @@ pic_stage0_host_status_t pic_stage0_host_prepare(
         return PIC_STAGE0_HOST_REJECT_EXECUTABLE_MAPPING;
     }
 
+    /*
+     * payload_va is a fixed-width wire value. Convert it explicitly before
+     * native arithmetic so a narrow host cannot truncate the address.
+     */
+    if (!loader_handoff_u64_to_uintptr(
+            output->descriptor_copy.payload_va, &payload_va)) {
+        return PIC_STAGE0_HOST_REJECT_ADDRESS_REPRESENTATION;
+    }
+
     if (input->target_entry_offset >= output->descriptor_copy.payload_size ||
-        output->descriptor_copy.payload_va >
-            (uintptr_t)-1 - input->target_entry_offset) {
+        payload_va > (uintptr_t)-1 - input->target_entry_offset) {
         return PIC_STAGE0_HOST_REJECT_PAYLOAD_RANGE;
     }
 
-    target_entry = (uintptr_t)output->descriptor_copy.payload_va +
-                   input->target_entry_offset;
+    target_entry = payload_va + input->target_entry_offset;
     if (!host_range_contains(input->executable_mapping_base,
                              input->executable_mapping_size,
                              target_entry, 4)) {
@@ -172,6 +180,20 @@ void pic_stage0_host_run_self_tests(void)
            PIC_STAGE0_HOST_READY);
     assert(output.runtime_delta == 0x100);
     assert(output.target_entry_va == 0x200000100ULL);
+
+    /* Zero is representable, but V1 rejects it as an invalid payload address. */
+    descriptor.payload_va = 0;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_DESCRIPTOR);
+    descriptor.payload_va = 0x200000000ULL;
+
+#if UINTPTR_MAX < UINT64_MAX
+    /* A wire address outside native uintptr_t must be rejected explicitly. */
+    descriptor.payload_va = (uint64_t)UINTPTR_MAX + 1ULL;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_ADDRESS_REPRESENTATION);
+    descriptor.payload_va = 0x200000000ULL;
+#endif
 
     input.descriptor_readable = DREYZE_HANDOFF_V1_SIZE - 1;
     assert(pic_stage0_host_prepare(&input, &output) ==

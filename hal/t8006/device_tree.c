@@ -437,13 +437,16 @@ static void platform_boot_info_reset_fallback(uint64_t arg0, uint64_t arg1)
 {
     memset(&g_boot_info, 0, sizeof(g_boot_info));
     loader_handoff_reset_unverified(arg0, arg1);
-    /* These values are diagnostics-only research fallbacks. They are not a
-     * runtime DRAM map and never authorize a physical dereference. */
-    g_boot_info.dram_phys_base    = T8006_DRAM_BASE;
-    g_boot_info.dram_size         = T8006_DRAM_SIZE;
-    g_boot_info.dram_virt_base    = 0;
-    g_boot_info.virt_base_valid   = false;
-    g_boot_info.metadata_status   = BOOT_METADATA_STATIC_FALLBACK;
+    /*
+     * No runtime DRAM map has been proven on the production path. Keep
+     * runtime-authoritative fields zero; historical product-memory quantities
+     * are research context only and are not part of platform_boot_info_t.
+     */
+    g_boot_info.dram_phys_base = 0;
+    g_boot_info.dram_size      = 0;
+    g_boot_info.dram_virt_base = 0;
+    g_boot_info.virt_base_valid = false;
+    g_boot_info.metadata_status = BOOT_METADATA_STATIC_FALLBACK;
     g_boot_info.chip_id           = 0x8006;
     strncpy(g_boot_info.model, "Watch4,2", sizeof(g_boot_info.model) - 1);
     g_boot_info_initialized = true;
@@ -478,6 +481,7 @@ static void platform_boot_info_apply_verified_boot_args(
     const loader_handoff_descriptor_t *handoff)
 {
     verified_range_t device_tree_range;
+    uintptr_t device_tree_ptr;
 
     if (!ba) {
         return;
@@ -506,18 +510,19 @@ static void platform_boot_info_apply_verified_boot_args(
      * independently verified nested buffer and its bounded length permit
      * ADT validation/parsing.
      */
-    if (!handoff || ba->devicetree_length < 64 ||
+    if (!handoff ||
+        !loader_handoff_u64_to_uintptr(ba->devicetree_p, &device_tree_ptr) ||
+        ba->devicetree_length < 64 ||
         !loader_handoff_range_to_native(&handoff->device_tree_range,
                                         &device_tree_range) ||
         !verified_range_contains_object(&device_tree_range,
-                                        (uintptr_t)ba->devicetree_p,
+                                        device_tree_ptr,
                                         ba->devicetree_length)) {
         return;
     }
 
-    if (devtree_validate_header((uintptr_t)ba->devicetree_p,
-                                ba->devicetree_length)) {
-        (void)devtree_parse_dynamic((uintptr_t)ba->devicetree_p,
+    if (devtree_validate_header(device_tree_ptr, ba->devicetree_length)) {
+        (void)devtree_parse_dynamic(device_tree_ptr,
                                      ba->devicetree_length, &g_boot_info);
     }
 }
@@ -587,7 +592,20 @@ void platform_boot_info_init_verified_for_test(
         devtree_parse_dynamic(raw_x0,
                                (uint32_t)handoff->raw_x1,
                                &g_boot_info) == 0) {
-        g_boot_info.metadata_status = BOOT_METADATA_RUNTIME_VERIFIED;
+        if (g_boot_info.dram_phys_base != 0 &&
+            g_boot_info.dram_size != 0) {
+            g_boot_info.metadata_status = BOOT_METADATA_RUNTIME_VERIFIED;
+        } else {
+            /*
+             * A valid ADT container without a populated /memory node is
+             * still only static metadata; never promote it to a runtime map.
+             */
+            g_boot_info.dram_phys_base = 0;
+            g_boot_info.dram_size = 0;
+            g_boot_info.dram_virt_base = 0;
+            g_boot_info.virt_base_valid = false;
+            g_boot_info.metadata_status = BOOT_METADATA_STATIC_FALLBACK;
+        }
     }
 }
 #endif

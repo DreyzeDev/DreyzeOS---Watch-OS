@@ -64,9 +64,10 @@ and `devicetree_p`; it does not provide target-specific runtime values or a
 producer trace for this static snapshot. Runtime population mechanism and
 runtime values are separate questions and remain **UNKNOWN**.
 
-The code keeps `T8006_DRAM_BASE = 0x800000000` and
-`T8006_DRAM_SIZE = 1 GiB` only as explicitly labelled diagnostics fallbacks.
-They never open a mapping gate and never authorize a physical dereference.
+Production boot-info fallback now leaves `dram_phys_base`, `dram_size`, and `dram_virt_base` at zero, with `virt_base_valid = false`. The historical
+`0x800000000` / 1 GiB values remain only as explicitly labelled research or
+host-test fixtures; they are not runtime DRAM evidence, do not open a mapping
+gate, and never authorize a physical dereference.
 
 ## 2. T8006 loader evidence gap matrix
 
@@ -228,6 +229,7 @@ and host tests confirm:
 * no function-pointer invocation, branch/return to a target address, payload
   execution, or assumption that runtime PC equals physical address;
 * exactly the pre-proven 128-byte descriptor prefix is copied before validation;
+* wire `payload_va` is converted through `loader_handoff_u64_to_uintptr()` before native arithmetic; nonrepresentable addresses are rejected;
 * runtime PC/link-base signed delta checks reject zero values and `INT64` overflow;
 * negative deltas are accepted only when representable;
 * executable mapping overflow, payload size zero, offset-at-size,

@@ -15,7 +15,7 @@ until proven otherwise.
 | Operation | Risk Level | Reversible? | Can Reboot? | Bootloop Risk? | Touches Flash? | Tested on Series 4? | Notes |
 |-----------|-----------|-------------|-------------|----------------|----------------|----------------------|-------|
 | Reading device information (model, UDID) | NONE | N/A | No | No | No | CONFIRMED | Normal operation |
-| Entering DFU mode | LOW | YES (exit DFU) | Yes (returns to watchOS) | No | No | LIKELY | Standard Apple procedure |
+| Entering DFU mode | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | No | UNKNOWN | Public stock procedure is documented, but it was not executed or verified on this target |
 | Entering Recovery mode | LOW | YES (restore) | Yes | No | No | LIKELY | Standard Apple procedure |
 | Reading kernelcache via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Public source targets Watch4,1; no device run |
 | Reading DeviceTree via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Same constraints as kernelcache |
@@ -48,6 +48,8 @@ Before ANY experiment on physical Apple Watch Series 4:
 ---
 
 ## Apple Watch Series 4 DFU Restore Procedure
+
+The following is public stock-documentation context only; it was not executed in this audit and does not guarantee recovery from an arbitrary experimental state.
 
 If an experiment causes a bootloop or unrecoverable state:
 

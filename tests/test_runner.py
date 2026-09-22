@@ -1256,33 +1256,44 @@ def test_cpu_state_symbols_and_safety():
 
 @test("boot_args — real virt_base tracking without phys_base proxying")
 def test_virt_base_truthfulness():
-    """Simulate platform_boot_info_init: virt_base is NEVER proxied from phys_base."""
-    # Host-only fixture: 0x800000000 is a historical research fallback, not
-    # a confirmed runtime DRAM base. Raw static ADT data has no live map.
+    """Unverified metadata keeps every runtime DRAM field unavailable."""
+    # The static ADT has no live map. Production fallback mirrors that fact.
     raw_adt_info = {
         "boot_args_present": False,
-        "dram_phys_base": 0x800000000,
+        "dram_phys_base": 0,
+        "dram_size": 0,
         "dram_virt_base": 0,
         "virt_base_valid": False,
-        "metadata_status": "STATIC_PLACEHOLDER"
+        "metadata_status": "STATIC_FALLBACK"
     }
+    assert raw_adt_info["metadata_status"] != "RUNTIME_VERIFIED"
+    assert raw_adt_info["dram_phys_base"] == 0
+    assert raw_adt_info["dram_size"] == 0
     assert raw_adt_info["virt_base_valid"] is False
     assert raw_adt_info["dram_virt_base"] == 0
-    # Must never equal phys_base if not explicitly supplied
-    assert raw_adt_info["dram_virt_base"] != raw_adt_info["dram_phys_base"]
 
-    # Host-only fixture: an explicit boot_args value is accepted only when a
-    # future runtime verifier supplies it; this does not prove target hardware.
+    # Historical product-memory quantity: diagnostic context only, never
+    # copied into runtime boot-info fields.
+    historical_fixture = {
+        "dram_phys_base": 0x800000000,
+        "dram_size": 0x40000000,
+    }
+    assert raw_adt_info["dram_phys_base"] != historical_fixture["dram_phys_base"]
+    assert raw_adt_info["dram_size"] != historical_fixture["dram_size"]
+
+    # An explicit boot_args value is accepted only when a future runtime
+    # verifier supplies it; this does not prove target hardware.
     boot_args_info = {
         "boot_args_present": True,
         "dram_phys_base": 0x800000000,
+        "dram_size": 0x40000000,
         "dram_virt_base": 0xFFFFFFF000000000,
         "virt_base_valid": True,
         "metadata_status": "RUNTIME_VERIFIED"
     }
+    assert boot_args_info["metadata_status"] == "RUNTIME_VERIFIED"
     assert boot_args_info["virt_base_valid"] is True
     assert boot_args_info["dram_virt_base"] == 0xFFFFFFF000000000
-
 
 @test("framebuffer — hard safety interlock symbols in ELF")
 def test_framebuffer_hard_interlock_symbols():

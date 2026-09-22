@@ -94,11 +94,17 @@ typedef struct {
     uint32_t devtree_size;           /* Size of DeviceTree in bytes */
 
     /* Physical and Virtual DRAM configuration */
-    uint64_t dram_phys_base;         /* Base physical address of DRAM */
-    uint64_t dram_size;              /* Total DRAM size in bytes */
-    uint64_t dram_virt_base;         /* Base virtual address of DRAM from boot_args (+0x08) */
-    bool     virt_base_valid;        /* True ONLY if obtained from confirmed boot_args */
-    boot_metadata_status_t metadata_status; /* Provenance of metadata, not address validity */
+    /*
+     * These fields are runtime-authoritative only for
+     * BOOT_METADATA_RUNTIME_VERIFIED. For every other status they remain
+     * zero, and virt_base_valid remains false; static research quantities
+     * must never be represented as a usable memory map.
+     */
+    uint64_t dram_phys_base;         /* Base physical address of verified DRAM */
+    uint64_t dram_size;              /* Total verified DRAM size in bytes */
+    uint64_t dram_virt_base;         /* Verified virtual DRAM base from boot_args */
+    bool     virt_base_valid;        /* True only for verified boot_args virt_base */
+    boot_metadata_status_t metadata_status; /* Runtime-map provenance and authority */
 
     /* Memory regions from /chosen/memory-map */
     memory_range_t memory_ranges[MAX_BOOT_MEMORY_RANGES];

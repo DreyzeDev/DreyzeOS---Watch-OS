@@ -504,6 +504,10 @@ static void test_handoff_descriptor_and_ranges(void)
     assert(info->boot_args_present == true);
     assert(info->devtree_present == true);
     assert(info->metadata_status == BOOT_METADATA_RUNTIME_VERIFIED);
+    assert(info->dram_phys_base == ba.phys_base);
+    assert(info->dram_size == ba.mem_size);
+    assert(info->dram_virt_base == ba.virt_base);
+    assert(info->virt_base_valid == true);
 
     /* A larger V1-compatible descriptor is accepted without reading its tail. */
     descriptor.size = DREYZE_HANDOFF_V1_SIZE + 64U;
@@ -522,12 +526,22 @@ static void test_handoff_descriptor_and_ranges(void)
     assert(info->boot_args_present == false);
     assert(info->devtree_present == true);
     assert(info->devtree_size == sizeof(nested_tree));
+    assert(info->metadata_status == BOOT_METADATA_STATIC_FALLBACK);
+    assert(info->dram_phys_base == 0);
+    assert(info->dram_size == 0);
+    assert(info->dram_virt_base == 0);
+    assert(info->virt_base_valid == false);
 
     /* The descriptor, not platform_boot_info_t, is the sole trust state. */
     platform_boot_info_init(UINTPTR_MAX, UINTPTR_MAX);
     assert(loader_handoff_is_verified() == false);
     assert(loader_handoff_get()->raw_x0 == UINTPTR_MAX);
     assert(loader_handoff_get()->raw_x1 == UINTPTR_MAX);
+    assert(info->metadata_status == BOOT_METADATA_STATIC_FALLBACK);
+    assert(info->dram_phys_base == 0);
+    assert(info->dram_size == 0);
+    assert(info->dram_virt_base == 0);
+    assert(info->virt_base_valid == false);
 
     printf("PASS\n");
 }

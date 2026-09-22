@@ -52,7 +52,7 @@ DreyzeOS enforces a strictly monotonic boot stage machine:
 |:---:|:---|:---|
 | 0 | `BOOT_STAGE_ENTRY` | C entry reached under the mandatory EL1 loader contract; read-only CPU state captured |
 | 1 | `BOOT_STAGE_RAM_LOG` | RAM logger initialized; UART MMIO remains disabled unless mapping is verified |
-| 2 | `BOOT_STAGE_BOOT_ARGS` | Boot metadata status recorded; unverified handoff uses `BOOT_METADATA_FALLBACK` |
+| 2 | `BOOT_STAGE_BOOT_ARGS` | Boot metadata status recorded; unverified handoff uses `BOOT_METADATA_STATIC_FALLBACK` with zero runtime DRAM fields |
 | 3 | `BOOT_STAGE_MEM_MAP` | Memory metadata status evaluated; static fallback is never called a validated runtime map |
 | 4 | `BOOT_STAGE_AIC` | AIC evaluated; no MMIO access or CONFIG write without verified mapping |
 | 5 | `BOOT_STAGE_FB` | Framebuffer evaluated (HEADLESS vs VALIDATED_NOMAP, writes **hard-locked**) |
@@ -217,7 +217,7 @@ typedef struct {
 
 - 5-pin diagnostic port in the Watch band slot (proprietary Apple iBUS)
 - Public research references an iBUS S4/S5 adapter **or** AWRT Apple Watch Research Tool adapter; exact Watch4,2 applicability remains UNKNOWN/BLOCKED.
-- DFU mode is triggered through adapter pin pull-down
+- Public research/documentation describes an adapter pin state for DFU; exact Watch4,2 behavior remains UNKNOWN/BLOCKED and was not tested
 
 ---
 
@@ -274,7 +274,7 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 | RAM delivery load address | Image cannot be loaded at fixed 0x100000000 | Confirm loader deposit address or implement PIC |
 | MMU translation table state | Cannot dereference physical FB address | Read SCTLR_EL1.M, TCR_EL1, TTBR0_EL1 on entry |
 | Caches enabled/disabled on entry | Cache coherency for MMIO/framebuffer | Read SCTLR_EL1 (C and I bits) at Stage 0 |
-| UART0 baud rate on T8006 | May differ from 115200 | Verify against iBoot clock-frequency node |
+| UART0 baud rate on T8006 | May differ from 115200 | Obtain target-specific UART clock/divisor evidence; `CNTFRQ_EL0` alone does not establish the baud rate |
 | usbliter8 exploit reliability on Watch4,2 | May not trigger reliably | Requires hardware experimentation |
 | x1 register value from iBoot | Unclear if size or pointer | Captured at Stage 0 and logged |
 | Diagnostic connector pinout | TX pin location unknown | Measure with logic analyzer/oscilloscope |

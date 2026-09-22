@@ -246,8 +246,8 @@ NOTE: The sketch above is not a source for current constants. Static
 | Type | Apple AIC (Apple Interrupt Controller) | LIKELY |
 | NOT GIC? | Correct — Apple uses custom AIC | CONFIRMED for Apple SoCs |
 | AIC base address | UNKNOWN | UNKNOWN |
-| ARM generic timer | Available (CNTPCT_EL0) | CONFIRMED |
-| ARM timer frequency | LIKELY 24 MHz | LIKELY (standard Apple SoC) |
+| ARM generic timer | Available through CNTPCT_EL0/CNTFRQ_EL0 | CONFIRMED architectural access |
+| ARM timer frequency | Runtime `CNTFRQ_EL0` value | UNKNOWN on T8006; no static 24 MHz confirmation |
 
 ---
 
@@ -265,7 +265,7 @@ NOTE: The sketch above is not a source for current constants. Static
 
 | Field | Value | Status |
 |-------|-------|--------|
-| DFU method | iBus adapter (diagnostic port) | CONFIRMED |
+| DFU method | Public documentation describes an iBUS/diagnostic adapter; exact Watch4,2 path unverified | UNKNOWN |
 | Port location | Under bottom strap lug | CONFIRMED |
 | iBus availability | Third-party (limited market) | CONFIRMED |
 | Water resistance after DFU | Compromised (permanently) | CONFIRMED |

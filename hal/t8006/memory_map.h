@@ -40,11 +40,9 @@
  *
  * Apple Watch Series 4 product-memory quantity: 1 GiB (research quantity).
  * Status: static /memory is [0x0+0x0]; live base and usable range are
- * UNKNOWN/BLOCKED. The constants below are historical research fallbacks
- * only and are never a loader handoff proof.
+ * UNKNOWN/BLOCKED. No historical DRAM fallback is compiled into runtime
+ * boot-info fields.
  */
-#define T8006_DRAM_BASE                 0x0000000800000000ULL  /* UNKNOWN/BLOCKED research fallback */
-#define T8006_DRAM_SIZE                 (1ULL * 1024 * 1024 * 1024) /* UNKNOWN/BLOCKED research fallback */
 #define DREYZEOS_PLACEHOLDER_LOAD_ADDR  0x0000000100000000ULL  /* Linker placeholder */
 
 /* ============================================================
@@ -71,8 +69,11 @@
 #define T8006_AIC_TIMEBASE_BASE         0x000000002d188000ULL  /* CONFIRMED — 4KB (0x1000) */
 #define T8006_AIC_TIMEBASE_SIZE         0x00001000ULL
 
-/* ARM Generic Timer */
-#define T8006_ARM_GENERIC_TIMER_FREQ    24000000               /* LIKELY 24MHz standard */
+/*
+ * ARM Generic Timer
+ * CNTFRQ_EL0 is the authoritative runtime frequency source. No static T8006
+ * frequency is asserted here.
+ */
 
 /* ============================================================
  * UART Controllers

@@ -145,7 +145,7 @@ Production boot metadata behavior is deliberately conservative: `kernel_main`
 passes raw x0/x1 to `platform_boot_info_init`, which records them in the single
 loader handoff descriptor but performs no pointer dereference or ADT scan while
 that descriptor is unverified. Stage 2 is therefore `HANDOFF_UNAVAILABLE` /
-`BOOT_METADATA_FALLBACK`, not a claim that boot_args or DeviceTree was validated.
+`BOOT_METADATA_STATIC_FALLBACK` with zero runtime DRAM fields, not a claim that boot_args or DeviceTree was validated.
 Any future verified path must provide an explicit top-level range; no `0x100000`,
 `0x200000`, or `0x80000` size estimate is permitted. The nested
 `boot_args->devicetree_p` pointer must be fully contained in a separate verified
