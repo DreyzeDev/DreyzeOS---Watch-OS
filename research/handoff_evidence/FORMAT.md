@@ -7,6 +7,12 @@ analysis or a future captured snapshot. It is not a loader protocol and it
 does not authenticate a Watch capture. The verifier never opens device memory,
 follows a supplied pointer, executes a payload, or writes hardware.
 
+Target identity and artifact provenance use the nested
+`dreyzeos.target_provenance_envelope.v1` schema described in
+[docs/TARGET_PROVENANCE_ENVELOPE.md](../../docs/TARGET_PROVENANCE_ENVELOPE.md).
+It is validated by this same offline verifier and is not a second evidence
+pipeline.
+
 ## Bundle layout
 
 The bundle is one JSON file plus local files referenced by relative paths. All
@@ -81,6 +87,7 @@ never collide with each other in the verifier.
   "architecture": "aarch64",
   "target": { ... },
   "source": { "kind": "synthetic", "evidence_status": "DESIGN" },
+  "provenance_envelope": { "schema": "dreyzeos.target_provenance_envelope.v1" },
   "image": { ... },
   "handoff_descriptor": { ... },
   "mmu_snapshot": { ... }
@@ -112,8 +119,11 @@ Metadata matching and identity proof are separate results. Matching strings
 are not proof of capture identity. A synthetic bundle must leave
 `identity_proven` false.
 
-For a non-synthetic target-specific result, the manifest also carries
-`target_provenance`:
+For a non-synthetic target-specific result, the manifest carries
+`provenance_envelope`, with independent facts for metadata match, identity,
+artifact presence, local hash verification, target binding, and runtime proof.
+The legacy `target_provenance` summary may remain for compatibility, but is
+checked against the envelope when supplied and is not sufficient by itself.
 
 ```json
 {
@@ -122,11 +132,9 @@ For a non-synthetic target-specific result, the manifest also carries
 }
 ```
 
-This declares that the external provenance record covers the required artifact
-set; it is not cryptographic authenticity. The host verifier requires this
-coverage claim before target-specific readiness can be reported. A bundle whose
-`source.kind` is `synthetic` remains `DESIGN` and cannot be promoted to
-hardware `READY` by changing status strings.
+This summary is not cryptographic authenticity and cannot replace per-artifact
+provenance. A bundle whose `source.kind` is `synthetic` remains `DESIGN` and
+cannot be promoted to hardware `READY` by changing status strings.
 
 ### Artifact references
 
@@ -194,6 +202,16 @@ The verifier emits an evidence graph. Each node contains `status`,
 prevent an offline contract result from being READY. A synthetic offline
 READY result still has `hardware_evidence_status = DESIGN`,
 `LOADER CONTRACT = BLOCKED`, and `FIRST HARDWARE EXECUTION = NOT_READY`.
+
+Envelope-only preflight uses the same verifier implementation:
+
+```sh
+python3 tools/handoff_evidence_verifier.py \
+  --provenance-envelope path/to/provenance_envelope.json --json
+```
+
+This mode cannot close EV-027; the full `--bundle` mode owns the complete
+critical artifact graph.
 
 A target-specific result cannot be READY unless every critical dependency is
 PROVEN, the source status is `CONFIRMED`, and target identity is separately

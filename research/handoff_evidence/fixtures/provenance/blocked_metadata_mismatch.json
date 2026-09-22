@@ -1,0 +1,10 @@
+{
+  "case": "metadata_mismatch",
+  "expected_requirement": "EV-000",
+  "expected_proof_state": "NOT_PROVEN",
+  "operations": [
+    {"op": "set", "path": "target.metadata.model.value", "value": "Watch4,1"},
+    {"op": "set", "path": "target.metadata_match.value", "value": false}
+  ],
+  "expected_blocker": "TARGET_METADATA_MISMATCH"
+}

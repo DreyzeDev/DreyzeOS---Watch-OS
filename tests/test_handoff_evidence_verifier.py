@@ -55,6 +55,15 @@ def bool_fact(value: bool, proven: bool = True) -> Dict[str, Any]:
     }
 
 
+def provenance_fact(value: Any, source: str, proven: bool = True) -> Dict[str, Any]:
+    return {
+        "value": value,
+        "value_present": True,
+        "value_proven": proven,
+        "source": source,
+    }
+
+
 def range_fact(
     name: str,
     base: int,
@@ -424,6 +433,85 @@ def build_ready_bundle(root: Path, **snapshot_options: Any) -> Path:
         },
         "persistence": {
             "persistent_write_required": bool_fact(False),
+        },
+    }
+    capture_id = "00000000-0000-4000-8000-000000000211"
+    expected_target = {
+        "model": "Watch4,2",
+        "board": "N131bAP",
+        "soc": "T8006",
+        "firmware": "watchOS 10.6.1",
+        "build": "21U580",
+        "architecture": "aarch64",
+    }
+    envelope_artifacts = []
+    for artifact_id, artifact_type in (
+        ("image", "DREYZEOS_ELF"),
+        ("handoff_descriptor", "HANDOFF_DESCRIPTOR_V1"),
+        ("mmu_snapshot", "MMU_SNAPSHOT_MANIFEST"),
+    ):
+        spec = bundle[artifact_id]
+        envelope_artifacts.append(
+            {
+                "artifact_id": artifact_id,
+                "artifact_type": artifact_type,
+                "bundle_ref": artifact_id,
+                "path": spec["path"],
+                "sha256": spec["sha256"],
+                "artifact_present": provenance_fact(True, "synthetic_fixture.local_file"),
+                "artifact_hash_verified": provenance_fact(True, "synthetic_fixture.local_sha256"),
+                "artifact_target_bound": provenance_fact(False, "synthetic_fixture.no_target_binding", False),
+                "artifact_runtime_proven": provenance_fact(False, "synthetic_fixture.no_runtime_capture", False),
+                "provenance_relationship": {
+                    "capture_id": capture_id,
+                    "relationship": "synthetic fixture member; not a target capture",
+                    "relationship_proven": provenance_fact(True, "synthetic_fixture_manifest"),
+                },
+            }
+        )
+    bundle["provenance_envelope"] = {
+        "schema": "dreyzeos.target_provenance_envelope.v1",
+        "source": {
+            "kind": "synthetic",
+            "evidence_status": "DESIGN",
+            "runtime_evidence_source": None,
+        },
+        "capture": {
+            "capture_id": provenance_fact(capture_id, "synthetic_fixture"),
+            "started_at_utc": provenance_fact("2026-01-01T00:00:00Z", "synthetic_fixture_clock"),
+            "ended_at_utc": provenance_fact("2026-01-01T00:00:01Z", "synthetic_fixture_clock"),
+        },
+        "target": {
+            "expected_metadata": expected_target,
+            "metadata": {
+                key: provenance_fact(value, "synthetic_fixture.target_metadata")
+                for key, value in expected_target.items()
+            },
+            "metadata_match": provenance_fact(True, "synthetic_fixture.comparison"),
+            "identity_proven": provenance_fact(False, "synthetic_fixture_identity_not_proven", False),
+            "identity_attestation": {"artifact_id": None, "authority": None, "method": None},
+            "assertions": [],
+        },
+        "producer": {
+            "name": provenance_fact("DreyzeOS host test", "synthetic_fixture"),
+            "version": provenance_fact("test fixture", "synthetic_fixture"),
+            "host": provenance_fact("local test runner", "synthetic_fixture"),
+        },
+        "source_interface": {
+            "description": provenance_fact("Generated entirely for host-side tests.", "synthetic_fixture"),
+            "interface": provenance_fact("none", "synthetic_fixture"),
+            "interaction_class": provenance_fact("NO_DEVICE_INTERACTION", "synthetic_fixture"),
+        },
+        "coverage": {
+            "required_artifact_ids": ["image", "handoff_descriptor", "mmu_snapshot"],
+            "declared_artifact_ids": ["image", "handoff_descriptor", "mmu_snapshot"],
+            "covered_artifact_ids": ["image", "handoff_descriptor", "mmu_snapshot"],
+            "coverage_complete": provenance_fact(True, "synthetic_fixture.coverage"),
+        },
+        "artifacts": envelope_artifacts,
+        "conflict_detection": {
+            "scope": ["target_assertions", "bundle_target", "artifact_paths", "coverage"],
+            "declared_conflicts": [],
         },
     }
     bundle_path = root / "ready_bundle.json"

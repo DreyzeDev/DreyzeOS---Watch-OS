@@ -1,0 +1,77 @@
+{
+  "schema": "dreyzeos.target_provenance_envelope.v1",
+  "source": {
+    "kind": "future_capture",
+    "evidence_status": "UNKNOWN",
+    "runtime_evidence_source": null
+  },
+  "capture": {
+    "capture_id": {"value": null, "value_present": false, "value_proven": false, "source": null},
+    "started_at_utc": {"value": null, "value_present": false, "value_proven": false, "source": null},
+    "ended_at_utc": {"value": null, "value_present": false, "value_proven": false, "source": null}
+  },
+  "target": {
+    "expected_metadata": {
+      "model": "Watch4,2",
+      "board": "N131bAP",
+      "soc": "T8006",
+      "firmware": "watchOS 10.6.1",
+      "build": "21U580",
+      "architecture": "aarch64"
+    },
+    "user_observed_metadata_reference": {
+      "path": "../t8006_evidence/user_observed_target_metadata.json",
+      "source_class": "USER_OBSERVED",
+      "runtime_proven": false
+    },
+    "metadata": {
+      "model": {"value": null, "value_present": false, "value_proven": false, "source": null},
+      "board": {"value": null, "value_present": false, "value_proven": false, "source": null},
+      "soc": {"value": null, "value_present": false, "value_proven": false, "source": null},
+      "firmware": {"value": null, "value_present": false, "value_proven": false, "source": null},
+      "build": {"value": null, "value_present": false, "value_proven": false, "source": null},
+      "architecture": {"value": null, "value_present": false, "value_proven": false, "source": null}
+    },
+    "metadata_match": {"value": null, "value_present": false, "value_proven": false, "source": null},
+    "identity_proven": {
+      "value": false,
+      "value_present": true,
+      "value_proven": false,
+      "source": "template default; no external identity attestation supplied"
+    },
+    "identity_attestation": {"artifact_id": null, "authority": null, "method": null},
+    "assertions": []
+  },
+  "producer": {
+    "name": {"value": null, "value_present": false, "value_proven": false, "source": null},
+    "version": {"value": null, "value_present": false, "value_proven": false, "source": null},
+    "host": {"value": null, "value_present": false, "value_proven": false, "source": null}
+  },
+  "source_interface": {
+    "description": {"value": null, "value_present": false, "value_proven": false, "source": null},
+    "interface": {"value": null, "value_present": false, "value_proven": false, "source": null},
+    "interaction_class": {"value": "UNKNOWN", "value_present": true, "value_proven": false, "source": null}
+  },
+  "coverage": {
+    "required_artifact_ids": ["image", "handoff_descriptor", "mmu_snapshot"],
+    "declared_artifact_ids": ["image", "handoff_descriptor", "mmu_snapshot", "cpu_state", "runtime_memory", "boot_args", "device_tree", "control_transfer", "identity_attestation"],
+    "covered_artifact_ids": [],
+    "coverage_complete": {"value": false, "value_present": true, "value_proven": false, "source": "template is intentionally incomplete"}
+  },
+  "artifacts": [
+    {"artifact_id": "image", "artifact_type": "DREYZEOS_ELF", "bundle_ref": "image", "required_for_ev000": true, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}},
+    {"artifact_id": "handoff_descriptor", "artifact_type": "HANDOFF_DESCRIPTOR_V1", "bundle_ref": "handoff_descriptor", "required_for_ev000": true, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}},
+    {"artifact_id": "mmu_snapshot", "artifact_type": "MMU_SNAPSHOT_MANIFEST", "bundle_ref": "mmu_snapshot", "required_for_ev000": true, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}},
+    {"artifact_id": "cpu_state", "artifact_type": "CPU_STATE_RECORD", "bundle_ref": null, "required_for_ev000": false, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}},
+    {"artifact_id": "runtime_memory", "artifact_type": "RUNTIME_MEMORY_RECORD", "bundle_ref": null, "required_for_ev000": false, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}},
+    {"artifact_id": "boot_args", "artifact_type": "BOOT_ARGS_COPY", "bundle_ref": "boot_args", "required_for_ev000": false, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}},
+    {"artifact_id": "device_tree", "artifact_type": "DEVICETREE_COPY", "bundle_ref": "device_tree", "required_for_ev000": false, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}},
+    {"artifact_id": "control_transfer", "artifact_type": "CONTROL_TRANSFER_RECORD", "bundle_ref": null, "required_for_ev000": false, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}},
+    {"artifact_id": "identity_attestation", "artifact_type": "TARGET_IDENTITY_ATTESTATION", "bundle_ref": null, "required_for_ev000": false, "path": null, "sha256": null, "artifact_present": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_hash_verified": {"value": null, "value_present": false, "value_proven": false, "source": null}, "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": null}, "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": null}, "provenance_relationship": {"capture_id": null, "relationship": null, "relationship_proven": {"value": null, "value_present": false, "value_proven": false, "source": null}}}
+  ],
+  "conflict_detection": {
+    "scope": ["target_assertions", "bundle_target", "artifact_paths", "coverage"],
+    "declared_conflicts": [],
+    "status": "UNKNOWN"
+  }
+}

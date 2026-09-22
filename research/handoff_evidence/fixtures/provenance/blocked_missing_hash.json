@@ -1,0 +1,11 @@
+{
+  "case": "missing_hash",
+  "expected_requirement": "EV-000",
+  "expected_proof_state": "NOT_PROVEN",
+  "operations": [
+    {"op": "set", "path": "artifacts[0].sha256", "value": null},
+    {"op": "set", "path": "artifacts[0].artifact_hash_verified.value", "value": false},
+    {"op": "set", "path": "artifacts[0].artifact_hash_verified.value_proven", "value": true}
+  ],
+  "expected_blocker": "ARTIFACT_HASH_MISSING"
+}

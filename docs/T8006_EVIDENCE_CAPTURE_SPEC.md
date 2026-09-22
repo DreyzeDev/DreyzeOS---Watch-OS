@@ -105,16 +105,26 @@ Matching strings are not identity proof. A synthetic fixture must set
 before a target-facing result can be considered, and even then the complete
 critical graph is required.
 
-For a non-synthetic target-facing bundle, add a `target_provenance` object with
-`coverage_proven: true` and a `covered_artifacts` list containing at least
-`image`, `handoff_descriptor`, and `mmu_snapshot`. This is an explicit
-coverage claim, not cryptographic authenticity. The verifier rejects promotion
-of a synthetic `DESIGN` bundle to hardware readiness even if status strings are
-manually changed.
+For a non-synthetic target-facing bundle, add
+`provenance_envelope: {"schema":"dreyzeos.target_provenance_envelope.v1"}`.
+The exact schema is documented in
+[docs/TARGET_PROVENANCE_ENVELOPE.md](TARGET_PROVENANCE_ENVELOPE.md). It
+separately records metadata match, identity proof, local artifact presence/hash,
+target binding, and runtime proof. EV-000 coverage must include `image`,
+`handoff_descriptor`, and `mmu_snapshot`; optional CPU, runtime-memory,
+boot_args, DeviceTree, and transfer artifacts need not exist yet.
+
+The older top-level `target_provenance` object is only a compatibility summary;
+it is not sufficient to prove EV-000. SHA-256 is local-byte integrity only,
+not cryptographic authenticity. The verifier rejects promotion of a synthetic
+`DESIGN` bundle to hardware readiness even if status strings are manually
+changed.
 
 Record capture provenance, producer, timestamp, firmware/build context, and
 the relationship between every artifact and the provenance record. Do not
 claim cryptographic authenticity merely because the manifest has SHA-256.
+The current user-observed Watch metadata record is contextual only and must not
+be copied into a runtime identity claim.
 
 ## Required artifacts
 

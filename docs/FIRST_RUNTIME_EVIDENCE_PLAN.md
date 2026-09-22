@@ -67,10 +67,19 @@ Required fields are schema, exact model/board/SoC/firmware/build/architecture,
 source status, producer, capture ID/timestamp, a provenance relationship for
 every artifact, relative paths, SHA-256 values, and explicit boolean
 `metadata_match` and `identity_proven` facts. For a non-synthetic target
-bundle, `target_provenance.coverage_proven` must be true and
-`target_provenance.covered_artifacts` must include at least `image`,
+bundle, `provenance_envelope.coverage.coverage_complete` must be proven and
+its per-artifact target-binding facts must cover at least `image`,
 `handoff_descriptor`, and `mmu_snapshot`. Declare the ELF, exact 128-byte
 descriptor, MMU manifest, all table blobs, and optional object copies.
+
+The host-only preparation schema is now
+`dreyzeos.target_provenance_envelope.v1`, embedded as
+`bundle.provenance_envelope` or validated alone with
+`tools/handoff_evidence_verifier.py --provenance-envelope`. Its per-artifact
+presence, hash, target-binding, and runtime-proof facts are independent. The
+legacy `target_provenance` fields are compatibility summaries only. The
+sanitized template and synthetic/blocked mutation fixtures live under
+`research/handoff_evidence/`; none contains target runtime evidence.
 
 Completeness means every critical artifact is declared, hashed, present, and
 covered by the same provenance record. Local validation is

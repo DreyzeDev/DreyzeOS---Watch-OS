@@ -1,0 +1,13 @@
+{
+  "case": "missing_target_binding",
+  "expected_requirement": "EV-000",
+  "expected_proof_state": "NOT_PROVEN",
+  "operations": [
+    {"op": "set", "path": "source.kind", "value": "capture"},
+    {"op": "set", "path": "source.evidence_status", "value": "CONFIRMED"},
+    {"op": "set", "path": "target.identity_proven.value", "value": true},
+    {"op": "set", "path": "target.identity_proven.value_proven", "value": true},
+    {"op": "set", "path": "target.identity_proven.source", "value": "unattested_claim"}
+  ],
+  "expected_blocker": "REQUIRED_ARTIFACT_TARGET_BINDING_MISSING"
+}

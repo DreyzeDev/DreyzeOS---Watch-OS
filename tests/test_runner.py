@@ -1452,6 +1452,19 @@ def test_offline_handoff_evidence_verifier():
     assert "OK" in ((result.stdout or "") + (result.stderr or ""))
 
 
+@test("target provenance envelope — host-only validation suite")
+def test_target_provenance_envelope():
+    """Run provenance-envelope fixtures without any device interaction."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    envelope_tests = os.path.join(root_dir, "tests", "test_provenance_envelope.py")
+    result = run_command_cross(
+        [sys.executable, envelope_tests],
+        "cd /home/pc/DreyzeOS---Watch-OS && python3 tests/test_provenance_envelope.py",
+    )
+    assert result.returncode == 0, (result.stdout or "") + (result.stderr or "")
+    assert "OK" in ((result.stdout or "") + (result.stderr or ""))
+
+
 # Phase 4 Step 2.12 — Target-specific runtime evidence gap inventory
 @test("T8006 evidence gap tool — synthetic host suite")
 def test_t8006_evidence_gap_tool():
@@ -1512,6 +1525,7 @@ def main():
         # Phase 4 Step 2.9 — T8006 Loader Evidence / Documentation Truth Audit
         test_offline_mmu_snapshot_analyzer,
         test_offline_handoff_evidence_verifier,
+        test_target_provenance_envelope,
         test_t8006_evidence_gap_tool,
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,

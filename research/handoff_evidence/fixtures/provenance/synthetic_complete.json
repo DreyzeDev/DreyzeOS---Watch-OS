@@ -1,0 +1,79 @@
+{
+  "schema": "dreyzeos.target_provenance_envelope.v1",
+  "source": {
+    "kind": "synthetic",
+    "evidence_status": "DESIGN",
+    "runtime_evidence_source": null
+  },
+  "fixture_scope": "ENVELOPE_ONLY; marker files are not parsed ELF/descriptor/MMU evidence",
+  "capture": {
+    "capture_id": {"value": "00000000-0000-4000-8000-000000000211", "value_present": true, "value_proven": true, "source": "synthetic_fixture"},
+    "started_at_utc": {"value": "2026-01-01T00:00:00Z", "value_present": true, "value_proven": true, "source": "synthetic_fixture_clock"},
+    "ended_at_utc": {"value": "2026-01-01T00:00:01Z", "value_present": true, "value_proven": true, "source": "synthetic_fixture_clock"}
+  },
+  "target": {
+    "expected_metadata": {"model": "Watch4,2", "board": "N131bAP", "soc": "T8006", "firmware": "watchOS 10.6.1", "build": "21U580", "architecture": "aarch64"},
+    "user_observed_metadata_reference": {"source_class": "USER_OBSERVED", "runtime_proven": false, "note": "Context only; this synthetic fixture does not bind to a device."},
+    "metadata": {
+      "model": {"value": "Watch4,2", "value_present": true, "value_proven": true, "source": "synthetic_fixture.target_metadata"},
+      "board": {"value": "N131bAP", "value_present": true, "value_proven": true, "source": "synthetic_fixture.target_metadata"},
+      "soc": {"value": "T8006", "value_present": true, "value_proven": true, "source": "synthetic_fixture.target_metadata"},
+      "firmware": {"value": "watchOS 10.6.1", "value_present": true, "value_proven": true, "source": "synthetic_fixture.target_metadata"},
+      "build": {"value": "21U580", "value_present": true, "value_proven": true, "source": "synthetic_fixture.target_metadata"},
+      "architecture": {"value": "aarch64", "value_present": true, "value_proven": true, "source": "synthetic_fixture.target_metadata"}
+    },
+    "metadata_match": {"value": true, "value_present": true, "value_proven": true, "source": "synthetic_fixture.comparison"},
+    "identity_proven": {"value": false, "value_present": true, "value_proven": false, "source": "synthetic_fixture.no_target_attestation"},
+    "identity_attestation": {"artifact_id": null, "authority": null, "method": null},
+    "assertions": []
+  },
+  "producer": {
+    "name": {"value": "DreyzeOS provenance fixture", "value_present": true, "value_proven": true, "source": "fixture"},
+    "version": {"value": "1", "value_present": true, "value_proven": true, "source": "fixture"},
+    "host": {"value": "offline test host", "value_present": true, "value_proven": true, "source": "fixture"}
+  },
+  "source_interface": {
+    "description": {"value": "No Apple device was accessed; fixture-only marker bytes.", "value_present": true, "value_proven": true, "source": "fixture"},
+    "interface": {"value": "none", "value_present": true, "value_proven": true, "source": "fixture"},
+    "interaction_class": {"value": "NO_DEVICE_INTERACTION", "value_present": true, "value_proven": true, "source": "fixture"}
+  },
+  "coverage": {
+    "required_artifact_ids": ["image", "handoff_descriptor", "mmu_snapshot"],
+    "declared_artifact_ids": ["image", "handoff_descriptor", "mmu_snapshot"],
+    "covered_artifact_ids": ["image", "handoff_descriptor", "mmu_snapshot"],
+    "coverage_complete": {"value": true, "value_present": true, "value_proven": true, "source": "synthetic_fixture.coverage"}
+  },
+  "artifacts": [
+    {
+      "artifact_id": "image", "artifact_type": "DREYZEOS_ELF", "bundle_ref": null,
+      "path": "artifacts/image.fixture", "sha256": "faf9148b3a87bcedbc3226311957dadf8240e4b700977c9ace98f83d5ddda705",
+      "artifact_present": {"value": true, "value_present": true, "value_proven": true, "source": "local_filesystem"},
+      "artifact_hash_verified": {"value": true, "value_present": true, "value_proven": true, "source": "local_sha256_comparison"},
+      "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": "no_device_attestation"},
+      "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": "not_runtime_data"},
+      "provenance_relationship": {"capture_id": "00000000-0000-4000-8000-000000000211", "relationship": "synthetic fixture member only", "relationship_proven": {"value": true, "value_present": true, "value_proven": true, "source": "fixture_manifest"}}
+    },
+    {
+      "artifact_id": "handoff_descriptor", "artifact_type": "HANDOFF_DESCRIPTOR_V1", "bundle_ref": null,
+      "path": "artifacts/descriptor.fixture", "sha256": "e93989d677674e81be9d3dfe4cb83bca2edd8defa3346c15cbe6ab5e013731b1",
+      "artifact_present": {"value": true, "value_present": true, "value_proven": true, "source": "local_filesystem"},
+      "artifact_hash_verified": {"value": true, "value_present": true, "value_proven": true, "source": "local_sha256_comparison"},
+      "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": "no_device_attestation"},
+      "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": "not_runtime_data"},
+      "provenance_relationship": {"capture_id": "00000000-0000-4000-8000-000000000211", "relationship": "synthetic fixture member only", "relationship_proven": {"value": true, "value_present": true, "value_proven": true, "source": "fixture_manifest"}}
+    },
+    {
+      "artifact_id": "mmu_snapshot", "artifact_type": "MMU_SNAPSHOT_MANIFEST", "bundle_ref": null,
+      "path": "artifacts/mmu.fixture", "sha256": "b8307f82e7da4a6f002ed9dd3953ffb7286dc88b081be42ac04252d9b141e1b3",
+      "artifact_present": {"value": true, "value_present": true, "value_proven": true, "source": "local_filesystem"},
+      "artifact_hash_verified": {"value": true, "value_present": true, "value_proven": true, "source": "local_sha256_comparison"},
+      "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": "no_device_attestation"},
+      "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": "not_runtime_data"},
+      "provenance_relationship": {"capture_id": "00000000-0000-4000-8000-000000000211", "relationship": "synthetic fixture member only", "relationship_proven": {"value": true, "value_present": true, "value_proven": true, "source": "fixture_manifest"}}
+    }
+  ],
+  "conflict_detection": {
+    "scope": ["target_assertions", "bundle_target", "artifact_paths", "coverage"],
+    "declared_conflicts": []
+  }
+}

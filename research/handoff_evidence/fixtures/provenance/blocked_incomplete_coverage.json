@@ -1,0 +1,10 @@
+{
+  "case": "incomplete_artifact_coverage",
+  "expected_requirement": "EV-000",
+  "expected_proof_state": "NOT_PROVEN",
+  "operations": [
+    {"op": "set", "path": "coverage.covered_artifact_ids", "value": ["image", "handoff_descriptor"]},
+    {"op": "set", "path": "coverage.coverage_complete.value", "value": false}
+  ],
+  "expected_blocker": "EV-000"
+}

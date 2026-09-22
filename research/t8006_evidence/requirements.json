@@ -17,11 +17,11 @@
       "critical": true,
       "status": "BLOCKED",
       "evidence_group": "TARGET_PROVENANCE",
-      "evidence_sources": ["target-bound capture provenance", "bundle.target.identity_proven"],
-      "missing": "A provenance chain independently binding every capture artifact to Watch4,2/N131bAP/T8006/watchOS 10.6.1 build 21U580.",
-      "closure_conditions": ["target metadata matches", "identity_proven is an explicit externally attested boolean", "capture artifacts are covered by the provenance record"],
-      "verifier_requirements": ["target_metadata_match", "target_identity_proven"],
-      "verifier_node": "target_identity_proven"
+      "evidence_sources": ["provenance_envelope.target.metadata_match", "provenance_envelope.target.identity_proven", "provenance_envelope.target.identity_attestation", "provenance_envelope.capture.capture_id and UTC timestamps", "provenance_envelope.artifacts[].artifact_target_bound", "provenance_envelope.artifacts[].artifact_hash_verified"],
+      "missing": "A non-synthetic, externally attested identity and provenance chain independently binding every required capture artifact to Watch4,2/N131bAP/T8006/watchOS 10.6.1 build 21U580. Envelope preparation or local hashes alone do not close EV-000.",
+      "closure_conditions": ["target metadata values match the fixed project target and their sources are proven", "metadata_match is explicitly proven and true", "identity_proven is explicitly proven true and references a hashed external identity-attestation artifact with authority and method stated", "capture ID and UTC start/end timestamps are present and proven", "producer and source/interface provenance are present and proven", "image, handoff_descriptor, and mmu_snapshot artifacts are present and their declared local SHA-256 values verify", "required-artifact coverage is explicitly complete", "each required artifact has a separately proven target/session provenance relationship and target binding", "no conflicting proven target facts or artifact declarations exist", "SHA-256 equality is treated only as local byte integrity, not device authenticity"],
+      "verifier_requirements": ["target_metadata_match", "provenance_envelope", "target_identity_proven", "target_provenance"],
+      "verifier_node": "target_provenance"
     },
     {
       "id": "EV-001",
@@ -341,10 +341,10 @@
       "critical": true,
       "status": "BLOCKED",
       "evidence_group": "BUNDLE_COMPLETENESS",
-      "evidence_sources": ["target-bound bundle manifest", "all referenced local artifacts"],
-      "missing": "One internally consistent, target-bound bundle containing all critical artifacts and hashes.",
-      "closure_conditions": ["bundle integrity is confirmed", "all required artifacts are present", "conflicts are absent", "source status is CONFIRMED"],
-      "verifier_requirements": ["bundle_integrity", "cpu_consistency"],
+      "evidence_sources": ["full dreyzeos.handoff_evidence.v1 bundle", "provenance_envelope EV-000 result", "all referenced local artifacts and verifier dependency nodes"],
+      "missing": "One internally consistent, target-bound bundle containing all critical artifacts, hashes, and the EV-000 provenance chain.",
+      "closure_conditions": ["bundle integrity is confirmed and the provenance envelope closes EV-000", "all critical artifacts and evidence-graph dependencies are present and proven", "conflicts are absent", "source status is CONFIRMED", "the full handoff verifier confirms CPU/MMU consistency, mappings, ranges, and collision completeness"],
+      "verifier_requirements": ["bundle_integrity", "provenance_envelope", "target_provenance", "cpu_consistency"],
       "verifier_node": "bundle_integrity"
     }
   ]

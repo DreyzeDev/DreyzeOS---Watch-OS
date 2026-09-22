@@ -28,6 +28,7 @@ try:
         analyze_elf,
         analyze_range,
     )
+    from provenance_envelope import validate_envelope
 except ModuleNotFoundError:  # pragma: no cover - used when imported from tests
     sys.path.insert(0, str(Path(__file__).resolve().parent))
     from mmu_snapshot_analyzer import (
@@ -37,6 +38,7 @@ except ModuleNotFoundError:  # pragma: no cover - used when imported from tests
         analyze_elf,
         analyze_range,
     )
+    from provenance_envelope import validate_envelope
 
 
 U64_MAX = (1 << 64) - 1
@@ -548,6 +550,7 @@ class BundleVerifier:
         self.target_match = False
         self.identity_proven = False
         self.target_provenance_proven = False
+        self.provenance_envelope_report: Optional[Dict[str, Any]] = None
         self.ranges: Dict[str, Dict[str, Any]] = {}
         self.protected_ranges: List[Dict[str, Any]] = []
         self.security_warnings: List[Dict[str, Any]] = []
@@ -822,16 +825,86 @@ class BundleVerifier:
             if isinstance(target, dict)
             else None
         )
+        envelope = self.root.get("provenance_envelope")
+        if isinstance(envelope, dict):
+            self.provenance_envelope_report = validate_envelope(
+                envelope,
+                self.bundle_dir,
+                EXPECTED_TARGET,
+                bundle=self.root,
+                artifact_cache=self.artifacts,
+                path_resolver=safe_bundle_path,
+                file_hasher=hash_file,
+            )
+            for conflict in self.provenance_envelope_report.get("conflicts", []):
+                self.conflicts.append(conflict)
+            envelope_target = self.provenance_envelope_report.get("target", {})
+            envelope_identity = bool(envelope_target.get("identity_proven"))
+            envelope_ev000 = self.provenance_envelope_report.get("requirements", {}).get("EV-000", {})
+            envelope_status = self.provenance_envelope_report.get("status", "UNKNOWN")
+            envelope_checked = (
+                envelope_status in {"CONFIRMED", "DESIGN"}
+                and not self.provenance_envelope_report.get("errors")
+                and not self.provenance_envelope_report.get("conflicts")
+            )
+            self.add_node(
+                "provenance_envelope",
+                envelope_status,
+                "PROVEN" if envelope_checked else "NOT_PROVEN",
+                "envelope declarations and local bytes were checked; external authenticity is not established",
+                ("bundle.provenance_envelope",),
+                critical=False,
+                validation=self.provenance_envelope_report,
+            )
+        else:
+            self.provenance_envelope_report = None
+            envelope_identity = False
+            envelope_ev000 = {}
+            self.add_node(
+                "provenance_envelope",
+                "BLOCKED" if self.evidence_status == "CONFIRMED" else "UNKNOWN",
+                "NOT_PROVEN",
+                "target-bound provenance envelope is absent",
+                ("bundle.provenance_envelope",),
+                critical=False,
+            )
+        identity_valid = bool(
+            envelope_identity
+            and identity is True
+            and self.target_match
+            and self.evidence_status == "CONFIRMED"
+            and self.provenance_envelope_report is not None
+            and envelope_checked
+            and envelope_ev000.get("proof_state") == "PROVEN"
+        )
+        self.identity_proven = identity_valid
+        self.add_node(
+            "target_identity_proven",
+            "CONFIRMED" if identity_valid else (
+                "DESIGN" if source_kind == "synthetic" else (
+                    "BLOCKED" if self.evidence_status == "CONFIRMED" else "UNKNOWN"
+                )
+            ),
+            "PROVEN" if identity_valid else "NOT_PROVEN",
+            "identity requires an explicit proven claim and a hashed external identity-attestation artifact; matching strings alone are insufficient",
+            ("bundle.provenance_envelope.target.identity_proven", "bundle.provenance_envelope.target.identity_attestation"),
+            critical=False,
+            value=identity_valid,
+        )
         if source_kind == "synthetic":
-            safe_synthetic = self.evidence_status == "DESIGN" and identity is not True
+            safe_synthetic = self.evidence_status == "DESIGN" and identity is not True and not identity_valid
+            covered = (
+                self.provenance_envelope_report.get("coverage", {}).get("covered_artifact_ids", [])
+                if self.provenance_envelope_report else []
+            )
             self.add_node(
                 "target_provenance",
                 "DESIGN",
                 "NOT_PROVEN",
                 "synthetic evidence is never target identity provenance",
-                ("bundle.source", "bundle.target.identity_proven"),
+                ("bundle.source", "bundle.provenance_envelope"),
                 critical=False,
-                covered_artifacts=[],
+                covered_artifacts=covered,
             )
             self.add_node(
                 "synthetic_evidence_guard",
@@ -845,33 +918,18 @@ class BundleVerifier:
                 source_kind=source_kind,
             )
             return
-
-        provenance = self.root.get("target_provenance")
-        coverage_proven = (
-            strict_bool(
-                provenance,
-                "coverage_proven",
-                False,
-                "bundle.target_provenance.coverage_proven",
-            )
-            if isinstance(provenance, dict)
-            else None
-        )
-        covered = provenance.get("covered_artifacts") if isinstance(provenance, dict) else None
-        required = {"image", "handoff_descriptor", "mmu_snapshot"}
-        covered_ok = isinstance(covered, list) and required.issubset(
-            {item for item in covered if isinstance(item, str)}
-        )
-        valid = (
-            isinstance(source_kind, str)
-            and bool(source_kind)
+        valid = bool(
+            source_kind
             and self.evidence_status == "CONFIRMED"
             and self.target_match
-            and identity is True
-            and coverage_proven is True
-            and covered_ok
+            and identity_valid
+            and envelope_ev000.get("proof_state") == "PROVEN"
         )
         self.target_provenance_proven = valid
+        covered = (
+            self.provenance_envelope_report.get("coverage", {}).get("covered_artifact_ids", [])
+            if self.provenance_envelope_report else []
+        )
         self.add_node(
             "target_provenance",
             "CONFIRMED" if valid else (
@@ -880,8 +938,8 @@ class BundleVerifier:
             "PROVEN" if valid else "NOT_PROVEN",
             "provenance explicitly covers all required bundle artifacts"
             if valid
-            else "target-specific readiness requires explicit proven artifact coverage",
-            ("bundle.source", "bundle.target_provenance", "bundle.image", "bundle.handoff_descriptor", "bundle.mmu_snapshot"),
+            else "target-specific readiness requires externally supported identity and per-artifact proven coverage in provenance_envelope",
+            ("bundle.source", "bundle.provenance_envelope", "bundle.image", "bundle.handoff_descriptor", "bundle.mmu_snapshot"),
             critical=True,
             source_kind=source_kind,
             covered_artifacts=covered if isinstance(covered, list) else [],
@@ -2450,12 +2508,14 @@ class BundleVerifier:
                 "evidence_status": self.evidence_status,
             },
             "bundle_integrity": self.nodes.get("bundle_integrity"),
+            "provenance_envelope": self.nodes.get("provenance_envelope"),
             "target": {
                 "metadata_match": self.target_match,
                 "identity_proven": self.identity_proven,
                 "node": self.nodes.get("target_metadata_match"),
                 "identity_node": self.nodes.get("target_identity_proven"),
                 "provenance_node": self.nodes.get("target_provenance"),
+                "provenance_envelope": self.provenance_envelope_report,
             },
             "artifacts": self.artifacts,
             "descriptor": {
@@ -2620,6 +2680,30 @@ def human_report(report: Dict[str, Any]) -> str:
     return "\n".join(lines)
 
 
+def provenance_human_report(report: Dict[str, Any]) -> str:
+    target = report.get("target", {})
+    requirements = report.get("requirements", {})
+    lines = [
+        "DreyzeOS Provenance Envelope Validation",
+        "",
+        f"Envelope ...................... {report.get('status', 'UNKNOWN')}",
+        f"Metadata match ................ {target.get('metadata_match')}",
+        f"Target identity proven ........ {target.get('identity_proven')}",
+        f"Artifact coverage complete .... {report.get('coverage', {}).get('coverage_complete_claimed_and_consistent')}",
+        f"EV-000 ......................... {requirements.get('EV-000', {}).get('status', 'BLOCKED')}",
+        f"EV-027 ......................... {requirements.get('EV-027', {}).get('status', 'BLOCKED')}",
+        "",
+        "SHA-256 proves local byte equality only; it does not authenticate a capture.",
+        "LOADER CONTRACT = BLOCKED",
+        "FIRST HARDWARE EXECUTION = NOT READY",
+    ]
+    for item in report.get("conflicts", []):
+        lines.append(f"CONFLICT: {item.get('code')}: {item.get('detail')}")
+    for item in report.get("errors", []):
+        lines.append(f"BLOCKER: {item}")
+    return "\n".join(lines)
+
+
 def build_arg_parser() -> argparse.ArgumentParser:
     parser = argparse.ArgumentParser(
         description=(
@@ -2627,7 +2711,12 @@ def build_arg_parser() -> argparse.ArgumentParser:
             "No hardware or payload execution is performed."
         )
     )
-    parser.add_argument("--bundle", required=True, help="local evidence bundle JSON")
+    input_group = parser.add_mutually_exclusive_group(required=True)
+    input_group.add_argument("--bundle", help="local evidence bundle JSON")
+    input_group.add_argument(
+        "--provenance-envelope",
+        help="validate a standalone host-only provenance envelope without a full bundle",
+    )
     output = parser.add_mutually_exclusive_group()
     output.add_argument("--json", action="store_true", help="emit machine-readable JSON")
     output.add_argument("--human", action="store_true", help="emit concise human report")
@@ -2643,7 +2732,19 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
     parser = build_arg_parser()
     args = parser.parse_args(argv)
     try:
-        report = verify_bundle(args.bundle)
+        provenance_only = args.provenance_envelope is not None
+        if provenance_only:
+            envelope_path = Path(args.provenance_envelope).resolve()
+            envelope = load_json(envelope_path)
+            report = validate_envelope(
+                envelope,
+                envelope_path.parent,
+                EXPECTED_TARGET,
+                path_resolver=safe_bundle_path,
+                file_hasher=hash_file,
+            )
+        else:
+            report = verify_bundle(args.bundle)
     except VerificationInputError as exc:
         output = exc.as_dict()
         if args.json:
@@ -2661,10 +2762,16 @@ def main(argv: Optional[Sequence[str]] = None) -> int:
         return 1
     if args.json:
         print(json.dumps(report, indent=2, sort_keys=True))
+    elif provenance_only:
+        print(provenance_human_report(report))
     else:
         print(human_report(report))
-    if args.strict and report["readiness"]["offline_contract_result"] != "READY":
-        return 1
+    if args.strict:
+        if provenance_only:
+            if report.get("requirements", {}).get("EV-000", {}).get("proof_state") != "PROVEN":
+                return 1
+        elif report["readiness"]["offline_contract_result"] != "READY":
+            return 1
     return 0
 
 

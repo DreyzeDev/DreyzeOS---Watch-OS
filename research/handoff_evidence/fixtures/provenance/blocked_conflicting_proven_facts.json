@@ -1,0 +1,9 @@
+{
+  "case": "conflicting_proven_target_facts",
+  "expected_requirement": "EV-000",
+  "expected_proof_state": "NOT_PROVEN",
+  "operations": [
+    {"op": "append", "path": "target.assertions", "value": {"field": "model", "value": "Watch4,1", "value_present": true, "value_proven": true, "source": "second_synthetic_attestor"}}
+  ],
+  "expected_blocker": "PROVEN_TARGET_FACT_CONFLICT"
+}
