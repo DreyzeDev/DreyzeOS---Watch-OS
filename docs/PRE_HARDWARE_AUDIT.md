@@ -406,3 +406,20 @@ descriptor trust, or complete collision coverage.
 The current static `/memory = base 0,size 0` artifact remains separate from
 product RAM context. Without target-specific captured evidence the readiness
 gate remains `LOADER CONTRACT = BLOCKED` / `FIRST HARDWARE EXECUTION = NOT READY`.
+
+## Step 2.12 — target evidence gap closure
+
+The repository now defines a data-only capture specification and an exact
+runtime evidence matrix. This is offline infrastructure, not a capture or
+delivery procedure. The matrix explicitly requires target provenance, runtime
+DRAM, complete translation-table bytes, normalized entry state, bounded boot
+metadata, protected-range completeness, payload ownership, and control
+transfer. No new target-specific runtime evidence was found in this step.
+
+The static `/memory` artifact remains `base=0,size=0` (**CONFIRMED static
+artifact**). Product RAM quantity and historical `0x800000000 / 1 GiB`
+research values remain separate from runtime memory truth. The target-facing
+readiness result is unchanged:
+
+**LOADER CONTRACT = BLOCKED**
+**FIRST HARDWARE EXECUTION = NOT READY**

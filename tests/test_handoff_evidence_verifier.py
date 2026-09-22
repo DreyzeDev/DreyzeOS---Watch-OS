@@ -606,6 +606,21 @@ class HandoffEvidenceVerifierTests(unittest.TestCase):
             blocking_names(report),
         )
 
+    def test_inline_descriptor_bytes_do_not_bypass_artifact_integrity(self) -> None:
+        def mutate(bundle: Dict[str, Any], directory: Path) -> None:
+            descriptor_path = directory / bundle["handoff_descriptor"]["path"]
+            descriptor = descriptor_path.read_bytes()
+            bundle["handoff_descriptor"] = {
+                "bytes_hex": descriptor.hex(),
+                "sha256": sha256(descriptor_path),
+                "prefix_readable_proven": True,
+                "copied_to_trusted_storage_proven": True,
+            }
+
+        report = self.verify_mutated(mutate)
+        self.assertIn("bundle_integrity", blocking_names(report))
+        self.assertIn("descriptor_structure", blocking_names(report))
+
     def test_boot_args_nested_device_tree_bounds(self) -> None:
         def mutate(bundle: Dict[str, Any], directory: Path) -> None:
             boot = bytearray((directory / "boot_args.bin").read_bytes())
@@ -642,6 +657,24 @@ class HandoffEvidenceVerifierTests(unittest.TestCase):
             "target_metadata_match",
             blocking_names(report),
         )
+
+    def test_mmu_snapshot_target_mismatch_is_blocked(self) -> None:
+        def mutate(bundle: Dict[str, Any], directory: Path) -> None:
+            snapshot_path = directory / bundle["mmu_snapshot"]["path"]
+            snapshot = json.loads(snapshot_path.read_text(encoding="utf-8"))
+            snapshot["target"]["model"] = "Watch4,1"
+            snapshot_path.write_text(json.dumps(snapshot), encoding="utf-8")
+            bundle["mmu_snapshot"]["sha256"] = sha256(snapshot_path)
+
+        report = self.verify_mutated(mutate)
+        self.assertIn("mmu_snapshot_target_match", blocking_names(report))
+
+    def test_string_identity_boolean_cannot_prove_target(self) -> None:
+        report = self.verify_mutated(
+            lambda bundle, directory: bundle["target"].update({"identity_proven": "false"})
+        )
+        self.assertFalse(report["target"]["identity_proven"])
+        self.assertEqual(report["target"]["identity_node"]["proof_state"], "NOT_PROVEN")
 
     def test_mmu_disabled_contradiction(self) -> None:
         def mutate(bundle: Dict[str, Any], directory: Path) -> None:

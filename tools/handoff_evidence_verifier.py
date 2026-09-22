@@ -84,6 +84,7 @@ REQUIRED_SNAPSHOT_REGISTERS = (
 CRITICAL_ORDER = (
     "bundle_integrity",
     "target_metadata_match",
+    "mmu_snapshot_target_match",
     "image_integrity",
     "image_shape",
     "descriptor_structure",
@@ -214,6 +215,18 @@ def status_for_evidence(evidence: str) -> str:
     return "UNKNOWN"
 
 
+def strict_bool(raw: Dict[str, Any], key: str, default: bool, name: str) -> Optional[bool]:
+    value = raw.get(key, default)
+    if not isinstance(value, bool):
+        return None
+    return value
+
+
+def normalize_board(value: Any) -> set[str]:
+    values = value if isinstance(value, list) else [value]
+    return {str(item).lower() for item in values if item is not None}
+
+
 def present_fact(raw: Any, name: str) -> Dict[str, Any]:
     if not isinstance(raw, dict):
         return {
@@ -222,10 +235,14 @@ def present_fact(raw: Any, name: str) -> Dict[str, Any]:
             "value_proven": False,
             "source": name,
         }
-    present = bool(raw.get("value_present", "value" in raw))
-    proven = bool(raw.get("value_proven", False))
+    present = strict_bool(raw, "value_present", "value" in raw, f"{name}.value_present")
+    proven = strict_bool(raw, "value_proven", False, f"{name}.value_proven")
     value: Optional[int] = None
     error: Optional[str] = None
+    if present is None or proven is None:
+        error = "BOOLEAN_REQUIRED"
+        present = present is True
+        proven = False
     if present and "value" in raw:
         try:
             value = parse_u64(raw["value"], name)
@@ -236,7 +253,7 @@ def present_fact(raw: Any, name: str) -> Dict[str, Any]:
     return {
         "value": value,
         "value_present": present,
-        "value_proven": proven and error is None,
+        "value_proven": bool(proven) and error is None,
         "source": name,
         "error": error,
     }
@@ -250,9 +267,17 @@ def bool_fact(raw: Any, name: str) -> Dict[str, Any]:
             "value_proven": False,
             "source": name,
         }
-    present = bool(raw.get("value_present", "value" in raw))
-    proven = bool(raw.get("value_proven", False))
+    present = strict_bool(raw, "value_present", "value" in raw, f"{name}.value_present")
+    proven = strict_bool(raw, "value_proven", False, f"{name}.value_proven")
     value = raw.get("value")
+    if present is None or proven is None:
+        return {
+            "value": None,
+            "value_present": present is True,
+            "value_proven": False,
+            "source": name,
+            "error": "BOOLEAN_REQUIRED",
+        }
     if present and not isinstance(value, bool):
         return {
             "value": None,
@@ -285,18 +310,42 @@ def range_fact(raw: Any, name: str, default_space: Optional[str] = None) -> Dict
     except VerificationInputError as exc:
         return {
             "name": name,
-            "present": bool(raw.get("present", True)),
+            "present": raw.get("present", True) is True,
             "bounds_proven": False,
             "ownership_proven": False,
             "valid": False,
             "reason": exc.code,
         }
     address_space = raw.get("address_space", default_space)
-    bounds_proven = bool(raw.get("bounds_proven", raw.get("proven", False)))
-    ownership_proven = bool(raw.get("ownership_proven", False))
+    present = strict_bool(raw, "present", True, f"{name}.present")
+    bounds_proven = strict_bool(
+        raw, "bounds_proven", raw.get("proven", False), f"{name}.bounds_proven"
+    )
+    ownership_proven = strict_bool(raw, "ownership_proven", False, f"{name}.ownership_proven")
+    readable = strict_bool(raw, "readable", False, f"{name}.readable")
+    writable = strict_bool(raw, "writable", False, f"{name}.writable")
+    executable = strict_bool(raw, "executable", False, f"{name}.executable")
+    mapping_proven = strict_bool(raw, "mapping_proven", False, f"{name}.mapping_proven")
+    if any(value is None for value in (
+        present, bounds_proven, ownership_proven, readable, writable,
+        executable, mapping_proven,
+    )):
+        return {
+            "name": str(raw.get("name", name)),
+            "base": base,
+            "length": length,
+            "end": None,
+            "address_space": address_space,
+            "present": present is True,
+            "bounds_proven": False,
+            "ownership_proven": False,
+            "valid": False,
+            "reason": "BOOLEAN_REQUIRED",
+            "source": str(raw.get("source", name)),
+        }
     valid_space = address_space in {"physical", "virtual"}
     valid = (
-        bool(raw.get("present", True))
+        present
         and bounds_proven
         and length != 0
         and valid_space
@@ -312,13 +361,13 @@ def range_fact(raw: Any, name: str, default_space: Optional[str] = None) -> Dict
         "length": length,
         "end": base + length if valid else None,
         "address_space": address_space,
-        "present": bool(raw.get("present", True)),
+        "present": present,
         "bounds_proven": bounds_proven,
         "ownership_proven": ownership_proven,
-        "readable": bool(raw.get("readable", False)),
-        "writable": bool(raw.get("writable", False)),
-        "executable": bool(raw.get("executable", False)),
-        "mapping_proven": bool(raw.get("mapping_proven", False)),
+        "readable": readable,
+        "writable": writable,
+        "executable": executable,
+        "mapping_proven": mapping_proven,
         "valid": valid,
         "reason": "valid" if valid else "invalid or unproven range",
         "source": str(raw.get("source", name)),
@@ -516,6 +565,8 @@ class BundleVerifier:
             status = "UNKNOWN"
         if proof_state not in PROOF_VALUES:
             proof_state = "NOT_PROVEN"
+        if proof_state == "PROVEN" and status not in {"CONFIRMED", "DESIGN"}:
+            proof_state = "NOT_PROVEN"
         node = {
             "status": status,
             "proof_state": proof_state,
@@ -609,7 +660,13 @@ class BundleVerifier:
                 result["proof_state"] = "NOT_PROVEN"
                 result["error"] = "local bytes are shorter than declared length"
                 return None, result
-            if bool(spec.get("complete", False)) and len(data) != length:
+            complete = strict_bool(spec, "complete", False, f"{name}.complete")
+            if complete is None:
+                result["status"] = "BLOCKED"
+                result["proof_state"] = "NOT_PROVEN"
+                result["error"] = "complete must be a JSON boolean"
+                return None, result
+            if complete and len(data) != length:
                 result["status"] = "BLOCKED"
                 result["proof_state"] = "NOT_PROVEN"
                 result["error"] = "complete artifact has extra or missing bytes"
@@ -691,9 +748,9 @@ class BundleVerifier:
             match=self.target_match,
             mismatches=mismatches,
         )
-        explicit_identity = bool(target.get("identity_proven", False))
+        explicit_identity = strict_bool(target, "identity_proven", False, "bundle.target.identity_proven")
         self.identity_proven = (
-            explicit_identity
+            explicit_identity is True
             and self.target_match
             and self.evidence_status == "CONFIRMED"
         )
@@ -754,19 +811,17 @@ class BundleVerifier:
         data: Optional[bytes] = None
         artifact = self.artifacts.get("handoff_descriptor", {})
         if isinstance(spec, dict) and "bytes_hex" in spec:
-            try:
-                data = bytes.fromhex(str(spec["bytes_hex"]))
-                artifact = {
-                    "name": "handoff_descriptor",
-                    "status": "CONFIRMED",
-                    "proof_state": "PROVEN",
-                    "path": None,
-                    "sha256_actual": hash_bytes(data),
-                    "sha256_expected": spec.get("sha256"),
-                }
-                self.artifacts["handoff_descriptor"] = artifact
-            except ValueError:
-                data = None
+            data = None
+            artifact = {
+                "name": "handoff_descriptor",
+                "status": "BLOCKED",
+                "proof_state": "NOT_PROVEN",
+                "path": None,
+                "sha256_actual": None,
+                "sha256_expected": spec.get("sha256"),
+                "error": "inline descriptor bytes are not accepted; provide a hashed local file",
+            }
+            self.artifacts["handoff_descriptor"] = artifact
         elif artifact.get("path") is not None and artifact.get("status") != "BLOCKED":
             try:
                 data = safe_bundle_path(
@@ -820,11 +875,27 @@ class BundleVerifier:
                 descriptor and descriptor.get("flags", 0) & FLAG_VERIFIED
             ),
         )
-        prefix = bool(spec.get("prefix_readable_proven", False)) if isinstance(spec, dict) else False
-        copied = bool(
-            spec.get("copied_to_trusted_storage_proven", False)
-        ) if isinstance(spec, dict) else False
-        root_ok = structure_ok and prefix and copied
+        prefix = (
+            strict_bool(
+                spec,
+                "prefix_readable_proven",
+                False,
+                "handoff_descriptor.prefix_readable_proven",
+            )
+            if isinstance(spec, dict)
+            else False
+        )
+        copied = (
+            strict_bool(
+                spec,
+                "copied_to_trusted_storage_proven",
+                False,
+                "handoff_descriptor.copied_to_trusted_storage_proven",
+            )
+            if isinstance(spec, dict)
+            else False
+        )
+        root_ok = structure_ok and prefix is True and copied is True
         self.add_node(
             "descriptor_root_of_trust",
             evidence if root_ok else "BLOCKED",
@@ -874,6 +945,42 @@ class BundleVerifier:
                 critical=True,
             )
             return
+        snapshot_target = self.snapshot.manifest.get("target")
+        bundle_target = self.root.get("target")
+        target_mismatches: Dict[str, Any] = {}
+        if not isinstance(bundle_target, dict):
+            target_mismatches["bundle_target"] = "bundle target metadata is missing"
+        elif not isinstance(snapshot_target, dict):
+            target_mismatches["snapshot_target"] = "snapshot target metadata is missing"
+        else:
+            for field in EXPECTED_TARGET:
+                expected = bundle_target.get(field)
+                actual = snapshot_target.get(field)
+                if field == "board":
+                    expected_values = normalize_board(expected)
+                    actual_values = normalize_board(actual)
+                    if not expected_values or expected_values != actual_values:
+                        target_mismatches[field] = {
+                            "bundle": expected,
+                            "snapshot": actual,
+                        }
+                elif str(actual).lower() != str(expected).lower():
+                    target_mismatches[field] = {
+                        "bundle": expected,
+                        "snapshot": actual,
+                    }
+        snapshot_target_ok = not target_mismatches
+        self.add_node(
+            "mmu_snapshot_target_match",
+            self._status_for_mapping() if snapshot_target_ok else "BLOCKED",
+            "PROVEN" if snapshot_target_ok else "NOT_PROVEN",
+            "MMU snapshot target metadata matches the bundle target"
+            if snapshot_target_ok
+            else "MMU snapshot target metadata is missing or conflicts with the bundle target",
+            (f"mmu_snapshot:{self.snapshot_path}:target", "bundle.target"),
+            critical=True,
+            mismatches=target_mismatches,
+        )
         self.add_node(
             "mmu_snapshot_present",
             self._status_for_mapping(),
@@ -1077,11 +1184,30 @@ class BundleVerifier:
         )
         daif_raw = state.get("daif", {})
         daif_fact = self.cpu["daif"]
+        daif_normalized = (
+            strict_bool(
+                daif_raw,
+                "normalized",
+                False,
+                "bundle.cpu_state.daif.normalized",
+            )
+            if isinstance(daif_raw, dict)
+            else None
+        )
+        daif_normalized_proven = (
+            strict_bool(
+                daif_raw,
+                "normalized_proven",
+                daif_fact.get("value_proven", False),
+                "bundle.cpu_state.daif.normalized_proven",
+            )
+            if isinstance(daif_raw, dict)
+            else None
+        )
         daif_ok = (
             daif_fact.get("value_proven")
-            and isinstance(daif_raw, dict)
-            and bool(daif_raw.get("normalized", False))
-            and bool(daif_raw.get("normalized_proven", daif_raw.get("value_proven", False)))
+            and daif_normalized is True
+            and daif_normalized_proven is True
         )
         self.add_node(
             "daif_normalized",
@@ -1099,8 +1225,14 @@ class BundleVerifier:
         policy = state.get("translation_policy", {})
         if not isinstance(policy, dict):
             policy = {}
+        policy_proven = strict_bool(
+            policy,
+            "normalized_proven",
+            False,
+            "bundle.cpu_state.translation_policy.normalized_proven",
+        )
         translation_ok = (
-            bool(policy.get("normalized_proven", False))
+            policy_proven is True
             and self.cpu["sctlr_el1"].get("value_proven")
             and self.cpu["tcr_el1"].get("value_proven")
             and self.cpu["ttbr0_el1"].get("value_proven")
@@ -1152,11 +1284,29 @@ class BundleVerifier:
             cache = {}
         icache = cache.get("icache", {})
         dcache = cache.get("dcache", {})
+        icache_proven = (
+            strict_bool(
+                icache,
+                "normalized_proven",
+                False,
+                "bundle.cpu_state.cache_policy.icache.normalized_proven",
+            )
+            if isinstance(icache, dict)
+            else None
+        )
+        dcache_proven = (
+            strict_bool(
+                dcache,
+                "normalized_proven",
+                False,
+                "bundle.cpu_state.cache_policy.dcache.normalized_proven",
+            )
+            if isinstance(dcache, dict)
+            else None
+        )
         cache_ok = (
-            isinstance(icache, dict)
-            and isinstance(dcache, dict)
-            and bool(icache.get("normalized_proven", False))
-            and bool(dcache.get("normalized_proven", False))
+            icache_proven is True
+            and dcache_proven is True
             and self.cpu["vbar_el1"].get("value_proven")
             and self.cpu["cpacr_el1"].get("value_proven")
         )
@@ -1481,10 +1631,20 @@ class BundleVerifier:
             ("bundle.ranges.kernel_stack", "ELF:__stack_bottom", "ELF:__stack_top"),
             critical=True,
         )
-        framebuffer_known = bool(raw.get("framebuffer_reservation_known", False))
-        framebuffer_known_proven = bool(raw.get("framebuffer_reservation_known_proven", False))
+        framebuffer_known = strict_bool(
+            raw,
+            "framebuffer_reservation_known",
+            False,
+            "bundle.ranges.framebuffer_reservation_known",
+        )
+        framebuffer_known_proven = strict_bool(
+            raw,
+            "framebuffer_reservation_known_proven",
+            False,
+            "bundle.ranges.framebuffer_reservation_known_proven",
+        )
         fb = self.ranges["framebuffer"]
-        framebuffer_ok = framebuffer_known and framebuffer_known_proven and (
+        framebuffer_ok = framebuffer_known is True and framebuffer_known_proven is True and (
             not fb.get("present") or (
                 fb.get("valid") and fb.get("ownership_proven")
             )
@@ -1504,8 +1664,20 @@ class BundleVerifier:
             ),
             critical=True,
         )
-        protected_complete = bool(raw.get("protected_ranges_complete", False)) and bool(
-            raw.get("protected_ranges_complete_proven", False)
+        protected_complete_value = strict_bool(
+            raw,
+            "protected_ranges_complete",
+            False,
+            "bundle.ranges.protected_ranges_complete",
+        )
+        protected_complete_proven = strict_bool(
+            raw,
+            "protected_ranges_complete_proven",
+            False,
+            "bundle.ranges.protected_ranges_complete_proven",
+        )
+        protected_complete = (
+            protected_complete_value is True and protected_complete_proven is True
         )
         self.protected_ranges = []
         seen_names: set[str] = set()
@@ -1849,8 +2021,18 @@ class BundleVerifier:
         raw_ranges = self.root.get("ranges", {})
         if not isinstance(raw_ranges, dict):
             raw_ranges = {}
-        boot_required = bool(raw_ranges.get("boot_args_required", False))
-        dt_required = bool(raw_ranges.get("device_tree_required", False))
+        boot_required = strict_bool(
+            raw_ranges,
+            "boot_args_required",
+            False,
+            "bundle.ranges.boot_args_required",
+        ) is True
+        dt_required = strict_bool(
+            raw_ranges,
+            "device_tree_required",
+            False,
+            "bundle.ranges.device_tree_required",
+        ) is True
         boot_range = self.ranges.get("boot_args", {})
         dt_range = self.ranges.get("device_tree", {})
         descriptor_ranges = self.descriptor.get("ranges", {}) if self.descriptor else {}
@@ -2024,7 +2206,7 @@ class BundleVerifier:
                 entry_end = None
         control_ok = (
             entry_fact.get("value_proven")
-            and bool(control.get("proven", False))
+            and strict_bool(control, "proven", False, "bundle.control_transfer.proven") is True
             and target_ok
             and self.descriptor is not None
             and entry_fact.get("value") is not None
@@ -2047,7 +2229,7 @@ class BundleVerifier:
             critical=True,
             entry_pc=fact_summary(entry_fact),
             target=control.get("target"),
-            proven=bool(control.get("proven", False)),
+            proven=strict_bool(control, "proven", False, "bundle.control_transfer.proven") is True,
         )
         persistence = self.root.get("persistence", {})
         required_fact = bool_fact(

@@ -238,3 +238,17 @@ See [HANDOFF_EVIDENCE_VERIFIER.md](HANDOFF_EVIDENCE_VERIFIER.md).
 No current Watch4,2 artifact contains a live translation-table snapshot. The
 static `/memory` result remains `base=0,size=0`; analyzer or synthetic results
 do not change hardware readiness.
+
+## Step 2.12 evidence-gap integration
+
+Step 2.12 does not add another page-table walker. The unified gap tool
+[`tools/t8006_evidence_gap.py`](../tools/t8006_evidence_gap.py) consumes the
+Step 2.11 verifier graph and the target requirement inventory. It distinguishes
+`DESIGN` offline fixtures from target-proven `CONFIRMED` evidence and reports
+the exact next evidence group for each unresolved requirement.
+
+The required data-only capture schema is
+[T8006_EVIDENCE_CAPTURE_SPEC.md](T8006_EVIDENCE_CAPTURE_SPEC.md). A complete
+synthetic graph may demonstrate that the pipeline is ready to consume data,
+but it cannot prove a live Watch state, ownership, access authority, or a safe
+handoff.

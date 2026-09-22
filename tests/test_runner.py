@@ -1451,6 +1451,20 @@ def test_offline_handoff_evidence_verifier():
     assert result.returncode == 0, (result.stdout or "") + (result.stderr or "")
     assert "OK" in ((result.stdout or "") + (result.stderr or ""))
 
+
+# Phase 4 Step 2.12 — Target-specific runtime evidence gap inventory
+@test("T8006 evidence gap tool — synthetic host suite")
+def test_t8006_evidence_gap_tool():
+    """Run the deterministic evidence-gap unit tests without hardware access."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    gap_tests = os.path.join(root_dir, "tests", "test_t8006_evidence_gap.py")
+    result = run_command_cross(
+        [sys.executable, gap_tests],
+        "cd /home/pc/DreyzeOS---Watch-OS && python3 tests/test_t8006_evidence_gap.py",
+    )
+    assert result.returncode == 0, (result.stdout or "") + (result.stderr or "")
+    assert "OK" in ((result.stdout or "") + (result.stderr or ""))
+
 # Run all tests
 # ============================================================
 
@@ -1498,6 +1512,7 @@ def main():
         # Phase 4 Step 2.9 — T8006 Loader Evidence / Documentation Truth Audit
         test_offline_mmu_snapshot_analyzer,
         test_offline_handoff_evidence_verifier,
+        test_t8006_evidence_gap_tool,
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,

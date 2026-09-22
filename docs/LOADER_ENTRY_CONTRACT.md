@@ -263,3 +263,21 @@ and the verifier behavior in
 A synthetic bundle may validate the offline model, but it is DESIGN evidence
 only. The Watch4,2 target remains `LOADER CONTRACT = BLOCKED` and
 `FIRST HARDWARE EXECUTION = NOT READY`.
+
+## Step 2.12 target-specific evidence gaps
+
+The contract is now paired with a target-specific, machine-readable evidence
+inventory in [research/t8006_evidence/requirements.json](../research/t8006_evidence/requirements.json)
+and its human matrix in
+[REQUIRED_RUNTIME_EVIDENCE.md](../research/t8006_evidence/REQUIRED_RUNTIME_EVIDENCE.md).
+`tools/t8006_evidence_gap.py` consumes a verifier report and checks which
+requirements are actually proven. `DESIGN` synthetic nodes are useful for
+testing dependency logic but cannot close a target requirement; `VERIFIED` in
+the V1 descriptor remains an assertion and is not a root of trust.
+
+The capture data contract is documented in
+[T8006_EVIDENCE_CAPTURE_SPEC.md](T8006_EVIDENCE_CAPTURE_SPEC.md). It requires
+independent target provenance, complete MMU table bytes, runtime DRAM
+provenance, ownership, collision completeness, and control transfer before a
+future target-facing handoff can be considered. The repository currently has
+none of that target-bound runtime evidence.

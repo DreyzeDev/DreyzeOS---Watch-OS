@@ -431,3 +431,22 @@ preference.
 No target-specific captured bundle has been added. Runtime DRAM, payload
 placement/ownership, execution mapping, entry state, object bounds, complete
 reservations, and control transfer remain UNKNOWN/BLOCKED.
+
+## Step 2.12 — target-specific evidence requirements
+
+The public/static review for this step found **no new target-specific runtime
+artifact**. The next gap is therefore evidence collection, not another claim
+about a loader path. The required facts and exact closure conditions are in
+[research/t8006_evidence/REQUIRED_RUNTIME_EVIDENCE.md](../research/t8006_evidence/REQUIRED_RUNTIME_EVIDENCE.md)
+and [requirements.json](../research/t8006_evidence/requirements.json). The
+data-only bundle contract is in
+[docs/T8006_EVIDENCE_CAPTURE_SPEC.md](T8006_EVIDENCE_CAPTURE_SPEC.md).
+
+`tools/t8006_evidence_gap.py` is an offline checklist over the Step 2.11
+evidence graph. It never promotes a synthetic mapping to target truth, and it
+keeps target identity, ownership, descriptor trust, collision completeness,
+and control transfer separate from page-table translation facts.
+
+The static `/memory = base=0,size=0` artifact remains **CONFIRMED** as a static
+file fact. Runtime DRAM, payload placement, live TTBR/TCR/MAIR state, and a
+future control-transfer protocol remain **UNKNOWN/BLOCKED**.

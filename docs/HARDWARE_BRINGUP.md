@@ -346,3 +346,17 @@ Until runtime DRAM provenance, normalized entry state, complete mappings,
 bounded descriptor/boot_args/DeviceTree data, ownership, collision coverage,
 and control transfer are target-specifically proven, hardware bring-up is not
 authorized: `LOADER CONTRACT = BLOCKED` and `FIRST HARDWARE EXECUTION = NOT READY`.
+
+## Step 2.12 — evidence specification only
+
+`research/t8006_evidence/requirements.json` and
+`REQUIRED_RUNTIME_EVIDENCE.md` enumerate the target-specific facts still
+missing. `docs/T8006_EVIDENCE_CAPTURE_SPEC.md` defines how a future local
+bundle represents presence, proof, bounds, ownership, and completeness. The
+gap analyzer can report `OFFLINE INFRASTRUCTURE = COMPLETE` and
+`EVIDENCE PIPELINE READY = YES`; those labels describe repository tooling,
+not Watch readiness.
+
+No USB/DFU, exploit, loader, MMIO, framebuffer, flash, or control-flow action
+was performed. The current hardware conclusion remains
+`LOADER CONTRACT = BLOCKED` / `FIRST HARDWARE EXECUTION = NOT READY`.
