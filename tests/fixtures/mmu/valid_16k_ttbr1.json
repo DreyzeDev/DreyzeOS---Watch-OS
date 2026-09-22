@@ -1,0 +1,60 @@
+{
+  "schema": "dreyzeos.mmu_snapshot.v1",
+  "architecture": "aarch64",
+  "target": {
+    "name": "synthetic-16k-ttbr1",
+    "watch_target": "Watch4,2",
+    "hardware_execution": false
+  },
+  "source": {
+    "kind": "synthetic",
+    "status": "DESIGN",
+    "description": "Synthetic 16 KiB TTBR1 page walk; no Apple bytes."
+  },
+  "evidence_status": "DESIGN",
+  "registers": {
+    "tcr_el1": {
+      "value": "0x57511b511",
+      "value_present": true,
+      "value_proven": false
+    },
+    "ttbr0_el1": {
+      "value": "0x40000",
+      "value_present": true,
+      "value_proven": false
+    },
+    "ttbr1_el1": {
+      "value": "0x10000",
+      "value_present": true,
+      "value_proven": false
+    },
+    "mair_el1": {
+      "value": "0xff",
+      "value_present": true,
+      "value_proven": false
+    }
+  },
+  "physical_memory_regions": [
+    {
+      "physical_base": "0x10000",
+      "length": "0x10000",
+      "memory_bytes_present": true,
+      "memory_range_complete": true,
+      "label": "synthetic translation tables",
+      "data_words": [
+        {"offset": "0x0", "value": "0x14003"},
+        {"offset": "0x4000", "value": "0x18003"},
+        {"offset": "0x8000", "value": "0x40000090000783"}
+      ]
+    }
+  ],
+  "virtual_search_ranges": [
+    {
+      "base": "0xffff800000000000",
+      "length": "0x4000",
+      "address_space": "virtual",
+      "ttbr": "ttbr1",
+      "name": "synthetic upper VA search range"
+    }
+  ]
+}

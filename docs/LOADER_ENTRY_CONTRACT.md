@@ -225,3 +225,26 @@ critical fact keeps the gate closed.
 **LOADER CONTRACT = BLOCKED**
 
 **FIRST HARDWARE EXECUTION = NOT READY**
+
+## Step 2.10 offline translation evidence
+
+The host-only `tools/mmu_snapshot_analyzer.py` can decode a future local
+AArch64 translation-table snapshot and report mapping facts for this native
+contract. It does not change the contract state automatically.
+
+A complete mapping report may support a future review of:
+
+- kernel executable/readable/writable intervals;
+- the entry PC and stack VA;
+- descriptor, boot_args, DeviceTree, framebuffer, and protected ranges.
+
+The report remains evidence from a supplied snapshot. It does not prove that the
+snapshot is live, that the loader owns the interval, that a descriptor is
+trusted, that a payload was deposited, or that control can transfer safely.
+The bridge therefore leaves ownership, descriptor trust, collision completion,
+entry proof, and control-transfer proof false.
+
+The snapshot format is documented in
+[research/mmu_snapshots/FORMAT.md](../research/mmu_snapshots/FORMAT.md).
+The current Watch4,2 static artifacts contain no runtime table snapshot, so the
+analyzer reduces future evidence ambiguity but does not move any hardware gate.

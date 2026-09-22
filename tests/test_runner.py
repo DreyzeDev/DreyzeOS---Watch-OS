@@ -1422,6 +1422,24 @@ def test_elf_relocation_audit():
 
 
 # ============================================================
+# Phase 4 Step 2.10 — Offline MMU / Translation Evidence Analyzer
+# ============================================================
+@test("offline MMU snapshot analyzer — synthetic host suite")
+def test_offline_mmu_snapshot_analyzer():
+    """Run the pure-Python translation analyzer tests without hardware access."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    analyzer_tests = os.path.join(root_dir, "tests", "test_mmu_snapshot_analyzer.py")
+    result = run_command_cross(
+        [sys.executable, analyzer_tests],
+        "cd /home/pc/DreyzeOS---Watch-OS && "
+        "python3 tests/test_mmu_snapshot_analyzer.py",
+    )
+    assert result.returncode == 0, (
+        (result.stdout or "") + (result.stderr or "")
+    )
+    output = (result.stdout or "") + (result.stderr or "")
+    assert "OK" in output, output
+
 # Run all tests
 # ============================================================
 
@@ -1467,6 +1485,7 @@ def main():
         test_boot_stage_failsafe_preserves_last_successful,
         test_boot_stage_error_separate_from_last_successful,
         # Phase 4 Step 2.9 — T8006 Loader Evidence / Documentation Truth Audit
+        test_offline_mmu_snapshot_analyzer,
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,

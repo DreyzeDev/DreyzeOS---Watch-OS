@@ -310,3 +310,27 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 ---
 
 *Last updated: Phase 4 Step 2.9 — loader entry contract design and static audit. Hardware execution remains blocked.*
+
+## 9. Step 2.10 — offline MMU evidence only
+
+The host/static research tool `tools/mmu_snapshot_analyzer.py` can inspect a
+future local translation-table snapshot and compare it with the fixed DreyzeOS
+ELF, but it does not select a load address, open MMIO, enable the framebuffer,
+run an exploit, or deliver a payload.
+
+Static DeviceTree MMIO addresses remain physical evidence only. A synthetic or
+captured VA-to-PA match does not authorize UART/AIC/display access. The
+production MMIO and framebuffer gates remain closed.
+
+The analyzer's current target result is still:
+
+| Item | Status |
+|---|---|
+| runtime DRAM map | **UNKNOWN / BLOCKED** |
+| fixed-image executable mapping | **UNKNOWN / BLOCKED** without a target snapshot |
+| runtime framebuffer mapping | **UNKNOWN / BLOCKED** |
+| loader entry contract | **BLOCKED** |
+| first hardware execution | **NOT READY** |
+
+*Last updated: Phase 4 Step 2.10 — offline translation evidence analyzer; no
+hardware execution performed.*

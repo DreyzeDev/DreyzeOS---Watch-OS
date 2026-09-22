@@ -372,3 +372,25 @@ See the evidence matrix and unresolved T8006 loader questions in
 ### **VERDICT: FIRST HARDWARE EXECUTION = NOT READY (BLOCKED)**
 
 *Reason: Hardware load address, physical-to-virtual entry mapping, and physical RAM delivery exploit on Watch4,2 remain UNCONFIRMED. DreyzeOS must remain in host research mode until these parameters are validated.*
+
+## 20. Step 2.10 — offline translation evidence
+
+A new host-only analyzer can consume a future local AArch64 table snapshot
+without touching a Watch. It decodes TCR granules, MAIR attributes, TTBR0/1
+walks, block/page descriptors, permissions, range continuity, and current
+DreyzeOS ELF intervals. Synthetic fixtures are **DESIGN** evidence only.
+
+This does not change the target facts:
+
+- the static /memory node remains `base=0,size=0`;
+- product RAM quantity remains separate from a runtime DRAM map;
+- `0x800000000` and 1 GiB remain historical/research context, not a
+  placement proof;
+- the fixed `0x100000000` VMA remains a placeholder requiring a
+  target-specific executable/readable mapping;
+- mapping evidence cannot establish ownership, descriptor trust, or control
+  transfer.
+
+The analyzer's loader-contract bridge is intentionally non-authoritative.
+**LOADER CONTRACT = BLOCKED** and
+**FIRST HARDWARE EXECUTION = NOT READY** remain unchanged.

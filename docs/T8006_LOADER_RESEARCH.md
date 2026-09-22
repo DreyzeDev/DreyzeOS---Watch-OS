@@ -388,3 +388,32 @@ for target-specific delivery research. Neither closes these requirements now.
 
 **LOADER CONTRACT = BLOCKED**
 **FIRST HARDWARE EXECUTION = NOT READY**
+
+## 13. Step 2.10 offline translation analyzer
+
+Step 2.10 adds `tools/mmu_snapshot_analyzer.py`, a pure host/offline decoder
+for a future captured AArch64 translation-table snapshot. Its JSON manifest
+explicitly separates register `value_present` from `value_proven` and
+physical `memory_bytes_present` from `memory_range_complete`. It supports
+architectural 4 KiB, 16 KiB, and 64 KiB geometry when the decoded TCR is
+supported; it never assumes identity mapping, a fixed TTBR, 48-bit VA, or a
+48-bit PA.
+
+The analyzer reports translation facts only:
+
+| Query | Analyzer result | What it still does not prove |
+|---|---|---|
+| VA walk | selected TTBR, level, descriptor, PA, AP/PXN/UXN/AF, MAIR | live state or access authority |
+| VA range | complete/partial mapping, permissions, attributes, PA continuity | ownership or collision completion |
+| DreyzeOS ELF | intended-vs-snapshot mapping comparison | ELF flags as hardware permissions |
+| MMIO reverse query | match in explicitly searched VA ranges | safe MMIO access or gate opening |
+| framebuffer query | optional manifest range mapping | runtime /vram fact or write permission |
+| loader bridge | mapping evidence candidates | descriptor trust, payload deposit, control transfer |
+
+Repository fixtures are synthetic and contain no Apple firmware bytes. The
+static Watch4,2 /memory artifact remains `base=0,size=0`; no runtime table
+snapshot was added. Therefore this tool changes no readiness conclusion.
+
+**LOADER CONTRACT = BLOCKED**
+
+**FIRST HARDWARE EXECUTION = NOT READY**
