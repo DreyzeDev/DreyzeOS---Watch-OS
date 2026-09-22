@@ -204,13 +204,13 @@ static void test_framebuffer_mapping_interlock(void)
     assert(pixels[10 * width + 10] == 0); /* Still zero! */
 
     /* 4. A verification bit alone cannot promote PA to VA. */
-    framebuffer_set_mapping_verified(true);
+    framebuffer_set_mapping_verified_for_test(true);
     assert(framebuffer_is_mapping_verified() == false);
     assert(fb_desc->is_write_allowed == false);
 
     /* Host-only model supplies a concrete VA; production has no such setter. */
     framebuffer_set_virtual_base_for_test((uintptr_t)fb_mem);
-    framebuffer_set_mapping_verified(true);
+    framebuffer_set_mapping_verified_for_test(true);
     assert(framebuffer_is_mapping_verified() == true);
 
     framebuffer_enable_writes(true);
@@ -221,7 +221,7 @@ static void test_framebuffer_mapping_interlock(void)
     assert(pixels[10 * width + 10] == 0x00FF0000);
 
     /* 6. Revoking mapping verification immediately revokes write permission */
-    framebuffer_set_mapping_verified(false);
+    framebuffer_set_mapping_verified_for_test(false);
     assert(framebuffer_is_mapping_verified() == false);
     assert(fb_desc->is_write_allowed == false);
 
@@ -382,6 +382,7 @@ static void test_handoff_descriptor_and_ranges(void)
 
     xnu_arm64_boot_args_t ba;
     memset(&ba, 0, sizeof(ba));
+    /* Host fixture only: historical research values, not a runtime map. */
     ba.phys_base = 0x800000000ULL;
     ba.mem_size = 0x40000000ULL;
     ba.virt_base = 0xFFFF000080000000ULL;
@@ -417,6 +418,7 @@ static void test_handoff_descriptor_and_ranges(void)
     assert(loader_handoff_descriptor_validate(&descriptor) == true);
 
     descriptor.flags |= DREYZE_HANDOFF_FLAG_PAYLOAD_LOCATION_KNOWN;
+    /* Host fixture only: payload PA is deliberately illustrative. */
     descriptor.payload_pa = 0x800000000ULL;
     descriptor.payload_va = 0x100000000ULL;
     descriptor.payload_size = 0;

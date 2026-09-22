@@ -352,7 +352,8 @@ int devtree_parse_dynamic(uintptr_t base, uint32_t size, platform_boot_info_t *i
         }
     }
 
-    /* 2. Parse /memory node for primary DRAM base & size */
+    /* 2. Parse the candidate /memory report; zero static placeholders
+     * are not runtime DRAM-map evidence. */
     uintptr_t memory_node = devtree_find_node_by_path(base, size, "/memory");
     if (memory_node) {
         uint32_t reg_sz;
@@ -436,6 +437,8 @@ static void platform_boot_info_reset_fallback(uint64_t arg0, uint64_t arg1)
 {
     memset(&g_boot_info, 0, sizeof(g_boot_info));
     loader_handoff_reset_unverified(arg0, arg1);
+    /* These values are diagnostics-only research fallbacks. They are not a
+     * runtime DRAM map and never authorize a physical dereference. */
     g_boot_info.dram_phys_base    = T8006_DRAM_BASE;
     g_boot_info.dram_size         = T8006_DRAM_SIZE;
     g_boot_info.dram_virt_base    = 0;

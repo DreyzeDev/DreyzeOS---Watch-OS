@@ -3,7 +3,7 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **watchOS**: 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.7: T8006 Loader / RAM Handoff Contract Research
+**Phase**: 4 — Step 2.8: T8006 Loader Evidence / Documentation Truth Audit
 **Status**: Pre-hardware (host-side validation complete, real device test BLOCKED)
 
 ---
@@ -192,7 +192,7 @@ typedef struct {
     boot_video_t video;             // +0x28 — 6 × uint64 (baseAddr, display, rowBytes, width, height, depth)
     uint32_t machine_type;          // +0x58
     uint32_t _pad1;                 // +0x5C
-    uint64_t devicetree_p;          // +0x60 — physical/virt address of ADT
+    uint64_t devicetree_p;          // +0x60 — XNU-consumed ADT address; domain at DreyzeOS handoff UNKNOWN
     uint32_t devicetree_length;     // +0x68 — byte length of ADT
     char command_line[1024];        // +0x6C — boot argument string
 } xnu_arm64_boot_args_t;
@@ -200,23 +200,23 @@ typedef struct {
 
 ---
 
-## 4. Hardware Required for RAM Delivery
+## 4. Candidate Hardware Paths for RAM Delivery
 
 > [!IMPORTANT]
-> No software-only jailbreak or kexec exists for watchOS 10.6.1. Hardware access is required.
+> The reviewed public evidence does not establish a project-specific software-only/kexec path. This is an evidence gap, not proof that hardware is the only possible path.
 
-### Option A — usbliter8 (Hardware BootROM Exploit)
+### Option A — usbliter8 (Candidate T8006 Research Path)
 
 - **Exploit**: DWC2 USB buffer underflow in T8006/T8010 SecureROM
-- **Hardware**: RP2350 / Raspberry Pi Pico 2 acting as USB host interposer
-- **Adapter**: iBUS S4/S5 adapter (5-pin diagnostic connector in Watch band slot)
+- **Public setup described by the repository**: RP2350 / Raspberry Pi Pico 2 acting as a USB host interposer
+- **Public adapter context**: iBUS S4/S5 adapter (5-pin diagnostic connector in Watch band slot)
 - **Status**: **UNKNOWN/BLOCKED** for this configuration. Public T8006-related code exists, but no reproducible Watch4,2 + watchOS 10.6.1 DreyzeOS delivery contract is established.
-- **Requirement**: Physical iBUS/AWRT adapter + Pico 2 interposer hardware build
+- **Evidence boundary**: These are candidate research components, not a confirmed mandatory or exclusive DreyzeOS delivery chain.
 
 ### Physical Connector
 
 - 5-pin diagnostic port in the Watch band slot (proprietary Apple iBUS)
-- Requires: iBUS S4/S5 adapter **or** AWRT Apple Watch Research Tool adapter
+- Public research references an iBUS S4/S5 adapter **or** AWRT Apple Watch Research Tool adapter; exact Watch4,2 applicability remains UNKNOWN/BLOCKED.
 - DFU mode is triggered through adapter pin pull-down
 
 ---
@@ -226,7 +226,7 @@ typedef struct {
 > [!WARNING]
 > **Crown + Side Button reset is the expected stock hardware reset path, but recovery from an arbitrary experimental execution state has not yet been validated by a controlled DreyzeOS hardware test.**
 >
-> Holding Crown + Side Button for 10–15 seconds triggers a PMU hard reset, which causes iBoot to reboot the device from stock watchOS on NAND.
+> Stock behavior is commonly described as a 10–15 second Crown + Side Button PMU reset; whether it returns an arbitrary experimental state to iBoot/stock watchOS on this target is unverified. Treat recovery as an expected path, not a guarantee.
 >
 > RAM-only execution significantly reduces persistent-write risk because DreyzeOS makes zero NAND writes, but it does NOT constitute proof of zero risk under all failure conditions.
 
@@ -308,4 +308,4 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 
 ---
 
-*Last updated: Phase 4 Step 2.7 — T8006 loader/RAM handoff contract research. Build: ELF=PASS BIN=PASS; hardware execution remains blocked.*
+*Last updated: Phase 4 Step 2.8 — T8006 loader evidence/documentation truth audit. Hardware execution remains blocked.*

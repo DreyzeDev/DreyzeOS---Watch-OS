@@ -75,14 +75,17 @@ const framebuffer_t *framebuffer_get_info(void);
 
 /*
  * Hard safety interlock control:
- * Framebuffer writes CANNOT be enabled unless mapping is explicitly verified.
+ * Production exposes only the closed-state query and write capability check.
+ * A future trusted verifier must be added deliberately before any production
+ * mapping can be opened.
  */
-void framebuffer_set_mapping_verified(bool verified);
 bool framebuffer_is_mapping_verified(void);
 
 #ifdef HOST_TEST
-/* Test-only mapping injection; production has no guessed identity mapping. */
+/* Test-only mapping injection and gate control; production has no guessed
+ * identity mapping or setter that can assert verification. */
 void framebuffer_set_virtual_base_for_test(uintptr_t base_vaddr);
+void framebuffer_set_mapping_verified_for_test(bool verified);
 #endif
 
 /* Explicitly enable or disable hardware writes to the framebuffer */

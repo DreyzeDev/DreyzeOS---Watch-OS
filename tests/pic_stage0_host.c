@@ -100,17 +100,18 @@ pic_stage0_host_status_t pic_stage0_host_prepare(
         return PIC_STAGE0_HOST_REJECT_CPU_CONTRACT;
     }
 
+    /* Validate the PC pair before using it as a mapping witness. */
+    if (!input->runtime_pc || !input->stage0_link_base ||
+        !signed_delta(input->runtime_pc, input->stage0_link_base,
+                      &output->runtime_delta)) {
+        return PIC_STAGE0_HOST_REJECT_RUNTIME_PC;
+    }
+
     if (!input->executable_mapping_proven ||
         !host_range_contains(input->executable_mapping_base,
                              input->executable_mapping_size,
                              input->runtime_pc, 1)) {
         return PIC_STAGE0_HOST_REJECT_EXECUTABLE_MAPPING;
-    }
-
-    if (!input->runtime_pc || !input->stage0_link_base ||
-        !signed_delta(input->runtime_pc, input->stage0_link_base,
-                      &output->runtime_delta)) {
-        return PIC_STAGE0_HOST_REJECT_RUNTIME_PC;
     }
 
     if (input->target_entry_offset >= output->descriptor_copy.payload_size ||
@@ -147,6 +148,7 @@ void pic_stage0_host_run_self_tests(void)
                        DREYZE_HANDOFF_FLAG_PAYLOAD_LOCATION_KNOWN |
                        DREYZE_HANDOFF_FLAG_MMU_STATE_KNOWN;
     descriptor.entry_el = 1;
+    /* Host-only fixture: historical fallback, not a runtime DRAM map. */
     descriptor.payload_pa = 0x800000000ULL;
     descriptor.payload_va = 0x200000000ULL;
     descriptor.payload_size = 0x4000;
@@ -179,6 +181,80 @@ void pic_stage0_host_run_self_tests(void)
     input.initial_stack_proven = false;
     assert(pic_stage0_host_prepare(&input, &output) ==
            PIC_STAGE0_HOST_REJECT_CPU_CONTRACT);
+
+    /* Every V1-external CPU contract fact is independently mandatory. */
+    input.initial_stack_proven = true;
+    input.daif_state_proven = false;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_CPU_CONTRACT);
+    input.daif_state_proven = true;
+    input.translation_state_proven = false;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_CPU_CONTRACT);
+    input.translation_state_proven = true;
+    input.cache_state_proven = false;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_CPU_CONTRACT);
+    input.cache_state_proven = true;
+
+    /* Zero PC/link base are rejected before mapping arithmetic. */
+    input.runtime_pc = 0;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_RUNTIME_PC);
+    input.runtime_pc = 0x100000100ULL;
+    input.stage0_link_base = 0;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_RUNTIME_PC);
+
+    /* A negative signed delta is valid when both ends are representable. */
+    input.runtime_pc = 0x100000000ULL;
+    input.stage0_link_base = 0x100000100ULL;
+    assert(pic_stage0_host_prepare(&input, &output) == PIC_STAGE0_HOST_READY);
+    assert(output.runtime_delta == -0x100);
+    input.runtime_pc = 0x100000100ULL;
+    input.stage0_link_base = 0x100000000ULL;
+
+    /* Signed-delta overflow must be rejected, not truncated. */
+    input.runtime_pc = UINTPTR_MAX;
+    input.stage0_link_base = 1;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_RUNTIME_PC);
+    input.runtime_pc = 0x100000100ULL;
+    input.stage0_link_base = 0x100000000ULL;
+
+    /* A wrapping executable range cannot witness even the runtime PC. */
+    input.executable_mapping_base = UINTPTR_MAX - 0x10U;
+    input.executable_mapping_size = 0x20U;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_EXECUTABLE_MAPPING);
+    input.executable_mapping_base = 0x100000000ULL;
+    input.executable_mapping_size = 0x110000000ULL;
+
+    /* The structural validator rejects an empty payload location. */
+    descriptor.payload_size = 0;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_DESCRIPTOR);
+    descriptor.payload_size = 0x4000;
+
+    /* An entry offset equal to payload_size is outside the payload. */
+    input.target_entry_offset = descriptor.payload_size;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_PAYLOAD_RANGE);
+    input.target_entry_offset = 0x100;
+
+    /* Valid descriptor ranges make target-entry overflow unreachable; retain
+     * a malformed max-address case as a regression guard for both checks. */
+    descriptor.payload_va = UINTPTR_MAX - 1U;
+    descriptor.payload_size = 2;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_DESCRIPTOR);
+    descriptor.payload_va = 0x200000000ULL;
+    descriptor.payload_size = 0x4000;
+
+    /* A malformed magic is rejected before any nested field is trusted. */
+    descriptor.magic ^= 1ULL;
+    assert(pic_stage0_host_prepare(&input, &output) ==
+           PIC_STAGE0_HOST_REJECT_DESCRIPTOR);
 
     printf("PASS\n");
 }

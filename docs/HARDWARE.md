@@ -69,7 +69,7 @@ Differences: case size, cellular modem, display resolution, materials.
 
 | Field | Value | Status |
 |-------|-------|--------|
-| RAM total | 1 GB (0x40000000 bytes) | CONFIRMED (iFixit, GSMArena) |
+| RAM total | 1 GB (0x40000000 bytes) | CONFIRMED product quantity only; not a runtime `/memory` map |
 | RAM type | LPDDR3 or LPDDR4 | LIKELY |
 | RAM physical base | UNKNOWN | UNKNOWN |
 | NAND flash | 16 GB | CONFIRMED |
@@ -79,7 +79,7 @@ Differences: case size, cellular modem, display resolution, materials.
 | Field | Value | Status |
 |-------|-------|--------|
 | checkm8 vulnerable? | **NO** | CONFIRMED |
-| Boot ROM exploitable? | No known public exploit | CONFIRMED |
+| Boot ROM research | Public usbliter8 T8006/S4-related code exists; Watch4,2/DreyzeOS applicability is unresolved | UNKNOWN/BLOCKED |
 | Related vulnerable Watch | Series 3 (T8004) only | CONFIRMED |
 
 **Source**: checkm8.info, Elcomsoft blog  
@@ -104,7 +104,7 @@ LLB (Low-Level Bootloader)
 iBoot
     │  [loads DeviceTree, kernelcache, ramdisk]
     │  [applies KASLR slide randomization]
-    │  [passes x0 = DeviceTree ptr to kernel]
+    │  [XNU-specific boot metadata handoff; DreyzeOS semantics unknown]
     ▼
 XNU kernel (arm64_32 ABI, AArch64 instructions)
     │
@@ -145,8 +145,8 @@ Physical Address Space — T8006 (generic research sketch, not a live map)
    ...
 0x0000_0002_0000_0000  MMIO region START (LIKELY)   UNKNOWN — extrapolated from related SoCs
    ...
-0x0000_0008_0000_0000  DRAM base (LIKELY)           UNKNOWN — conventional for Apple SoCs
-0x0000_000C_0000_0000  DRAM end (1GB from base)     UNKNOWN
+0x0000_0008_0000_0000  historical DRAM-base fallback UNKNOWN — not confirmed by static /memory
+0x0000_000C_0000_0000  historical 1GB-end sketch     UNKNOWN — not a runtime DRAM boundary
 =============================================================
 
 NOTE: The sketch above is not a source for current constants. Static
@@ -168,7 +168,7 @@ NOTE: The sketch above is not a source for current constants. Static
 |-----------|-------------|--------|
 | UART0 | 0x2e500000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
 | Display Controller | 0x18000000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
-| Framebuffer | Allocated by iBoot, in DeviceTree `chosen` | CONFIRMED method / UNKNOWN value |
+| Framebuffer | Static `/vram` is `0x0+0x0`; runtime value absent | UNKNOWN/BLOCKED |
 | Interrupt Controller (AIC) | 0x2d180000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
 | PMGR (Power Manager) | 0x2d000000 | CONFIRMED static DeviceTree reg; mapping UNKNOWN |
 | SPI0 | UNKNOWN_T8006_SPI0_BASE | UNKNOWN |
@@ -189,7 +189,7 @@ NOTE: The sketch above is not a source for current constants. Static
 | Display controller | Apple custom DCP (LIKELY) | LIKELY |
 | DCP interface | MIPI-DSI (LIKELY) | LIKELY |
 | Framebuffer pixel format | BGRA8888 (LIKELY) | LIKELY |
-| Framebuffer base address | From DeviceTree `chosen/framebuffer` | CONFIRMED method |
+| Framebuffer base address | Runtime boot metadata if supplied; static `/vram` is zero | UNKNOWN/BLOCKED |
 | DCP MMIO base | UNKNOWN | UNKNOWN |
 
 ---
@@ -199,9 +199,9 @@ NOTE: The sketch above is not a source for current constants. Static
 | Field | Value | Status |
 |-------|-------|--------|
 | UART hardware present? | YES (engineering use) | CONFIRMED |
-| Consumer-accessible UART? | NO (requires iBus + diagnostic cable) | CONFIRMED |
+| Consumer-accessible UART? | No consumer path established; iBUS/diagnostic access is only a candidate research route | UNKNOWN |
 | UART IP | Samsung S3C-derived (LIKELY) | LIKELY |
-| UART0 base address | UNKNOWN | UNKNOWN |
+| UART0 base address | 0x2e500000 static DeviceTree value | CONFIRMED static address; runtime mapping UNKNOWN |
 | Related SoC reference (A10/T8010) | 0x235200000 | CONFIRMED for A10, NOT T8006 |
 
 ---
@@ -308,7 +308,7 @@ To get real MMIO addresses, the following approaches exist (in order of safety):
 **Status**: REQUIRES physical Apple Watch Series 4 with specific watchOS version.
 
 ### Method 4: JTAG / Debug Cables
-1. Requires Apple internal debug cable (iBus with JTAG capability)
+1. Public descriptions reference an Apple internal debug cable (iBus with JTAG capability)
 2. Extremely rare, expensive, and potentially requires NDAs
 
 **Status**: BLOCKED — not realistic for this project.

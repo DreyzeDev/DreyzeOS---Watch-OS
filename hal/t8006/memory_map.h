@@ -38,13 +38,13 @@
  * RAM Layout
  * ============================================================
  *
- * Apple Watch Series 4 RAM: 1 GB total (LPDDR4)
+ * Apple Watch Series 4 product-memory quantity: 1 GiB (research quantity).
  * Status: static /memory is [0x0+0x0]; live base and usable range are
- * UNKNOWN/BLOCKED. The constants below are research fallbacks only and are
- * never a loader handoff proof.
+ * UNKNOWN/BLOCKED. The constants below are historical research fallbacks
+ * only and are never a loader handoff proof.
  */
 #define T8006_DRAM_BASE                 0x0000000800000000ULL  /* UNKNOWN/BLOCKED research fallback */
-#define T8006_DRAM_SIZE                 (1ULL * 1024 * 1024 * 1024) /* DESIGN quantity, not live map proof */
+#define T8006_DRAM_SIZE                 (1ULL * 1024 * 1024 * 1024) /* UNKNOWN/BLOCKED research fallback */
 #define DREYZEOS_PLACEHOLDER_LOAD_ADDR  0x0000000100000000ULL  /* Linker placeholder */
 
 /* ============================================================
@@ -139,8 +139,8 @@
 #define T8006_DISPLAY_WIDTH_40          324                    /* CONFIRMED — 40mm width */
 #define T8006_DISPLAY_HEIGHT_40         394                    /* CONFIRMED — 40mm height */
 
-/* Framebuffer base: allocated dynamically by iBoot in VRAM */
-#define UNKNOWN_T8006_FRAMEBUFFER_BASE  0xDEADBEEFDEADBEEFULL  /* UNKNOWN — filled at boot by iBoot */
+/* Framebuffer base: runtime value is absent from the static ADT snapshot. */
+#define UNKNOWN_T8006_FRAMEBUFFER_BASE  0xDEADBEEFDEADBEEFULL  /* UNKNOWN/BLOCKED */
 
 /* ============================================================
  * Multi-Touch & Digital Crown

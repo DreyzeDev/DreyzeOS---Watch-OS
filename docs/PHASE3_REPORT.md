@@ -164,7 +164,7 @@ All tests PASSED ✓
   - Safe fallback mechanisms when booting in simulator or without iBoot boot_args.
 
 - **LIKELY**:
-  - iBoot populates a `/chosen/memory-map` entry labeled `Display` or `Framebuffer` containing the active scanout memory range.
+  - A boot-time producer may populate a `/chosen/memory-map` entry labeled `Display` or `Framebuffer`, but the reviewed static artifact contains only zero-filled placeholders; this mechanism and its runtime value are not T8006-confirmed here.
 
 - **UNKNOWN**:
   - Exact framebuffer physical address before boot (must always be resolved dynamically at runtime).

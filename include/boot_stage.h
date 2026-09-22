@@ -18,7 +18,7 @@ typedef enum {
     BOOT_STAGE_ENTRY     = 0,   /* STAGE 0: entry reached (entry.S -> kernel_main) */
     BOOT_STAGE_RAM_LOG   = 1,   /* STAGE 1: RAM logger initialized; UART may be unavailable */
     BOOT_STAGE_BOOT_ARGS = 2,   /* STAGE 2: boot metadata status (may be fallback) */
-    BOOT_STAGE_MEM_MAP   = 3,   /* STAGE 3: memory map validated (DRAM & reservations) */
+    BOOT_STAGE_MEM_MAP   = 3,   /* STAGE 3: memory metadata evaluated; runtime map may be blocked */
     BOOT_STAGE_AIC       = 4,   /* STAGE 4: AIC evaluated; MMIO may remain untouched */
     BOOT_STAGE_FB        = 5,   /* STAGE 5: framebuffer evaluated */
     BOOT_STAGE_IDLE      = 6,   /* STAGE 6: system halted in a branch loop */

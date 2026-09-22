@@ -2,7 +2,7 @@
  * DreyzeOS — Kernel Main
  * Target: Apple Watch Series 4 / Apple S4 (T8006)
  *
- * PHASE 4 — Step 2.7: T8006 Loader / RAM Handoff Contract Research
+ * PHASE 4 — Step 2.8: T8006 Loader Evidence / Documentation Truth Audit
  *
  * This is the C entry point for the DreyzeOS kernel.
  * Called from boot/entry.S after:
@@ -90,7 +90,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_info(DREYZEOS_VERSION_STRING);
     klog_info("Target:   " DREYZEOS_TARGET);
     klog_info("Arch:     " DREYZEOS_ARCH);
-    klog_info("Phase:    PHASE 4 - Step 2.7: Loader Handoff Research");
+    klog_info("Phase:    PHASE 4 - Step 2.8: Loader Evidence Audit");
     klog_info("Branch:   " DREYZEOS_CANONICAL_BRANCH);
     klog_info("Git SHA:  " GIT_COMMIT_SHA);
     klog_info("========================================");
@@ -134,7 +134,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     klog_hex("  __stack_top    ", (uint64_t)(uintptr_t)__stack_top);
 
     /* ================================================================
-     * STAGE 2 — Boot Metadata Status (Phase 4 Step 2.7)
+     * STAGE 2 — Boot Metadata Status (Phase 4 Step 2.8)
      *
      * The production handoff is intentionally unverified.  The initializer
      * preserves x0/x1 and supplies static fallback metadata without touching
@@ -174,14 +174,14 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
     boot_stage_set(BOOT_STAGE_BOOT_ARGS);
 
     /* ================================================================
-     * STAGE 3 — Memory Map Validated
+     * STAGE 3 — Memory Map Evidence Evaluated
      * ================================================================
      */
     if (binfo->dram_phys_base == 0 || binfo->dram_size == 0) {
         boot_stage_failsafe("Stage 3: DRAM physical base or size is 0");
     }
 
-    klog_info("[BOOT] Stage 3: Memory map validation:");
+    klog_info("[BOOT] Stage 3: Memory map evidence evaluation:");
     if (binfo->metadata_status == BOOT_METADATA_RUNTIME_VERIFIED) {
         klog_info("  [MEM] DRAM parameters are RUNTIME VERIFIED by handoff descriptor");
     } else if (binfo->metadata_status == BOOT_METADATA_STATIC_FALLBACK) {
@@ -246,7 +246,7 @@ void kernel_main(uint64_t dtree_ptr, uint64_t arg1, uint64_t boot_el)
 
     klog_info("");
     klog_info("========================================");
-    klog_info("PHASE 4 Step 2.7 COMPLETE: Loader Handoff Research Updated.");
+    klog_info("PHASE 4 Step 2.8 COMPLETE: Loader Evidence Audit Updated.");
     klog_info("All early boot invariants verified.");
     klog_info("NO NAND writes. NO FB writes. NO unmasked interrupts.");
     klog_info("System entering branch-loop halt; WFI is not assumed safe before loader contract verification.");

@@ -51,7 +51,7 @@ Every range is labeled with its verification status:
 | **MIPI DSI Master** | `/arm-io/mipi-dsim` | `mipi-dsim-1,synopsys` | `0x0000000018400000`<br>`0x0000000018490000` | `0x90000` (576 KB)<br>`0x10000` (64 KB) | **CONFIRMED** | Synopsys DesignWare MIPI DSI controller |
 | **LCD / OLED Panel** | `/arm-io/mipi-dsim/lcd` | `lcd,summit` | N/A | N/A | **CONFIRMED** | Summit LTPO OLED panel (command mode) |
 | **Display DART (IOMMU)** | `/arm-io/dart-disp0` | `dart,t8020` | `0x0000000018704000`<br>`0x0000000018700000` | `0x4000` (16 KB)<br>`0x4000` (16 KB) | **CONFIRMED** | IOMMU for display DMA engines |
-| **Framebuffer Base** | `/vram` | N/A | Dynamic in DRAM | ~3.5 MB | **UNKNOWN** | Allocated dynamically by iBoot; passed in `x0` DT |
+| **Framebuffer Base** | `/vram` | N/A | Static `reg=[0x0+0x0]` | Runtime size/base absent | **UNKNOWN** | The reviewed static ADT does not contain a live framebuffer range; a runtime producer/handoff is still missing |
 | **DockChannel RTP (Touch/Crown)** | `/arm-io/dockchannel-rtp` | `dockchannel,t8002` | `0x000000004d080000`<br>`0x000000004d08c000`<br>`0x000000004d0b0000`<br>`0x000000004d0b4000`<br>`0x000000004d0a8000`<br>`0x000000004d0ac000` | `0x1000` (4 KB)<br>`0x1000` (4 KB)<br>`0x1000` (4 KB)<br>`0x1000` (4 KB)<br>`0x1000` (4 KB)<br>`0x1000` (4 KB) | **CONFIRMED** | IPC interface to Real-Time Processor (IRQ 76) |
 | **Multi-Touch Controller** | `.../rtp-transport/multi-touch` | `A3T531B,1` | No AP MMIO | N/A | **CONFIRMED** | Managed via RTP coprocessor over DockChannel IPC |
 | **Digital Crown Optical Encoder** | `.../rtp-transport/optical` | `optical` | No AP MMIO | N/A | **CONFIRMED** | Managed via RTP coprocessor over DockChannel IPC |
@@ -74,8 +74,8 @@ Every range is labeled with its verification status:
 | **AOP (Always-On Processor)** | `/arm-io/aop` | `iop,ascwrap-v2` | `0x000000004d600000`<br>`0x000000004c400000` | `0x160000` (1408 KB)<br>`0x60000` (384 KB) | **CONFIRMED** | Sensor hub and low-power management |
 | **RTP (Real-Time Processor)** | `/arm-io/rtp` | `iop,ascwrap-v2` | `0x000000004d400000`<br>`0x000000004cc00000` | `0x100000` (1 MB)<br>`0x60000` (384 KB) | **CONFIRMED** | Dedicated coprocessor for touch & crown |
 | **SEP (Secure Enclave)** | `/arm-io/sep` | `iop,ascwrap-v2` | `0x0000000042400000`<br>`0x0000000042050000` | `0xc000` (48 KB)<br>`0x4000` (16 KB) | **CONFIRMED** | Secure Enclave Processor mailboxes |
-| **Main DRAM Base** | `/memory` | N/A | `0x0000000800000000` | 1 GB (`0x40000000`) | **LIKELY** | Dynamically placed by iBoot; matches A11/A12 base |
-| **Reserved Memory Regions** | `/chosen/memory-map` | N/A | Dynamic in DRAM | Variable | **UNKNOWN** | 16 slots populated by iBoot at boot time |
+| **Main DRAM Base** | `/memory` | N/A | Static `base=0,size=0` | Static size `0` | **BLOCKED** | `0x800000000` and `0x40000000` are historical research fallbacks, not confirmed values from this artifact; runtime population is absent |
+| **Reserved Memory Regions** | `/chosen/memory-map` | N/A | All `MemoryMapReserved-*` entries are empty/zero in the static dump | No static ranges | **BLOCKED** | A runtime producer may populate them, but this snapshot does not identify or prove that mechanism for the target |
 
 ---
 
@@ -86,7 +86,7 @@ Every range is labeled with its verification status:
 - **Compatible**: `aic,1` (Apple Interrupt Controller v2)
 - **Base**: `0x2d180000`, Size: `0x8000`
 - **CPUs**: Dual core (`#main-cpus: 2`)
-- **Implication for DreyzeOS**: We can now write a real interrupt driver for DreyzeOS! The AIC2 register interface is well-understood from open-source Asahi Linux / PongoOS (`AIC_IRQ_PENDING`, `AIC_IRQ_MASK`, `AIC_TARGET_CPU`).
+- **Implication for DreyzeOS**: Static register research is available, but production AIC access remains gated. Asahi Linux/PongoOS behavior is architectural context, not Watch4,2 runtime mapping evidence.
 
 ### 3.2 Primary UART Console
 - **Node**: `/arm-io/uart0`
@@ -94,7 +94,7 @@ Every range is labeled with its verification status:
 - **Base**: `0x2e500000`, Size: `0x4000`
 - **Interrupt**: 262 (`0x106`)
 - **Clock**: `0x00000017` gate
-- **Implication for DreyzeOS**: We now have the **EXACT physical MMIO address for the boot UART!**
+- **Implication for DreyzeOS**: We have the **static physical DeviceTree address** for UART0; its runtime virtual mapping, clock state, and safe handoff remain UNKNOWN.
   - Replacing `UNKNOWN_T8006_UART0_BASE` (`0xDEADBEEF...`) with `0x2e500000` in `hal/t8006/memory_map.h`!
   - Standard Apple UART register layout:
     * `ULCON`: `0x00`
@@ -110,7 +110,7 @@ Every range is labeled with its verification status:
 - **Interface**: MIPI DSI (`mipi-dsim-1,synopsys`) at `0x18400000`
 - **Panel**: `lcd,summit` (LTPO OLED panel)
 - **Resolution**: 368 x 448 pixels (44mm model)
-- **Framebuffer Base**: Allocated dynamically by iBoot and mapped through `dart-disp0` (`0x18704000`). If booting from iBoot or using a bootloader handover, the framebuffer base is retrieved from `boot_args` or `/chosen/memory-map`.
+- **Framebuffer Base**: The static `/vram` entry is zero-filled. A runtime boot handoff may provide a framebuffer through `boot_args` or `/chosen/memory-map`, but that live value and mapping are not present in the reviewed artifact.
 
 ### 3.4 Multi-Touch & Digital Crown
 - **Critical Finding**: **No direct AP MMIO registers exist for touch or crown.**

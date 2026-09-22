@@ -1039,7 +1039,7 @@ def test_boot_stage_error_separate_from_last_successful():
         f"BOOT_STAGE_ERROR must fit in uint8_t, got {BOOT_STAGE_ERROR}"
 
 # ============================================================
-# Tests: Phase 4 Step 2.7 — T8006 Loader / RAM Handoff Contract Research
+# Tests: Phase 4 Step 2.8 — T8006 Loader Evidence / Documentation Truth Audit
 # ============================================================
 
 @test("C-level host test harness execution")
@@ -1257,20 +1257,22 @@ def test_cpu_state_symbols_and_safety():
 @test("boot_args — real virt_base tracking without phys_base proxying")
 def test_virt_base_truthfulness():
     """Simulate platform_boot_info_init: virt_base is NEVER proxied from phys_base."""
-    # When virt_base is 0 (or raw ADT), virt_base_valid must be False
+    # Host-only fixture: 0x800000000 is a historical research fallback, not
+    # a confirmed runtime DRAM base. Raw static ADT data has no live map.
     raw_adt_info = {
         "boot_args_present": False,
         "dram_phys_base": 0x800000000,
         "dram_virt_base": 0,
         "virt_base_valid": False,
-        "metadata_status": "RUNTIME_VERIFIED"
+        "metadata_status": "STATIC_PLACEHOLDER"
     }
     assert raw_adt_info["virt_base_valid"] is False
     assert raw_adt_info["dram_virt_base"] == 0
     # Must never equal phys_base if not explicitly supplied
     assert raw_adt_info["dram_virt_base"] != raw_adt_info["dram_phys_base"]
 
-    # When boot_args provides virt_base, it is real
+    # Host-only fixture: an explicit boot_args value is accepted only when a
+    # future runtime verifier supplies it; this does not prove target hardware.
     boot_args_info = {
         "boot_args_present": True,
         "dram_phys_base": 0x800000000,
@@ -1284,15 +1286,75 @@ def test_virt_base_truthfulness():
 
 @test("framebuffer — hard safety interlock symbols in ELF")
 def test_framebuffer_hard_interlock_symbols():
-    """Verify mapping_verified getter and setter symbols exist in compiled ELF."""
+    """Verify production keeps the framebuffer gate closed by construction."""
     root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
     elf_path = os.path.join(root_dir, "build", "DreyzeOS.elf")
     result = run_command_cross(
         ["aarch64-linux-gnu-nm", elf_path],
         "aarch64-linux-gnu-nm /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"
     )
-    assert "framebuffer_set_mapping_verified" in result.stdout
+    assert "framebuffer_enable_writes" in result.stdout
     assert "framebuffer_is_mapping_verified" in result.stdout
+    assert "framebuffer_set_mapping_verified" not in result.stdout
+
+
+@test("production ELF — host-only gate setters are absent")
+def test_production_elf_excludes_host_only_setters():
+    """HOST_TEST-only setters must not be linkable from the production image."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    elf_path = os.path.join(root_dir, "build", "DreyzeOS.elf")
+    result = run_command_cross(
+        ["aarch64-linux-gnu-nm", "-a", elf_path],
+        "aarch64-linux-gnu-nm -a /mnt/c/Users/pc/Desktop/DreyzeOS/build/DreyzeOS.elf"
+    )
+    assert result.returncode == 0, result.stderr
+    forbidden = [
+        "framebuffer_set_virtual_base_for_test",
+        "framebuffer_set_mapping_verified_for_test",
+        "mmio_mapping_set_verified_for_test",
+        "loader_handoff_set_verified_for_test",
+    ]
+    for symbol in forbidden:
+        assert symbol not in result.stdout, f"HOST_TEST symbol leaked into ELF: {symbol}"
+
+
+@test("static ADT — zero placeholders are not documented as runtime DRAM")
+def test_static_memory_evidence_truthfulness():
+    """Keep the exact static /memory and /chosen/memory-map evidence visible."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    with open(os.path.join(root_dir, "research", "ipsw", "21U580", "nodes_dump.txt"), encoding="utf-8") as f:
+        nodes = f.read()
+    with open(os.path.join(root_dir, "docs", "DEVTREE_REPORT.md"), encoding="utf-8") as f:
+        report = f.read()
+    with open(os.path.join(root_dir, "docs", "T8006_LOADER_RESEARCH.md"), encoding="utf-8") as f:
+        research = f.read()
+
+    assert "NODE: /memory" in nodes
+    assert "reg: base=0x0000000000000000 size=0x0" in nodes
+    assert "NODE: /chosen/memory-map" in nodes
+    assert "MemoryMapReserved-0: ''" in nodes
+    assert "base=0,size=0" in report
+    assert "not confirmed" in report.lower()
+    assert "runtime dram" in research.lower()
+    assert "UNKNOWN" in research
+
+
+@test("PIC stage-0 — host-only source has no device or control-flow primitive")
+def test_pic_stage0_host_is_non_executable_model():
+    """The PIC model must remain a pure bounded validator."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    paths = [
+        os.path.join(root_dir, "tests", "pic_stage0_host.c"),
+        os.path.join(root_dir, "tests", "pic_stage0_host.h"),
+    ]
+    source = "\n".join(open(path, encoding="utf-8").read() for path in paths)
+    upper = source.upper()
+    for forbidden in ["MMIO_READ", "MMIO_WRITE", "__ASM__", "ERET", "USBLITER8"]:
+        assert forbidden not in upper, f"PIC host model contains forbidden primitive: {forbidden}"
+    assert "memcpy(&output->descriptor_copy" in source
+    assert "target_entry_va" in source
+    assert ("does not relocate" in source.lower() or
+            "never relocates" in source.lower())
 
 
 @test("DeviceTree parser — malformed and fuzz-like blobs rejection")
@@ -1384,7 +1446,7 @@ def main():
         test_boot_stage_progression,
         test_boot_stage_failsafe_preserves_last_successful,
         test_boot_stage_error_separate_from_last_successful,
-        # Phase 4 Step 2.7 — T8006 Loader / RAM Handoff Contract Research
+        # Phase 4 Step 2.8 — T8006 Loader Evidence / Documentation Truth Audit
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,
@@ -1394,6 +1456,9 @@ def main():
         test_cpu_state_symbols_and_safety,
         test_virt_base_truthfulness,
         test_framebuffer_hard_interlock_symbols,
+        test_production_elf_excludes_host_only_setters,
+        test_static_memory_evidence_truthfulness,
+        test_pic_stage0_host_is_non_executable_model,
         test_devicetree_malformed_fuzz,
         test_elf_relocation_audit,
     ]

@@ -101,7 +101,8 @@ const framebuffer_t *framebuffer_get_info(void)
     return g_fb.is_configured ? &g_fb : NULL;
 }
 
-void framebuffer_set_mapping_verified(bool verified)
+#ifdef HOST_TEST
+void framebuffer_set_mapping_verified_for_test(bool verified)
 {
     /* No production path may open the gate without an explicit virtual base. */
     if (verified && (!g_fb.is_configured || g_fb.base_vaddr == 0)) {
@@ -116,6 +117,8 @@ void framebuffer_set_mapping_verified(bool verified)
         g_fb.is_write_allowed = false;
     }
 }
+
+#endif
 
 #ifdef HOST_TEST
 void framebuffer_set_virtual_base_for_test(uintptr_t base_vaddr)

@@ -20,7 +20,7 @@ until proven otherwise.
 | Reading kernelcache via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Public source targets Watch4,1; no device run |
 | Reading DeviceTree via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Same constraints as kernelcache |
 | RAM-only code injection via PongoOS | MEDIUM | YES (reboot) | Yes | Unlikely | NO | UNKNOWN for T8006 | Requires checkm8 or similar |
-| checkm8 DFU exploit on T8006 | BLOCKED | N/A | N/A | N/A | NO | CONFIRMED not a checkm8 target | Separate usbliter8 research was not executed |
+| checkm8 DFU exploit on T8006 | BLOCKED | N/A | N/A | N/A | NO | CONFIRMED not a checkm8 target | Separate usbliter8 T8006 research was inspected statically only; no exploit execution |
 | Modifying system partition | EXTREME | NO | Yes → bootloop | HIGH | YES | **NEVER** | PROHIBITED by project rules |
 | Overwriting iBoot | EXTREME | NO (brick) | N/A | CERTAIN | YES | **NEVER** | PROHIBITED — permanent brick |
 | Overwriting SecureROM area | EXTREME | NO (permanent) | N/A | CERTAIN | YES | **NEVER** | PROHIBITED — permanent brick |

@@ -3,10 +3,10 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.7: T8006 Loader / RAM Handoff Contract Research
+**Phase**: 4 — Step 2.8: T8006 Loader Evidence / Documentation Truth Audit
 **Canonical Branch**: `master`  
-**Step-Start Baseline Commit**: `6dec534db25ebf7df32b7f3c9b9886197bd2381d`
-**Host Test Status**: 42/42 PASS (Python + Native C Harness; C harness 8/8)
+**Step-Start Baseline Commit**: `b60be0401114ab73cbf735b440ebf3821dd6e7f0`
+**Host Test Status**: 45/45 PASS (Python + Native C Harness; C harness 8/8)
 **Build Status**: ELF=PASS, BIN=PASS, 0 Compiler Warnings  
 **Hardware Execution Gate**: **NOT READY (BLOCKED)**
 
@@ -85,14 +85,14 @@ The following items prevent safe hardware execution today:
 
 1. **Linker Load Address Discrepancy**:
    - `DreyzeOS.ld` links the binary at `0x100000000`.
-   - The real RAM delivery mechanism may load the binary at DRAM base (`0x800000000` + offset) or an SRAM buffer.
+   - A historical research fallback used `0x800000000` as a possible DRAM base, but the static `/memory` node is `base=0,size=0`; neither that base nor a 1 GiB range is confirmed at runtime. The real delivery location could instead be another RAM/SRAM region.
    - Executing an absolute-addressed image at a differing load address causes immediate invalid branches or data corruptions.
 2. **Unverified MMU Mapping**:
    - Until `SCTLR_EL1.M`, `TCR_EL1`, and `TTBR0_EL1` are captured, no virtual mapping can be presumed.
    - Physical framebuffer memory cannot be accessed as a virtual pointer.
 3. **Physical Hardware Delivery Interface**:
-   - Requires physical iBUS adapter and Raspberry Pi Pico 2 / RP2350 interposer running usbliter8.
-   - No confirmed working software-only path exists on watchOS 10.6.1.
+   - Public usbliter8 documents an iBUS/RP2350-style T8006 research setup, but this is a candidate delivery/research path, not a proven mandatory chain for Watch4,2 or DreyzeOS.
+   - No verified project-specific software-only/kexec path was found in the reviewed public evidence; this does not prove that no such path exists.
 
 ---
 
@@ -242,11 +242,10 @@ typedef struct {
 ## 15. RAM Delivery Research Status
 
 - **Firmware**: watchOS 10.6.1 (21U580).
-- **Software Jailbreak / kexec**: **NONE** exists publicly for this version.
-- **Hardware Exploit (usbliter8)**:
+- **Software Jailbreak / kexec**: No verified project-specific path was found in the reviewed public evidence; absence was not proven.
+- **Candidate public path (usbliter8)**:
   - Exploits USB buffer underflow in SecureROM DWC2 stack on Apple S4 (T8006).
-  - Requires physical connection to the diagnostic port via an iBUS S4/S5 adapter or AWRT tool.
-  - Requires an external RP2350 / Raspberry Pi Pico 2 microcontroller acting as a USB host controller interposer.
+  - Its public project documentation describes physical iBUS/AWRT and RP2350/Pico-class equipment as one research setup; that does not establish those components as a mandatory or exclusive DreyzeOS delivery chain.
   - Status for Watch4,2: **UNKNOWN/BLOCKED**. Public T8006-related code exists, but no confirmed turnkey DreyzeOS deployment contract exists for this exact board configuration.
 
 ---
@@ -258,7 +257,7 @@ Execution on real hardware may only proceed once **ALL** of the following condit
 1. [ ] Hardware load address is confirmed by a working loader or custom shim.
 2. [ ] Binary entry point matches loader expectations (or position-independent PIC loader is built).
 3. [ ] Handover MMU translation table state is verified.
-4. [ ] Physical iBUS diagnostic adapter and RP2350 interposer hardware are built and bench-tested.
+4. [ ] A target-specific delivery path is selected and its transfer bounds, payload destination, and control-flow behavior are statically verified; usbliter8/iBUS/RP2350 remain candidate research artifacts only.
 5. [ ] UART0 serial output is monitored with an oscilloscope/analyzer to verify baud and clock.
 6. [ ] User explicitly authorizes real hardware launch.
 

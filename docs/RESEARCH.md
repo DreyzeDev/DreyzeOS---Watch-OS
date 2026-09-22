@@ -219,8 +219,7 @@ Any apps running on DreyzeOS would choose their ABI independently.
 - **NOT applicable** to Series 4 (T8006 not checkm8 vulnerable)
 
 #### Option C: iBus + Future BootROM Research
-- **Requires**: iBus adapter + future undisclosed Series 4 bootrom exploit
-- **Status**: BLOCKED — no known T8006 BootROM vulnerability
+- **Status**: BLOCKED — public usbliter8 T8006-related research exists, but no target-specific DreyzeOS delivery contract or mandatory iBus/RP2350 chain is established
 - **Timeline**: Unknown
 
 #### Option D: IPSW DeviceTree + QEMU Emulation
