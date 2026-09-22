@@ -417,3 +417,17 @@ snapshot was added. Therefore this tool changes no readiness conclusion.
 **LOADER CONTRACT = BLOCKED**
 
 **FIRST HARDWARE EXECUTION = NOT READY**
+
+## Step 2.11 — unified offline handoff evidence
+
+The new evidence bundle and verifier are a deterministic HOST/OFFLINE bridge
+between the V1 descriptor, normalized CPU contract, MMU snapshot, ELF, and
+bounded object/range evidence. SHA-256 checks only local declaration equality;
+target strings do not prove capture identity; a `VERIFIED` descriptor bit is
+not a root of trust; and a VA-to-PA mapping is not ownership or access
+authority. Conflicting proven values are BLOCKED rather than resolved by
+preference.
+
+No target-specific captured bundle has been added. Runtime DRAM, payload
+placement/ownership, execution mapping, entry state, object bounds, complete
+reservations, and control transfer remain UNKNOWN/BLOCKED.

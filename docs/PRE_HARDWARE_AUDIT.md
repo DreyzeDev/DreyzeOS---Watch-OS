@@ -394,3 +394,15 @@ This does not change the target facts:
 The analyzer's loader-contract bridge is intentionally non-authoritative.
 **LOADER CONTRACT = BLOCKED** and
 **FIRST HARDWARE EXECUTION = NOT READY** remain unchanged.
+
+## Step 2.11 — evidence bundle gate
+
+`tools/handoff_evidence_verifier.py` is the single host-side orchestration
+path for future local evidence. It reports exact dependency nodes and sources,
+but never dereferences evidence pointers, opens MMIO, executes a payload, or
+creates a control-flow transfer. Mapping evidence cannot prove ownership,
+descriptor trust, or complete collision coverage.
+
+The current static `/memory = base 0,size 0` artifact remains separate from
+product RAM context. Without target-specific captured evidence the readiness
+gate remains `LOADER CONTRACT = BLOCKED` / `FIRST HARDWARE EXECUTION = NOT READY`.

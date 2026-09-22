@@ -1440,6 +1440,17 @@ def test_offline_mmu_snapshot_analyzer():
     output = (result.stdout or "") + (result.stderr or "")
     assert "OK" in output, output
 
+
+# Phase 4 Step 2.11 — Unified Offline Handoff Evidence Verifier
+@test("unified handoff evidence verifier — synthetic host suite")
+def test_offline_handoff_evidence_verifier():
+    """Run the deterministic local evidence-bundle verifier without hardware."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    verifier_tests = os.path.join(root_dir, "tests", "test_handoff_evidence_verifier.py")
+    result = run_command_cross([sys.executable, verifier_tests], "cd /home/pc/DreyzeOS---Watch-OS && python3 tests/test_handoff_evidence_verifier.py")
+    assert result.returncode == 0, (result.stdout or "") + (result.stderr or "")
+    assert "OK" in ((result.stdout or "") + (result.stderr or ""))
+
 # Run all tests
 # ============================================================
 
@@ -1486,6 +1497,7 @@ def main():
         test_boot_stage_error_separate_from_last_successful,
         # Phase 4 Step 2.9 — T8006 Loader Evidence / Documentation Truth Audit
         test_offline_mmu_snapshot_analyzer,
+        test_offline_handoff_evidence_verifier,
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,

@@ -334,3 +334,15 @@ The analyzer's current target result is still:
 
 *Last updated: Phase 4 Step 2.10 — offline translation evidence analyzer; no
 hardware execution performed.*
+
+## Step 2.11 — unified verifier only
+
+The repository now has a local evidence-bundle verifier for reviewing future
+captures. A synthetic offline result of READY is only a test of validator
+logic and remains `HARDWARE EVIDENCE STATUS = DESIGN`. It does not enable the
+MMIO/framebuffer gates, select a load address, or authorize execution.
+
+Until runtime DRAM provenance, normalized entry state, complete mappings,
+bounded descriptor/boot_args/DeviceTree data, ownership, collision coverage,
+and control transfer are target-specifically proven, hardware bring-up is not
+authorized: `LOADER CONTRACT = BLOCKED` and `FIRST HARDWARE EXECUTION = NOT READY`.

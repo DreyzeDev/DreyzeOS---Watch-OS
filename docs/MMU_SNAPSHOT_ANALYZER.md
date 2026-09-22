@@ -226,3 +226,15 @@ Until that evidence exists:
 `LOADER CONTRACT = BLOCKED`
 
 `FIRST HARDWARE EXECUTION = NOT READY`
+
+## Step 2.11 verifier integration
+
+The unified host verifier imports this analyzer rather than maintaining a
+second page-table walker. It preserves snapshot provenance, compares proven
+TCR/TTBR/MAIR facts with the bundle CPU state, audits the fixed DreyzeOS ELF,
+and leaves ownership and access authority separate from translation facts.
+See [HANDOFF_EVIDENCE_VERIFIER.md](HANDOFF_EVIDENCE_VERIFIER.md).
+
+No current Watch4,2 artifact contains a live translation-table snapshot. The
+static `/memory` result remains `base=0,size=0`; analyzer or synthetic results
+do not change hardware readiness.

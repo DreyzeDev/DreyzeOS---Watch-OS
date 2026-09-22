@@ -248,3 +248,18 @@ The snapshot format is documented in
 [research/mmu_snapshots/FORMAT.md](../research/mmu_snapshots/FORMAT.md).
 The current Watch4,2 static artifacts contain no runtime table snapshot, so the
 analyzer reduces future evidence ambiguity but does not move any hardware gate.
+
+## Step 2.11 unified evidence verification
+
+`tools/handoff_evidence_verifier.py` now orchestrates the V1 descriptor audit,
+CPU/MMU consistency checks, the Step 2.10 snapshot walker, ELF interval audit,
+bounded object parsing, and physical/virtual collision analysis. Its graph
+keeps mapping facts separate from ownership, descriptor trust, collision
+completeness, and control-transfer authority. The bundle format is documented
+in [research/handoff_evidence/FORMAT.md](../research/handoff_evidence/FORMAT.md)
+and the verifier behavior in
+[HANDOFF_EVIDENCE_VERIFIER.md](HANDOFF_EVIDENCE_VERIFIER.md).
+
+A synthetic bundle may validate the offline model, but it is DESIGN evidence
+only. The Watch4,2 target remains `LOADER CONTRACT = BLOCKED` and
+`FIRST HARDWARE EXECUTION = NOT READY`.
