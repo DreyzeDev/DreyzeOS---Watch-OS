@@ -137,6 +137,7 @@ void boot_stage_failsafe(const char *reason)
 #endif
 }
 
+#ifdef HOST_TEST
 void boot_stage_reset_for_test(void)
 {
     g_current_stage = BOOT_STAGE_ENTRY;
@@ -144,3 +145,4 @@ void boot_stage_reset_for_test(void)
     g_failure_stage = BOOT_STAGE_ENTRY;
     g_failure_reason = NULL;
 }
+#endif

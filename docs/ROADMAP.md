@@ -114,7 +114,7 @@ This document tracks the development phases from initial research to a working G
 ### Notes
 - This phase requires physical Apple Watch Series 4
 - Execution must be RAM-only and not touch flash
-- Device must be restorable via DFU after experiment
+- A restore path must be independently confirmed before any experiment; recovery from arbitrary execution state is not guaranteed
 
 ---
 

@@ -25,6 +25,7 @@
 #include "../hal/t8006/platform.h"
 #include "../include/log.h"
 #include "pic_stage0_host.h"
+#include "loader_entry_contract.h"
 
 /* ============================================================
  * Test Harness Stubs for Host Execution
@@ -509,6 +510,18 @@ static void test_handoff_descriptor_and_ranges(void)
     assert(info->dram_virt_base == ba.virt_base);
     assert(info->virt_base_valid == true);
 
+    /* Runtime proof is not tied to the historical 4 GiB/1 GiB fixture. */
+    ba.phys_base = 0x20000000ULL;
+    ba.mem_size = 0x01000000ULL;
+    ba.virt_base = 0x40000000ULL;
+    platform_boot_info_init_verified_for_test(&descriptor, true);
+    info = platform_get_boot_info();
+    assert(info->metadata_status == BOOT_METADATA_RUNTIME_VERIFIED);
+    assert(info->dram_phys_base == ba.phys_base);
+    assert(info->dram_size == ba.mem_size);
+    assert(info->dram_virt_base == ba.virt_base);
+    assert(info->virt_base_valid == true);
+
     /* A larger V1-compatible descriptor is accepted without reading its tail. */
     descriptor.size = DREYZE_HANDOFF_V1_SIZE + 64U;
     assert(loader_handoff_descriptor_validate(&descriptor) == true);
@@ -593,9 +606,10 @@ int main(void)
     test_handoff_descriptor_and_ranges();
     test_pre_hardware_mmio_gate();
     pic_stage0_host_run_self_tests();
+    loader_entry_contract_run_self_tests();
 
     printf("==================================================\n");
-    printf("All C-Level Host Tests PASSED (8/8) ✓\n");
+    printf("All C-Level Host Tests PASSED (9/9) ✓\n");
     printf("==================================================\n\n");
 
     return 0;

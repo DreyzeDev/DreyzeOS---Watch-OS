@@ -1039,7 +1039,7 @@ def test_boot_stage_error_separate_from_last_successful():
         f"BOOT_STAGE_ERROR must fit in uint8_t, got {BOOT_STAGE_ERROR}"
 
 # ============================================================
-# Tests: Phase 4 Step 2.8 — T8006 Loader Evidence / Documentation Truth Audit
+# Tests: Phase 4 Step 2.9 — T8006 Loader Evidence / Documentation Truth Audit
 # ============================================================
 
 @test("C-level host test harness execution")
@@ -1062,13 +1062,14 @@ def test_c_host_tests_execution():
         os.path.join(root_dir, "hal", "t8006", "framebuffer.c"),
         os.path.join(root_dir, "lib", "string.c"),
         os.path.join(root_dir, "tests", "pic_stage0_host.c"),
+        os.path.join(root_dir, "tests", "loader_entry_contract.c"),
         "-o", c_bin
     ]
     wsl_cmd = (
         "gcc -DHOST_TEST -I. -Iinclude -Ilib "
         "tests/test_host_c.c kernel/boot_stage.c kernel/log.c hal/t8006/device_tree.c "
         "hal/t8006/mmio_gate.c hal/t8006/handoff_gate.c hal/t8006/platform.c hal/t8006/uart.c hal/t8006/aic.c "
-        "hal/t8006/framebuffer.c lib/string.c tests/pic_stage0_host.c "
+        "hal/t8006/framebuffer.c lib/string.c tests/pic_stage0_host.c " "tests/loader_entry_contract.c "
         "-o build/test_host_c && ./build/test_host_c"
     )
     result = run_command_cross(compile_cmd, f"cd /mnt/c/Users/pc/Desktop/DreyzeOS && {wsl_cmd}")
@@ -1324,6 +1325,14 @@ def test_production_elf_excludes_host_only_setters():
         "framebuffer_set_mapping_verified_for_test",
         "mmio_mapping_set_verified_for_test",
         "loader_handoff_set_verified_for_test",
+        "loader_entry_contract_validate",
+        "loader_entry_contract_run_self_tests",
+        "platform_boot_info_init_verified_for_test",
+        "aic_mmio_access_count_for_test",
+        "aic_reset_mmio_access_count_for_test",
+        "uart_mmio_access_count_for_test",
+        "uart_reset_mmio_access_count_for_test",
+        "boot_stage_reset_for_test",
     ]
     for symbol in forbidden:
         assert symbol not in result.stdout, f"HOST_TEST symbol leaked into ELF: {symbol}"
@@ -1457,7 +1466,7 @@ def main():
         test_boot_stage_progression,
         test_boot_stage_failsafe_preserves_last_successful,
         test_boot_stage_error_separate_from_last_successful,
-        # Phase 4 Step 2.8 — T8006 Loader Evidence / Documentation Truth Audit
+        # Phase 4 Step 2.9 — T8006 Loader Evidence / Documentation Truth Audit
         test_c_host_tests_execution,
         test_linker_layout_and_assertions,
         test_entry_system_register_audit,

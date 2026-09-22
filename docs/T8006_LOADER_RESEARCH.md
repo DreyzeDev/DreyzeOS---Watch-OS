@@ -1,4 +1,4 @@
-# T8006 Loader Evidence Audit — Phase 4 Step 2.8
+# T8006 Loader Evidence Audit — Phase 4 Step 2.9
 
 **Target**: Apple Watch Series 4, 44mm GPS, `Watch4,2`, `N131bAP` / `n131bAP`
 **SoC**: Apple S4 / `T8006`, AArch64
@@ -308,13 +308,34 @@ loader cannot normalize the state, append a versioned V2 proposal rather than
 silently changing V1; candidate fields would still need independent validity
 and mapping proofs.
 
+## 9A. Step 2.9 internal Loader Entry Contract
+
+The host-only implementation in
+[LOADER_ENTRY_CONTRACT.md](LOADER_ENTRY_CONTRACT.md) is the machine-checkable
+DESIGN model for the missing loader preconditions. It does not modify V1 or
+enter the production image.
+
+The model separates facts from authority: a non-zero PA/VA, a V1 VERIFIED bit,
+or an MMU-enabled bit does not authorize access. The validator requires a
+trusted copied descriptor, normalized EL1/SP/DAIF/translation/cache policy,
+explicit executable/readable/writable mapping ranges, RUNTIME_VERIFIED DRAM
+provenance, independently bounded nested objects, and a complete collision
+audit. It returns explicit rejection statuses and never dereferences a raw
+pointer or performs a transfer.
+
+The preferred architecture remains a tiny PIC stage-0 DESIGN followed by the
+current fixed non-PIC kernel, but the PIC model is HOST ONLY. It cannot prove
+target PA/VA equivalence, live mappings, CPU register state, loader ownership,
+or a control-flow primitive. V1 therefore remains stable and the hardware
+readiness state remains BLOCKED.
+
 ## 10. Production MMIO and framebuffer safety
 
 * `mmio_mapping_set_verified_for_test`,
   `loader_handoff_set_verified_for_test`, and
   `framebuffer_set_mapping_verified_for_test` are under `HOST_TEST` only.
 * The production ELF must not contain those setters or
-  `framebuffer_set_virtual_base_for_test`; the Step 2.8 test checks symbols.
+  `framebuffer_set_virtual_base_for_test`; the production-ELF test checks symbols.
 * In the production framebuffer path, `base_vaddr == 0`,
   `mapping_verified == false`, and `is_write_allowed == false` after init.
 * `framebuffer_enable_writes(true)` remains rejected until a future trusted

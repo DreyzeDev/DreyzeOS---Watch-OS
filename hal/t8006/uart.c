@@ -39,17 +39,23 @@
 #endif
 
 static bool g_uart_ready = false;
+#ifdef HOST_TEST
 static uint32_t g_uart_mmio_access_count = 0;
+#endif
 
 static uint32_t uart_mmio_read32(uint64_t address)
 {
+#ifdef HOST_TEST
     g_uart_mmio_access_count++;
+#endif
     return MMIO_READ32(address);
 }
 
 static void uart_mmio_write32(uint64_t address, uint32_t value)
 {
+#ifdef HOST_TEST
     g_uart_mmio_access_count++;
+#endif
     MMIO_WRITE32(address, value);
 }
 
@@ -91,6 +97,7 @@ bool uart_is_ready(void)
     return g_uart_ready;
 }
 
+#ifdef HOST_TEST
 uint32_t uart_mmio_access_count_for_test(void)
 {
     return g_uart_mmio_access_count;
@@ -100,6 +107,7 @@ void uart_reset_mmio_access_count_for_test(void)
 {
     g_uart_mmio_access_count = 0;
 }
+#endif
 
 /*
  * uart_putc — Transmit single character over UART0 with timeout protection.

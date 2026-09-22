@@ -16,16 +16,16 @@ until proven otherwise.
 |-----------|-----------|-------------|-------------|----------------|----------------|----------------------|-------|
 | Reading device information (model, UDID) | NONE | N/A | No | No | No | CONFIRMED | Normal operation |
 | Entering DFU mode | UNKNOWN | UNKNOWN | UNKNOWN | UNKNOWN | No | UNKNOWN | Public stock procedure is documented, but it was not executed or verified on this target |
-| Entering Recovery mode | LOW | YES (restore) | Yes | No | No | LIKELY | Standard Apple procedure |
+| Entering Recovery mode | UNKNOWN/BLOCKED | UNKNOWN | UNKNOWN | UNKNOWN | No | UNKNOWN | Stock recovery/restore documentation is context only; arbitrary experimental-state recovery was not verified on this target |
 | Reading kernelcache via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Public source targets Watch4,1; no device run |
 | Reading DeviceTree via Peepo | LOW-MED | YES | Possibly | No | No | UNKNOWN/BLOCKED for Watch4,2 | Same constraints as kernelcache |
-| RAM-only code injection via PongoOS | MEDIUM | YES (reboot) | Yes | Unlikely | NO | UNKNOWN for T8006 | Requires checkm8 or similar |
+| RAM-only code injection via PongoOS | UNKNOWN/BLOCKED | UNKNOWN | UNKNOWN | UNKNOWN | NO | UNKNOWN for T8006 | PongoOS is a different-SoC reference; no DreyzeOS run or recovery proof |
 | checkm8 DFU exploit on T8006 | BLOCKED | N/A | N/A | N/A | NO | CONFIRMED not a checkm8 target | Separate usbliter8 T8006 research was inspected statically only; no exploit execution |
 | Modifying system partition | EXTREME | NO | Yes → bootloop | HIGH | YES | **NEVER** | PROHIBITED by project rules |
 | Overwriting iBoot | EXTREME | NO (brick) | N/A | CERTAIN | YES | **NEVER** | PROHIBITED — permanent brick |
 | Overwriting SecureROM area | EXTREME | NO (permanent) | N/A | CERTAIN | YES | **NEVER** | PROHIBITED — permanent brick |
 | Writing to NAND flash | HIGH | Partial only | N/A | HIGH | YES | **NEVER** | PROHIBITED by project rules |
-| Loading unsigned code via RAM exploit | MEDIUM | YES (reboot) | Yes | Low | NO | UNKNOWN/BLOCKED | Requires a proven loader/handoff contract |
+| Loading unsigned code via RAM exploit | UNKNOWN/BLOCKED | UNKNOWN | UNKNOWN | UNKNOWN | NO | UNKNOWN/BLOCKED | Requires a proven loader/handoff contract; recovery is not guaranteed |
 | Poking unknown MMIO addresses | HIGH | Maybe | Likely | Possible | No | **NEVER without research** | Can freeze or crash device |
 | Reading from unknown MMIO | MEDIUM | YES | Possible | Low | No | UNKNOWN | Less dangerous than writing |
 | Disabling WDT (watchdog timer) | MEDIUM | YES (reboot) | Possibly | Low | No | UNKNOWN | Common in OS research |

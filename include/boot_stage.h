@@ -57,4 +57,6 @@ const char *boot_stage_name(boot_stage_t stage);
 void boot_stage_failsafe(const char *reason);
 
 /* Reset boot stage state machine — strictly for unit tests */
+#ifdef HOST_TEST
 void boot_stage_reset_for_test(void);
+#endif

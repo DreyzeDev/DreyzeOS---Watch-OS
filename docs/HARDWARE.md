@@ -266,15 +266,15 @@ NOTE: The sketch above is not a source for current constants. Static
 | Field | Value | Status |
 |-------|-------|--------|
 | DFU method | Public documentation describes an iBUS/diagnostic adapter; exact Watch4,2 path unverified | UNKNOWN |
-| Port location | Under bottom strap lug | CONFIRMED |
-| iBus availability | Third-party (limited market) | CONFIRMED |
-| Water resistance after DFU | Compromised (permanently) | CONFIRMED |
-| checkm8 via DFU | NO — T8006 not vulnerable | CONFIRMED |
-| Restore via DFU | YES (with valid signed IPSW) | CONFIRMED |
+| Port location | Public reports place a diagnostic contact under the bottom strap lug; exact Watch4,2 access was not independently verified | UNKNOWN |
+| iBus availability | Public third-party research/listings mention adapters; target compatibility and availability are unverified | UNKNOWN |
+| Water resistance after DFU | Seal/service condition after physical access is target- and procedure-dependent; not verified here | UNKNOWN |
+| checkm8 via DFU | Public research does not include T8006 in the checkm8 target set; no exploit was executed | LIKELY |
+| Restore via DFU | Public stock restore documentation exists, but target accessibility and recovery from arbitrary experimental state are unverified | UNKNOWN/BLOCKED |
 
-> **MAC REQUIRED**: DFU restore of Apple Watch requires macOS with Apple Configurator 2 or iTunes.  
-> Reason: The restore protocol requires signed IPSW loading via Apple servers, and the USB  
-> protocol used is only implemented in Apple Configurator 2 / iTunes on macOS.
+> Public stock documentation describes macOS-based Apple restore tooling. This
+> audit did not verify current tool support for Watch4,2, and that path must
+> not be treated as a recovery guarantee for arbitrary experimental state.
 
 ---
 

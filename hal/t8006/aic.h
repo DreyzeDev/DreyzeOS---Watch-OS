@@ -106,5 +106,7 @@ void aic_handle_irq(void);
 /* Print diagnostic info to klog */
 void aic_diag(void);
 bool aic_is_initialized(void);
+#ifdef HOST_TEST
 uint32_t aic_mmio_access_count_for_test(void);
 void aic_reset_mmio_access_count_for_test(void);
+#endif

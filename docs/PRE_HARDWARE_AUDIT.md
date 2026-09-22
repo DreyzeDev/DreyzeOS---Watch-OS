@@ -3,10 +3,10 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.8: T8006 Loader Evidence / Documentation Truth Audit
+**Phase**: 4 — Step 2.9: Loader Contract Closure & Safe Stage-0 Architecture
 **Canonical Branch**: `master`  
-**Step-Start Baseline Commit**: `b60be0401114ab73cbf735b440ebf3821dd6e7f0`
-**Host Test Status**: 45/45 PASS (Python + Native C Harness; C harness 8/8)
+**Step-Start Baseline Commit**: `ac8c51b2065ce23fab48466ee1dc71ce4c5544ff`
+**Host Test Status**: 45/45 PASS (Python) + 9/9 PASS (Native C Harness)
 **Build Status**: ELF=PASS, BIN=PASS, 0 Compiler Warnings  
 **Hardware Execution Gate**: **NOT READY (BLOCKED)**
 
@@ -288,7 +288,26 @@ Execution on real hardware may only proceed once **ALL** of the following condit
 | **Expected recovery path documented** | **CONFIRMED** | Crown + Side Button expected reset documented |
 | **Build provenance recorded** | **CONFIRMED** | Git SHA + canonical branch embedded |
 
-## 18. DreyzeOS Loader ABI — DESIGN / NOT YET HARDWARE VERIFIED
+## 18A. Step 2.9 Loader Entry Contract — DESIGN / HOST ONLY
+
+The native host-only model in
+[LOADER_ENTRY_CONTRACT.md](LOADER_ENTRY_CONTRACT.md) is now the authoritative
+validation design for a future loader handoff. It keeps V1 at exactly 128
+bytes and separately models descriptor readability/copy proof, EL1/SP/DAIF,
+translation and cache normalization, executable/readable/writable mappings,
+runtime DRAM provenance, bounded boot_args/DeviceTree ranges, and collision
+exclusion.
+
+The model rejects incomplete proof with explicit statuses. It never probes a
+pointer, copies untrusted memory, opens MMIO or framebuffer gates, invokes a
+payload, or performs control-flow transfer. The current production path still
+records unverified x0/x1 and remains closed-by-default.
+
+ABI V2 NEEDED NOW: NO. External CPU-state normalization is the preferred
+DESIGN while V1 remains stable. The exact static ADT /memory value is still
+base=0,size=0; runtime DRAM base/size remain UNKNOWN/BLOCKED.
+
+## 19. DreyzeOS Loader ABI — DESIGN / NOT YET HARDWARE VERIFIED
 
 The project now has a host-testable descriptor design, but no real loader or
 shim implements it. The descriptor is intended to become the DreyzeOS-owned

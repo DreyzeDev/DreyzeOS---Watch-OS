@@ -487,9 +487,10 @@ static void platform_boot_info_apply_verified_boot_args(
         return;
     }
 
-    if (ba->phys_base < 0x100000000ULL ||
-        ba->mem_size < 0x1000000ULL ||
-        ba->mem_size > 0x80000000ULL) {
+    /* Only arithmetic sanity is justified here; no historical T8006
+     * DRAM base or product-size threshold is a runtime proof. */
+    if (ba->phys_base == 0 || ba->mem_size == 0 ||
+        ba->mem_size > (uint64_t)-1 - ba->phys_base) {
         return;
     }
 

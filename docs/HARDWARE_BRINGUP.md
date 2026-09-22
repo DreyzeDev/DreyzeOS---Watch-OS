@@ -3,7 +3,7 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
 **SoC**: Apple S4 / T8006, AArch64  
 **watchOS**: 10.6.1 (21U580)  
-**Phase**: 4 — Step 2.8: T8006 Loader Evidence / Documentation Truth Audit
+**Phase**: 4 — Step 2.9: Loader Contract Closure & Safe Stage-0 Architecture
 **Status**: Pre-hardware (host-side validation complete, real device test BLOCKED)
 
 ---
@@ -37,7 +37,7 @@ Before DreyzeOS can be safely executed on real hardware, the following blockers 
 | **Identity mapping at handoff** | UNKNOWN / BLOCKED | No T8006 loader evidence proves a flat map | **UNKNOWN/BLOCKED** |
 | **Relocation requirements** | Static / non-PIC | Statically linked at `0x100000000` (0 relocs) | **BLOCKED** |
 | **Delivery vector (usbliter8)** | Public T8006-related research exists; exact Watch4,2 path unresolved | BootROM USB DWC2 research, requires external hardware | **UNKNOWN/BLOCKED** |
-| **Diagnostic UART physical pin** | UNKNOWN | iBUS 5-pin connector TX line | **UNKNOWN** |
+| **Diagnostic UART physical pin** | UNKNOWN | Candidate iBUS/diagnostic route; exact target pin unverified | **UNKNOWN** |
 
 > [!IMPORTANT]
 > The current load address `0x100000000` in `DreyzeOS.ld` is a placeholder. Loading the binary at any arbitrary physical address without matching link-time VMA will cause faults on absolute address references. Real hardware execution remains **BLOCKED**.
@@ -92,7 +92,7 @@ RAM diagnostics and selects static fallback metadata. It does not dereference
 either value, auto-detect an ABI, or guess an ADT size. A single loader handoff
 descriptor is the authoritative trust state; its verified ranges must prove
 pointer ownership and bounded lengths. A `boot_args->devicetree_p` value is a
-separate trust boundary and requires its own independently verified range.
+separate trust boundary and requires its own independently verified range. The host-only Loader Entry Contract model and rejection matrix are documented in [LOADER_ENTRY_CONTRACT.md](LOADER_ENTRY_CONTRACT.md).
 
 ### DreyzeOS Loader ABI — DESIGN / NOT YET HARDWARE VERIFIED
 
@@ -295,6 +295,7 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 | Actual MMU/TTBR mappings | **UNKNOWN/BLOCKED** | SCTLR/TCR/TTBR/MAIR values alone do not prove a usable mapping |
 | Loader -> DreyzeOS handoff ABI | **BLOCKED** | No loader/shim selected; XNU `x0=boot_args` is not sufficient evidence |
 | boot_args / DeviceTree availability | **UNKNOWN** | Parser supports both forms, but future loader delivery is unproven |
+| Native loader entry contract | **DESIGN / HOST ONLY** | Explicit validator exists, but no target loader proves its inputs |
 | DeviceTree bounds-checked | **CONFIRMED** | Recursion limit 32, fuzz tested |
 | UART timeout safe | **CONFIRMED** | Non-blocking loop with cycle limit |
 | IRQ delivery disabled | **CONFIRMED** | DAIF=0xF after entry.S; AIC MMIO/configuration remains untouched and unknown |
@@ -308,4 +309,4 @@ Bounds / overflow check passed? ──(No)──► BLOCKED
 
 ---
 
-*Last updated: Phase 4 Step 2.8 — T8006 loader evidence/documentation truth audit. Hardware execution remains blocked.*
+*Last updated: Phase 4 Step 2.9 — loader entry contract design and static audit. Hardware execution remains blocked.*

@@ -19,7 +19,9 @@ typedef struct {
 /* Static table of registered handlers */
 static irq_slot_t g_irq_table[AIC_MAX_IRQS];
 static bool g_aic_initialized = false;
+#ifdef HOST_TEST
 static uint32_t g_aic_mmio_access_count = 0;
+#endif
 
 /* ============================================================
  * Low-Level MMIO Access Helpers
@@ -27,7 +29,9 @@ static uint32_t g_aic_mmio_access_count = 0;
 
 static inline uint32_t aic_read32(uint32_t offset)
 {
+#ifdef HOST_TEST
     g_aic_mmio_access_count++;
+#endif
     volatile uint32_t *reg = (volatile uint32_t *)(uintptr_t)(T8006_AIC_BASE + offset);
     uint32_t val = *reg;
 #ifdef __aarch64__
@@ -38,7 +42,9 @@ static inline uint32_t aic_read32(uint32_t offset)
 
 static inline void aic_write32(uint32_t offset, uint32_t val)
 {
+#ifdef HOST_TEST
     g_aic_mmio_access_count++;
+#endif
     volatile uint32_t *reg = (volatile uint32_t *)(uintptr_t)(T8006_AIC_BASE + offset);
     *reg = val;
 #ifdef __aarch64__
@@ -178,6 +184,7 @@ bool aic_is_initialized(void)
     return g_aic_initialized;
 }
 
+#ifdef HOST_TEST
 uint32_t aic_mmio_access_count_for_test(void)
 {
     return g_aic_mmio_access_count;
@@ -187,6 +194,7 @@ void aic_reset_mmio_access_count_for_test(void)
 {
     g_aic_mmio_access_count = 0;
 }
+#endif
 
 /*
  * aic_handle_irq — called from ARM64 exception entry point (_exc_irq_spx)

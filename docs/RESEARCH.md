@@ -207,7 +207,7 @@ Any apps running on DreyzeOS would choose their ABI independently.
 #### Option A: Peepo-based code injection
 - **Requires**: Physical Watch with watchOS 10.6.1/10.6.2
 - **Method**: Peepo → kernel R/W → map DreyzeOS code into kernel memory → jump to it
-- **Risk**: Medium (kernel panic recoverable via reboot)
+- **Risk**: UNKNOWN/BLOCKED; recovery from arbitrary experimental state is not proven
 - **Completeness**: Partial — runs after watchOS, shares kernel VA space
 - **Status**: UNKNOWN/BLOCKED — not confirmed for DreyzeOS specifically
 - **Windows path**: Peepo must run FROM the Watch (watchOS app or SSH) — Windows part = prep/build only
