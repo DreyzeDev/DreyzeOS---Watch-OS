@@ -83,6 +83,7 @@ REQUIRED_SNAPSHOT_REGISTERS = (
 )
 CRITICAL_ORDER = (
     "bundle_integrity",
+    "artifact_aliases",
     "target_metadata_match",
     "mmu_snapshot_target_match",
     "image_integrity",
@@ -253,7 +254,7 @@ def present_fact(raw: Any, name: str) -> Dict[str, Any]:
     return {
         "value": value,
         "value_present": present,
-        "value_proven": bool(proven) and error is None,
+        "value_proven": bool(proven) and present is True and error is None,
         "source": name,
         "error": error,
     }
@@ -289,7 +290,7 @@ def bool_fact(raw: Any, name: str) -> Dict[str, Any]:
     return {
         "value": value if present else None,
         "value_present": present,
-        "value_proven": proven,
+        "value_proven": proven and present is True,
         "source": name,
     }
 
@@ -546,6 +547,7 @@ class BundleVerifier:
         self.descriptor: Optional[Dict[str, Any]] = None
         self.target_match = False
         self.identity_proven = False
+        self.target_provenance_proven = False
         self.ranges: Dict[str, Dict[str, Any]] = {}
         self.protected_ranges: List[Dict[str, Any]] = []
         self.security_warnings: List[Dict[str, Any]] = []
@@ -806,6 +808,113 @@ class BundleVerifier:
             ),
         )
 
+    def verify_provenance(self) -> None:
+        source = self.root.get("source", {})
+        source_kind = source.get("kind") if isinstance(source, dict) else None
+        target = self.root.get("target", {})
+        identity = (
+            strict_bool(
+                target,
+                "identity_proven",
+                False,
+                "bundle.target.identity_proven",
+            )
+            if isinstance(target, dict)
+            else None
+        )
+        if source_kind == "synthetic":
+            safe_synthetic = self.evidence_status == "DESIGN" and identity is not True
+            self.add_node(
+                "target_provenance",
+                "DESIGN",
+                "NOT_PROVEN",
+                "synthetic evidence is never target identity provenance",
+                ("bundle.source", "bundle.target.identity_proven"),
+                critical=False,
+                covered_artifacts=[],
+            )
+            self.add_node(
+                "synthetic_evidence_guard",
+                "DESIGN" if safe_synthetic else "BLOCKED",
+                "PROVEN" if safe_synthetic else "NOT_PROVEN",
+                "synthetic source is explicitly DESIGN and identity is not proven"
+                if safe_synthetic
+                else "synthetic evidence cannot claim CONFIRMED status or target identity",
+                ("bundle.source.kind", "bundle.source.evidence_status", "bundle.target.identity_proven"),
+                critical=not safe_synthetic,
+                source_kind=source_kind,
+            )
+            return
+
+        provenance = self.root.get("target_provenance")
+        coverage_proven = (
+            strict_bool(
+                provenance,
+                "coverage_proven",
+                False,
+                "bundle.target_provenance.coverage_proven",
+            )
+            if isinstance(provenance, dict)
+            else None
+        )
+        covered = provenance.get("covered_artifacts") if isinstance(provenance, dict) else None
+        required = {"image", "handoff_descriptor", "mmu_snapshot"}
+        covered_ok = isinstance(covered, list) and required.issubset(
+            {item for item in covered if isinstance(item, str)}
+        )
+        valid = (
+            isinstance(source_kind, str)
+            and bool(source_kind)
+            and self.evidence_status == "CONFIRMED"
+            and self.target_match
+            and identity is True
+            and coverage_proven is True
+            and covered_ok
+        )
+        self.target_provenance_proven = valid
+        self.add_node(
+            "target_provenance",
+            "CONFIRMED" if valid else (
+                "BLOCKED" if self.evidence_status == "CONFIRMED" else "UNKNOWN"
+            ),
+            "PROVEN" if valid else "NOT_PROVEN",
+            "provenance explicitly covers all required bundle artifacts"
+            if valid
+            else "target-specific readiness requires explicit proven artifact coverage",
+            ("bundle.source", "bundle.target_provenance", "bundle.image", "bundle.handoff_descriptor", "bundle.mmu_snapshot"),
+            critical=True,
+            source_kind=source_kind,
+            covered_artifacts=covered if isinstance(covered, list) else [],
+        )
+
+    def verify_artifact_aliases(self) -> None:
+        owners: Dict[str, List[str]] = {}
+        for name, artifact in self.artifacts.items():
+            path_value = artifact.get("path")
+            if path_value is None:
+                continue
+            try:
+                resolved = str(safe_bundle_path(self.bundle_dir, path_value, f"{name}.path"))
+            except VerificationInputError:
+                continue
+            owners.setdefault(resolved, []).append(name)
+        duplicates = [
+            {"path": path, "artifacts": names}
+            for path, names in owners.items()
+            if len(names) > 1
+        ]
+        self.add_node(
+            "artifact_aliases",
+            "BLOCKED" if duplicates else "CONFIRMED",
+            "NOT_PROVEN" if duplicates else "PROVEN",
+            "artifact paths are unique after canonicalization"
+            if not duplicates
+            else "multiple artifact declarations resolve to the same local file",
+            ("bundle.artifacts",),
+            critical=True,
+            duplicates=duplicates,
+        )
+
     def verify_descriptor(self) -> None:
         spec = self.root.get("handoff_descriptor")
         data: Optional[bytes] = None
@@ -1061,9 +1170,9 @@ class BundleVerifier:
                 critical=True,
             )
             return
-        expected_arch = spec.get("expected_arch", "aarch64") if isinstance(spec, dict) else "aarch64"
+        expected_arch = spec.get("expected_arch") if isinstance(spec, dict) else None
         expected_entry = spec.get("expected_entry") if isinstance(spec, dict) else None
-        entry_ok = True
+        entry_ok = expected_entry is not None
         expected_entry_value: Optional[int] = None
         if expected_entry is not None:
             try:
@@ -2062,6 +2171,30 @@ class BundleVerifier:
         dt_data, dt_artifact = self.artifact_bytes(
             "device_tree", dt_spec, required=False
         )
+        def complete_required_object(spec: Any, artifact: Dict[str, Any], data: Optional[bytes]) -> bool:
+            if not isinstance(spec, dict):
+                return False
+            if artifact.get("proof_state") != "PROVEN" or data is None:
+                return False
+            if not valid_hash(spec.get("sha256")):
+                return False
+            try:
+                declared_length = parse_u64(spec.get("length"), "object.length")
+            except VerificationInputError:
+                return False
+            complete = strict_bool(spec, "complete", False, "object.complete")
+            return complete is True and len(data) == declared_length
+
+        boot_complete = (
+            complete_required_object(boot_spec, boot_artifact, boot_data)
+            if boot_required
+            else True
+        )
+        dt_complete = (
+            complete_required_object(dt_spec, dt_artifact, dt_data)
+            if dt_required
+            else True
+        )
         boot_ok = boot_range_match
         boot_details: Dict[str, Any] = {}
         if boot_data is not None:
@@ -2090,6 +2223,7 @@ class BundleVerifier:
                     boot_details["nested_device_tree_bounds"] = nested_ok
         elif boot_spec is not None or boot_required:
             boot_ok = False
+        boot_ok = boot_ok and boot_complete
         self.add_node(
             "boot_args_bounds",
             "DESIGN" if boot_ok and self.evidence_status == "DESIGN" else (
@@ -2130,6 +2264,7 @@ class BundleVerifier:
                     dt_details = {"parsed": False, "error": str(exc)}
         elif dt_spec is not None or dt_required:
             dt_ok = False
+        dt_ok = dt_ok and dt_complete
         self.add_node(
             "device_tree_bounds",
             "DESIGN" if dt_ok and self.evidence_status == "DESIGN" else (
@@ -2292,6 +2427,12 @@ class BundleVerifier:
             offline_ready
             and self.evidence_status == "CONFIRMED"
             and self.identity_proven
+            and self.target_provenance_proven
+            and (
+                self.root.get("source", {}).get("kind")
+                if isinstance(self.root.get("source"), dict)
+                else None
+            ) != "synthetic"
         )
         report: Dict[str, Any] = {
             "ok": True,
@@ -2314,6 +2455,7 @@ class BundleVerifier:
                 "identity_proven": self.identity_proven,
                 "node": self.nodes.get("target_metadata_match"),
                 "identity_node": self.nodes.get("target_identity_proven"),
+                "provenance_node": self.nodes.get("target_provenance"),
             },
             "artifacts": self.artifacts,
             "descriptor": {
@@ -2415,12 +2557,14 @@ class BundleVerifier:
             )
         self.verify_target()
         self.verify_integrity()
+        self.verify_provenance()
         self.verify_descriptor()
         self.verify_mmu()
         self.verify_image()
         self.verify_cpu()
         self.verify_ranges()
         self.verify_objects()
+        self.verify_artifact_aliases()
         self.verify_mappings()
         self.verify_control_and_persistence()
         self.verify_collisions()

@@ -105,6 +105,13 @@ Matching strings are not identity proof. A synthetic fixture must set
 before a target-facing result can be considered, and even then the complete
 critical graph is required.
 
+For a non-synthetic target-facing bundle, add a `target_provenance` object with
+`coverage_proven: true` and a `covered_artifacts` list containing at least
+`image`, `handoff_descriptor`, and `mmu_snapshot`. This is an explicit
+coverage claim, not cryptographic authenticity. The verifier rejects promotion
+of a synthetic `DESIGN` bundle to hardware readiness even if status strings are
+manually changed.
+
 Record capture provenance, producer, timestamp, firmware/build context, and
 the relationship between every artifact and the provenance record. Do not
 claim cryptographic authenticity merely because the manifest has SHA-256.

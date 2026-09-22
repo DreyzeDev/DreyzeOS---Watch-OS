@@ -112,6 +112,22 @@ Metadata matching and identity proof are separate results. Matching strings
 are not proof of capture identity. A synthetic bundle must leave
 `identity_proven` false.
 
+For a non-synthetic target-specific result, the manifest also carries
+`target_provenance`:
+
+```json
+{
+  "coverage_proven": true,
+  "covered_artifacts": ["image", "handoff_descriptor", "mmu_snapshot"]
+}
+```
+
+This declares that the external provenance record covers the required artifact
+set; it is not cryptographic authenticity. The host verifier requires this
+coverage claim before target-specific readiness can be reported. A bundle whose
+`source.kind` is `synthetic` remains `DESIGN` and cannot be promoted to
+hardware `READY` by changing status strings.
+
 ### Artifact references
 
 Each artifact contains a relative `path` and lowercase or uppercase

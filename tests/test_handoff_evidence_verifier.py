@@ -28,7 +28,9 @@ from handoff_evidence_verifier import (  # noqa: E402
     FLAG_PAYLOAD_LOCATION_KNOWN,
     FLAG_VERIFIED,
     ElfImage,
+    bool_fact as parse_bool_fact,
     human_report,
+    present_fact,
     verify_bundle,
 )
 
@@ -478,6 +480,64 @@ class HandoffEvidenceVerifierTests(unittest.TestCase):
             self.assertIn("NOT_READY", human)
         finally:
             shutil.rmtree(directory, ignore_errors=True)
+
+    def test_synthetic_status_cannot_be_promoted_to_hardware_ready(self) -> None:
+        directory, path = self.make_bundle()
+        try:
+            mutate_bundle(
+                path,
+                lambda bundle, _: (
+                    bundle["source"].update(evidence_status="CONFIRMED"),
+                    bundle["target"].update(identity_proven=True),
+                ),
+            )
+            report = verify_bundle(path)
+            self.assertEqual(report["readiness"]["loader_contract"], "BLOCKED")
+            self.assertEqual(
+                report["readiness"]["first_hardware_execution"], "NOT_READY"
+            )
+            self.assertIn("synthetic_evidence_guard", blocking_names(report))
+        finally:
+            shutil.rmtree(directory, ignore_errors=True)
+
+    def test_proven_fact_requires_present_value(self) -> None:
+        numeric = present_fact(
+            {"value_present": False, "value_proven": True}, "test.numeric"
+        )
+        boolean = parse_bool_fact(
+            {"value_present": False, "value_proven": True}, "test.boolean"
+        )
+        self.assertFalse(numeric["value_proven"])
+        self.assertFalse(boolean["value_proven"])
+
+    def test_non_synthetic_bundle_requires_target_provenance_coverage(self) -> None:
+        def mutate(bundle: Dict[str, Any], directory: Path) -> None:
+            bundle["source"].update({"kind": "capture", "evidence_status": "CONFIRMED"})
+            bundle["target"]["identity_proven"] = True
+
+        report = self.verify_mutated(mutate)
+        self.assertIn("target_provenance", blocking_names(report))
+        self.assertEqual(report["readiness"]["loader_contract"], "BLOCKED")
+
+    def test_missing_expected_entry_blocks_image_shape(self) -> None:
+        report = self.verify_mutated(
+            lambda bundle, directory: bundle["image"].pop("expected_entry")
+        )
+        self.assertIn("image_shape", blocking_names(report))
+
+    def test_required_object_must_be_complete(self) -> None:
+        report = self.verify_mutated(
+            lambda bundle, directory: bundle["boot_args"].update({"complete": False})
+        )
+        self.assertIn("boot_args_bounds", blocking_names(report))
+
+    def test_duplicate_artifact_path_is_blocked(self) -> None:
+        def mutate(bundle: Dict[str, Any], directory: Path) -> None:
+            bundle["device_tree"]["path"] = bundle["image"]["path"]
+            bundle["device_tree"]["sha256"] = bundle["image"]["sha256"]
+
+        report = self.verify_mutated(mutate)
+        self.assertIn("artifact_aliases", blocking_names(report))
 
     def test_missing_ttbr_proof(self) -> None:
         def mutate(bundle: Dict[str, Any], directory: Path) -> None:
