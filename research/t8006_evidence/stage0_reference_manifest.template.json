@@ -1,0 +1,53 @@
+{
+  "schema": "dreyzeos.stage0_reference_manifest.v1",
+  "artifact_kind": "host-only reference gate model",
+  "artifact_sha256": null,
+  "artifact_size": null,
+  "source_commit": null,
+  "source_inputs": {},
+  "source_inputs_clean_at_build": null,
+  "dreyzeos_image_reference": {
+    "elf": {
+      "path": "build/DreyzeOS.elf",
+      "sha256": null,
+      "size": null
+    },
+    "flat_binary": {
+      "path": "build/DreyzeOS.bin",
+      "sha256": null,
+      "size": null
+    },
+    "sha256_semantics": "local byte identity only; not target residency or authenticity"
+  },
+  "host_machine": null,
+  "elf_entry_symbol": "_start (host process runtime; not a Watch entry)",
+  "reference_gate_symbol": "stage0_reference_evaluate",
+  "target_entry_symbol": null,
+  "required_alignment": null,
+  "target_alignment_status": "UNRESOLVED_NOT_A_TARGET_BINARY",
+  "required_preconditions": [
+    "host process only",
+    "STAGE0_HOST_REFERENCE defined",
+    "not compiled with an ARM/AArch64 target compiler",
+    "all gate evidence inputs explicitly proven before positive evaluation"
+  ],
+  "allowed_outputs": [
+    "host process exit status",
+    "host build artifacts in build/stage0_reference/"
+  ],
+  "forbidden_side_effects": [
+    "Watch or iPhone communication",
+    "target memory or register access",
+    "MMIO, UART, AIC, or framebuffer access",
+    "page-table modification",
+    "persistent storage writes by the reference executable",
+    "payload delivery or control-flow transfer"
+  ],
+  "handoff_abi_version": 1,
+  "target_addresses_assigned": false,
+  "target_executable": false,
+  "transfer_implementation_present": false,
+  "reproducible_build_flags": [],
+  "reproducible_build_commands": [],
+  "positive_status_meaning": "host-side gate evaluation only; not authorization or execution"
+}

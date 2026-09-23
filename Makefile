@@ -108,7 +108,7 @@ DUMP    := $(BUILDDIR)/DreyzeOS.dump
 # ============================================================
 # Default target
 # ============================================================
-.PHONY: all clean info check tests help dump toolchain-check
+.PHONY: all clean info check tests help dump toolchain-check stage0-reference
 
 all: toolchain-check $(BIN)
 	@$(MAKE) --no-print-directory info
@@ -210,6 +210,10 @@ tests:
 	@echo "[TEST] Host-side tests..."
 	python3 tests/test_runner.py
 
+# Deterministic host-native reference model only; never part of the AArch64 image.
+stage0-reference: $(BIN)
+	python3 tools/build_stage0_reference.py --output-dir $(BUILDDIR)/stage0_reference
+
 # ============================================================
 # Clean
 # ============================================================
@@ -231,6 +235,7 @@ help:
 	@echo "  dump     Disassemble to $(DUMP)"
 	@echo "  check    Validate binary with inspect_binary.py"
 	@echo "  tests    Run host-side Python tests"
+	@echo "  stage0-reference  Build the host-only Stage-0 reference artifact"
 	@echo "  clean    Remove build/"
 	@echo ""
 	@echo "Toolchain: CROSS=$(CROSS)"

@@ -1421,6 +1421,20 @@ def test_elf_relocation_audit():
     assert "There are no relocations in this file." in result.stdout
 
 
+@test("Stage-0 reference — deterministic host-only gate artifact")
+def test_stage0_reference_artifact():
+    """Build and statically validate the host-only Stage-0 reference model."""
+    root_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    artifact_tests = os.path.join(root_dir, "tests", "test_stage0_reference.py")
+    result = run_command_cross(
+        [sys.executable, artifact_tests],
+        "cd /home/pc/DreyzeOS---Watch-OS && "
+        "python3 tests/test_stage0_reference.py",
+    )
+    assert result.returncode == 0, (result.stdout or "") + (result.stderr or "")
+    assert "OK" in ((result.stdout or "") + (result.stderr or ""))
+
+
 # ============================================================
 # Phase 4 Step 2.10 — Offline MMU / Translation Evidence Analyzer
 # ============================================================
@@ -1541,6 +1555,7 @@ def main():
         test_pic_stage0_host_is_non_executable_model,
         test_devicetree_malformed_fuzz,
         test_elf_relocation_audit,
+        test_stage0_reference_artifact,
     ]
 
     for t in tests:
