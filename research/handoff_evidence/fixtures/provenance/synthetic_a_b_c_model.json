@@ -1,0 +1,27 @@
+{
+  "case": "synthetic_a_b_c_model",
+  "expected_requirement": "EV-000C",
+  "expected_proof_state": "NOT_PROVEN",
+  "operations": [
+    {"op": "set", "path": "target.physical_identity.value", "value": true},
+    {"op": "set", "path": "target.physical_identity.value_proven", "value": true},
+    {"op": "set", "path": "target.identity_attestation.artifact_id", "value": "identity_attestation"},
+    {"op": "set", "path": "target.identity_attestation.authority", "value": "synthetic fixture issuer"},
+    {"op": "set", "path": "target.identity_attestation.method", "value": "synthetic fixture only"},
+    {"op": "set", "path": "target.identity_attestation.identity_scope", "value": "PERSISTENT_PHYSICAL_DEVICE"},
+    {"op": "append", "path": "coverage.declared_artifact_ids", "value": "identity_attestation"},
+    {"op": "append", "path": "artifacts", "value": {
+      "artifact_id": "identity_attestation",
+      "artifact_type": "TARGET_IDENTITY_ATTESTATION",
+      "bundle_ref": null,
+      "path": "artifacts/identity.fixture",
+      "sha256": "d29cec3db2c2e9efe0a290658d9f70f65333979e0eaca4e7f3595609c1976ede",
+      "artifact_present": {"value": true, "value_present": true, "value_proven": true, "source": "local_file"},
+      "artifact_hash_verified": {"value": true, "value_present": true, "value_proven": true, "source": "local_hash"},
+      "artifact_target_bound": {"value": false, "value_present": true, "value_proven": false, "source": "not target-bound"},
+      "artifact_runtime_proven": {"value": false, "value_present": true, "value_proven": false, "source": "not runtime data"},
+      "provenance_relationship": {"capture_id": "00000000-0000-4000-8000-000000000211", "relationship": "synthetic fixture only", "relationship_proven": {"value": true, "value_present": true, "value_proven": true, "source": "fixture manifest"}}
+    }}
+  ],
+  "expected_blocker": "PHYSICAL_IDENTITY_PROOF_UNSUPPORTED"
+}

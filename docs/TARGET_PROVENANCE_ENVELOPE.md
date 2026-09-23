@@ -1,15 +1,23 @@
 # Target provenance envelope (host-only preparation)
 
-Schema: `dreyzeos.target_provenance_envelope.v1`.
+Current schema: `dreyzeos.target_provenance_envelope.v2`.
+The validator also accepts v1 envelopes with explicitly legacy semantics.
+
+The version bump is necessary because v1's single `identity_proven` field and
+aggregate EV-000 could not distinguish metadata consistency, same-session
+artifact provenance, and persistent physical identity. Requirements use
+`dreyzeos.t8006_evidence_requirements.v2` for the same split. The outer
+`dreyzeos.handoff_evidence.v1` bundle and Loader Handoff ABI V1 are unchanged.
 
 This is a provenance sub-schema for the existing
 `dreyzeos.handoff_evidence.v1` bundle, not a new loader ABI and not a capture
 tool. It supports host-side preparation and validation only. No Watch or iPhone
 is queried, no pointer is dereferenced, and no device state is changed.
 
-The envelope is the first artifact in the dependency order for **EV-000** and
-contributes to **EV-027**. An envelope can be structurally complete while both
-requirements remain unproven. The standalone CLI validates only the envelope;
+The envelope is the first artifact in the dependency order for **EV-000A** and
+**EV-000B**, and contributes to **EV-027**. **EV-000C** is reported separately
+and is not a first-bring-up gate. An envelope can be structurally complete
+while target/session provenance is still only DESIGN. The standalone CLI validates only the envelope;
 the ordinary bundle mode remains the authority for ELF, ABI V1, MMU, object,
 range, and complete readiness checks.
 
@@ -24,22 +32,57 @@ Fact wrappers use strict JSON booleans:
 The schema keeps these separate:
 
 * `metadata_match`: whether declared metadata agrees with the project target;
-* `identity_proven`: an explicit external identity-attestation claim;
+* `physical_identity`: an optional v2 fact about persistent device identity;
+* `same_session_provenance`: computed from capture fields and per-artifact
+  relationships; no user-set boolean can create this result;
 * `artifact_present`: whether the relative local file exists;
 * `artifact_hash_verified`: whether its bytes match the declared SHA-256;
-* `artifact_target_bound`: whether an independently supported provenance
-  relationship binds that artifact to the named target/session;
+* `artifact_session_bound`: computed from local presence/hash and a proven
+  relationship to the same `capture_id`;
+* `artifact_target_bound`: computed only when target metadata and session
+  provenance are both proven for a non-synthetic confirmed source;
 * `artifact_runtime_proven`: whether the artifact's relevant contents are
   proven to describe runtime state.
 
 The verifier computes local presence and hash equality. It does not infer
-target binding or runtime proof from either result. Target metadata strings,
-the user-observed metadata record, filenames, non-zero addresses, and the V1
-`VERIFIED` flag cannot set `identity_proven=true`. A true identity claim also
-requires a separately declared, present, hashed
-`TARGET_IDENTITY_ATTESTATION` artifact plus explicit authority and method
-fields. This is structural validation of an external claim, not cryptographic
-authentication of the attestor or capture.
+session binding or runtime proof from either result. Metadata strings,
+user-observed records, filenames, non-zero addresses, and the V1 `VERIFIED`
+flag cannot prove physical identity. In v2, a true `physical_identity` claim
+requires a present, hashed `TARGET_IDENTITY_ATTESTATION`, authority, method,
+and `identity_scope = PERSISTENT_PHYSICAL_DEVICE`; even then the host tool only
+checks structure and hashes, not the attestor's authenticity. Synthetic
+attestations can never prove physical identity.
+
+## EV-000 split
+
+* **EV-000A — target metadata consistency:** all currently required target
+  metadata facts and their comparison must match the fixed project target.
+  Board and architecture values are not inferred from model strings or
+  watchOS process `cpuType`; if applicable values are unavailable, A stays
+  partial. A mismatch between proven facts is BLOCKED.
+* **EV-000B — same-session artifact provenance:** the capture ID, bounded UTC
+  interval, producer/interface provenance, required artifact hashes/coverage,
+  and each artifact's proven relationship must identify the same capture
+  session. It does not require serial/UDID identity.
+* **EV-000C — physical identity/cross-session continuity:** optional for
+  technical first bring-up; required only for claims that independent sessions
+  or reports belong to the same persistent physical Watch. It is NOT_PROVEN in
+  the current evidence. A CrashReporter Key match may support pseudonymous
+  correlation but is not serial-level identity or authenticity.
+
+EV-000 is the aggregate technical provenance gate: **A + B**, not C. This
+does not weaken any runtime CPU, MMU, RAM, ownership, mapping, collision,
+descriptor-trust, boot-metadata, transfer, or no-persistent-write requirement.
+Machine results expose `TARGET_METADATA_STATUS`,
+`SAME_SESSION_PROVENANCE_STATUS`, `PHYSICAL_IDENTITY_STATUS`, and
+`TECHNICAL_TARGET_PROVENANCE_READY` separately.
+
+V1 compatibility is conservative and explicit. V1 `target.identity_proven` is
+reported only as a legacy claim and is never silently migrated into EV-000C.
+The validator may derive B from v1's own proven capture ID and per-artifact
+session relationships, but physical identity remains NOT_PROVEN. The bundle
+schema and Loader Handoff ABI V1 are unchanged; only the nested provenance and
+requirements schemas are versioned forward.
 
 SHA-256 means only that local bytes match the bundle declaration. It does not
 prove the bytes originated from an Apple Watch. Keep real device identifiers,
@@ -54,14 +97,14 @@ The top-level object contains:
   `UNKNOWN`, or `BLOCKED`);
 * `capture`: a canonical UUID session ID and start/end RFC3339 UTC facts;
 * `target`: expected project metadata, independently sourced metadata facts,
-  metadata comparison, identity proof, optional identity-attestation reference,
-  and additional source assertions used for conflict detection;
+  metadata comparison, optional physical-identity fact/attestation, and
+  additional source assertions used for conflict detection;
 * `producer`: name, version, and host/tool environment facts;
 * `source_interface`: description, interface, and a safety-classification fact;
 * `coverage`: required, declared, and covered artifact IDs plus an explicit
   completeness fact;
-* `artifacts`: typed, relative-path records with SHA-256, the six independent
-  presence/hash/binding/runtime facts, and a relationship to the capture ID;
+* `artifacts`: typed, relative-path records with SHA-256, presence/hash/binding/
+  runtime facts, and a relationship to the capture ID;
 * `conflict_detection`: declared conflict notes and the fields that the
   validator compares. The validator independently detects contradictory
   proven target assertions, duplicate artifact IDs/paths, metadata mismatch,
@@ -82,18 +125,19 @@ separate sessions remains the producer's responsibility.
 
 ## Readiness mapping
 
-EV-000 can be reported proven only when the source is `CONFIRMED`, target
-metadata facts and their comparison are proven and matching, the identity
-attestation is structurally present and hashed, the capture ID/timestamps and
-producer/interface are present and proven, required artifacts exist and hash
-correctly, coverage is complete, and each required artifact is separately
-target-bound. No one of these facts implies another.
+EV-000A can be reported proven only when all required metadata facts and their
+comparison are proven and matching. EV-000B additionally requires a confirmed
+source, capture ID/timestamps, producer/interface provenance, complete coverage,
+verified required artifact bytes, and a proven per-artifact relationship to
+that same capture ID. EV-000C requires its own scoped persistent-identity
+attestation. C is not a dependency of A, B, or technical EV-000 readiness.
+No one of these facts implies another.
 
 The standalone envelope cannot close EV-027. The complete handoff verifier
 must still validate the full critical artifact graph, all hashes, CPU/MMU
 consistency, ranges, collision completeness, and conflicts.
 
-The sanitized template is `research/handoff_evidence/provenance_envelope.template.json`.
+The sanitized v2 template is `research/handoff_evidence/provenance_envelope.template.json`.
 The `research/handoff_evidence/fixtures/provenance/` directory contains one
 synthetic structurally complete envelope and blocked mutations for absent
 target binding, missing/mismatched SHA-256, incomplete coverage, metadata
@@ -136,7 +180,7 @@ the export origin is user-reported and not independently attested.
 
 The envelope hashes only the sanitized derivative and deliberately leaves
 `artifact_target_bound`, `artifact_runtime_proven`, and
-`identity_proven` false/unproven. The report does not establish current pairing,
+`physical_identity` false/unproven. The report does not establish current pairing,
 physical serial identity, future-capture identity, CPU/MMU/RAM state, payload
 ownership, or control transfer. No CPU-register, page-table, runtime-memory,
 mapping, or loader evidence is added by this report.

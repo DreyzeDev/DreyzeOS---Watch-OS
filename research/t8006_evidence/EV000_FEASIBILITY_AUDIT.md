@@ -1,5 +1,8 @@
 # EV-000 feasibility audit: identity scope vs. bring-up safety
 
+Audit baseline: this document first recorded the pre-split verifier behavior.
+The implementation outcome is updated at the end; v2 is now authoritative.
+
 Phase 4 host-only audit. No Watch/iPhone interaction, capture, installation,
 payload, loader, or device-state change was performed.
 
@@ -138,36 +141,36 @@ meanings and gates explicitly before any status promotion.
 4. Conflicts are absent, and a user explicitly approves the specific live
    operation after confirming the intended device.
 
-There is no technical dependency in the current loader contract that requires
-a persistent physical identifier once those conditions are met. The current
-verifier does require `identity_proven` and `target_provenance_proven` for
-hardware readiness, and `tools/t8006_evidence_gap.py` includes
-`identity_proven` in its target-proof predicate. Mechanically, a genuine
-external attestation of the selected target/session might satisfy that field
-without proving C; however, the current output cannot also report
-`PHYSICAL_IDENTITY_ATTESTATION = NOT_PROVEN` as an independent machine-readable
-fact. The schema should make that distinction explicit. Current EV-000 remains
-BLOCKED because neither a full A result nor B/external target-session binding
-exists in the current evidence. Do not bypass the gate or manually mark any
-node proven.
+There is no technical dependency in the loader contract that requires a
+persistent physical identifier once A+B and all other safety requirements are
+met. At this audit's original baseline, the verifier still coupled readiness to
+the ambiguous `identity_proven` field. Step 2.16 below removes that coupling
+without changing any runtime safety gate.
 
-## Current blockers and next step
+## Step 2.16 implementation outcome
 
-- **Current EV-000:** BLOCKED under the unchanged schema. A is partial, B is
-  not proven, and C is not proven.
-- **Other technical blockers:** EV-001 control transfer; EV-002 runtime DRAM;
-  payload PA/size/ownership; entry VA/PC and EL1; SP/stack and DAIF; MMU/cache
-  state; executable/readable/writable mappings; descriptor trust; boot_args / DT
-  bounds when used; reservation completeness and collisions; and the complete
-  no-persistent-write/control-transfer evidence graph.
-- **Next minimal step:** make a separately reviewed, host-only requirements and
-  verifier change that models EV-000A, EV-000B, and EV-000C separately; require
-  A+B for target-specific bring-up evaluation, retain C for physical-unit
-  continuity claims, and keep EV-027 plus all runtime-safety requirements
-  critical. Add negative tests proving that metadata strings, a lone CrashReporter
-  Key, `identity_proven`, or an incomplete session cannot make the hardware gate
-  READY. Do not acquire more device evidence until the acquisition method and
-  its risks are separately reviewed and explicitly approved.
+- **EV-000A:** LIKELY / PARTIAL. The sanitized report contains proven report
+  content for Watch4,2, watchOS 10.6.1, build 21U580, and T8006-consistent
+  symbols. It does not provide N131bAP or DreyzeOS-relevant AArch64 target
+  evidence, and the export origin remains user-reported.
+- **EV-000B:** BLOCKED / NOT_PROVEN. No complete DreyzeOS capture session binds
+  image, descriptor, MMU snapshot, and any other consumed artifacts together.
+- **EV-000C:** NOT_PROVEN. The one private correlation field has no matching
+  second report and is not serial-level identity.
+- **EV-000:** remains BLOCKED because A and B are not both proven. C is not a
+  first-bring-up dependency.
+- **Schemas:** nested provenance is now
+  `dreyzeos.target_provenance_envelope.v2`; requirements inventory is
+  `dreyzeos.t8006_evidence_requirements.v2`. Handoff bundle v1 and Loader ABI
+  V1 remain unchanged. V1 envelope inputs are accepted explicitly as legacy;
+  their ambiguous `identity_proven` claim is never promoted to EV-000C.
+- **Readiness:** technical target provenance requires A+B, and the complete
+  pre-existing EV-001/CPU/MMU/RAM/mapping/ownership/collision/descriptor/boot
+  metadata/transfer/no-persistent-write graph remains critical. Physical
+  identity is reported but does not gate first bring-up.
+- **Next minimal evidence:** complete target metadata for A, then one
+  target-bound session artifact set for B. Runtime CPU/MMU/RAM and all other
+  hardware blockers remain unchanged; no live acquisition is authorized here.
 
 ## Sources inspected
 

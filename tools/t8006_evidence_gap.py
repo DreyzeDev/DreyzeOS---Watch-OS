@@ -16,7 +16,8 @@ from pathlib import Path
 from typing import Any, Dict, Iterable, List, Optional, Set, Tuple
 
 
-SCHEMA = "dreyzeos.t8006_evidence_requirements.v1"
+SCHEMA = "dreyzeos.t8006_evidence_requirements.v2"
+LEGACY_SCHEMA = "dreyzeos.t8006_evidence_requirements.v1"
 VERIFICATION_SCHEMA = "dreyzeos.handoff_evidence.v1"
 STATUS_VALUES = {"CONFIRMED", "LIKELY", "DESIGN", "UNKNOWN", "BLOCKED"}
 PROOF_VALUES = {"PRESENT", "PROVEN", "NOT_PROVEN", "NOT_APPLICABLE"}
@@ -77,8 +78,8 @@ def normalize_board(value: Any) -> Set[str]:
 
 
 def validate_requirements(document: Dict[str, Any]) -> Tuple[List[Dict[str, Any]], Set[str]]:
-    if document.get("schema") != SCHEMA:
-        raise GapInputError("SCHEMA_MISMATCH", f"requirements schema must be {SCHEMA}")
+    if document.get("schema") not in {SCHEMA, LEGACY_SCHEMA}:
+        raise GapInputError("SCHEMA_MISMATCH", f"requirements schema must be {SCHEMA} or {LEGACY_SCHEMA}")
     target = document.get("target")
     if not isinstance(target, dict):
         raise GapInputError("TARGET_REQUIRED", "requirements target metadata is missing")
@@ -193,7 +194,10 @@ def evaluate_requirement(
     nodes: Dict[str, Any],
     source_status: str,
     metadata_match: bool,
-    identity_proven: bool,
+    technical_target_provenance_ready: bool,
+    physical_identity_proven: bool,
+    *,
+    legacy_requirements: bool = False,
 ) -> Dict[str, Any]:
     node_names = requirement["verifier_requirements"]
     observations: List[Dict[str, Any]] = []
@@ -216,14 +220,26 @@ def evaluate_requirement(
     any_unknown = any(item["observed_status"] == "UNKNOWN" for item in observations)
     any_design = any(item["observed_status"] == "DESIGN" for item in observations)
     all_proven_locally = bool(observations) and all(item["offline_proven"] for item in observations)
-    target_proven = (
-        bool(observations)
-        and all(item["proven"] for item in observations)
-        and source_status == "CONFIRMED"
-        and metadata_match
-        and identity_proven
-    )
-    if not metadata_match and "target_metadata_match" in node_names:
+    nodes_proven = bool(observations) and all(item["proven"] for item in observations)
+    if legacy_requirements:
+        # Requirements v1 explicitly coupled technical readiness to the
+        # ambiguous identity flag. Preserve that old interpretation only when
+        # a caller explicitly supplies the old requirements schema.
+        target_proven = nodes_proven and source_status == "CONFIRMED" and metadata_match and physical_identity_proven
+    elif requirement["id"] == "EV-000C":
+        target_proven = nodes_proven and source_status == "CONFIRMED" and physical_identity_proven
+    elif requirement["id"] == "EV-000B":
+        target_proven = nodes_proven and source_status == "CONFIRMED"
+    elif requirement["id"] == "EV-000A":
+        target_proven = nodes_proven and source_status == "CONFIRMED" and metadata_match
+    else:
+        target_proven = (
+            nodes_proven
+            and source_status == "CONFIRMED"
+            and metadata_match
+            and technical_target_provenance_ready
+        )
+    if not metadata_match and requirement["id"] in {"EV-000", "EV-000A"}:
         observed_status = "BLOCKED"
         result_class = "BLOCKED"
     elif target_proven:
@@ -269,9 +285,25 @@ def verify_gap(report: Dict[str, Any], requirements_document: Dict[str, Any]) ->
     source_status = report["bundle"]["evidence_status"]
     target_result = report["target"]
     metadata_match = require_bool(target_result.get("metadata_match"), "target.metadata_match")
-    identity_proven = require_bool(target_result.get("identity_proven"), "target.identity_proven")
+    physical_identity_proven = require_bool(
+        target_result.get("physical_identity_proven", target_result.get("identity_proven", False)),
+        "target.physical_identity_proven",
+    )
+    technical_target_provenance_ready = require_bool(
+        target_result.get("technical_target_provenance_ready", False),
+        "target.technical_target_provenance_ready",
+    )
+    legacy_requirements = requirements_document.get("schema") == LEGACY_SCHEMA
     results = [
-        evaluate_requirement(item, nodes, source_status, metadata_match, identity_proven)
+        evaluate_requirement(
+            item,
+            nodes,
+            source_status,
+            metadata_match,
+            technical_target_provenance_ready,
+            physical_identity_proven,
+            legacy_requirements=legacy_requirements,
+        )
         for item in requirements
     ]
     proven = [item for item in results if item["target_proven"]]
@@ -303,7 +335,12 @@ def verify_gap(report: Dict[str, Any], requirements_document: Dict[str, Any]) ->
         "schema": SCHEMA,
         "verification_source_status": source_status,
         "target_metadata_match": metadata_match,
-        "target_identity_proven": identity_proven,
+        "target_metadata_status": target_result.get("metadata_status", "UNKNOWN"),
+        "same_session_provenance_status": target_result.get("same_session_provenance_status", "UNKNOWN"),
+        "physical_identity_status": target_result.get("physical_identity_status", "NOT_PROVEN"),
+        "technical_target_provenance_ready": technical_target_provenance_ready,
+        "physical_identity_proven": physical_identity_proven,
+        "target_identity_proven": physical_identity_proven,
         "proven_requirements": [item["id"] for item in proven],
         "offline_proven_requirements": [item["id"] for item in results if item["offline_nodes_proven"]],
         "unproven_requirements": [item["id"] for item in unproven],
@@ -337,7 +374,10 @@ def human_report(result: Dict[str, Any]) -> str:
         "",
         f"Requirements ................ {len(requirements)}",
         f"Target metadata match ....... {'YES' if result['target_metadata_match'] else 'NO'}",
-        f"Target identity proven ...... {'YES' if result['target_identity_proven'] else 'NO'}",
+        f"TARGET_METADATA_STATUS = {result['target_metadata_status']}",
+        f"SAME_SESSION_PROVENANCE_STATUS = {result['same_session_provenance_status']}",
+        f"PHYSICAL_IDENTITY_STATUS = {result['physical_identity_status']}",
+        f"TECHNICAL_TARGET_PROVENANCE_READY = {str(result['technical_target_provenance_ready']).lower()}",
         f"Target-proven requirements . {proven}",
         f"Unproven requirements ....... {unproven}",
         f"Unknown requirements ........ {unknown}",

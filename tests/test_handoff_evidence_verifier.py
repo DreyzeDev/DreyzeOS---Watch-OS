@@ -368,7 +368,6 @@ def build_ready_bundle(root: Path, **snapshot_options: Any) -> Path:
             "firmware": "watchOS 10.6.1",
             "build": "21U580",
             "architecture": "aarch64",
-            "identity_proven": False,
         },
         "source": {
             "kind": "synthetic",
@@ -470,7 +469,7 @@ def build_ready_bundle(root: Path, **snapshot_options: Any) -> Path:
             }
         )
     bundle["provenance_envelope"] = {
-        "schema": "dreyzeos.target_provenance_envelope.v1",
+        "schema": "dreyzeos.target_provenance_envelope.v2",
         "source": {
             "kind": "synthetic",
             "evidence_status": "DESIGN",
@@ -488,8 +487,8 @@ def build_ready_bundle(root: Path, **snapshot_options: Any) -> Path:
                 for key, value in expected_target.items()
             },
             "metadata_match": provenance_fact(True, "synthetic_fixture.comparison"),
-            "identity_proven": provenance_fact(False, "synthetic_fixture_identity_not_proven", False),
-            "identity_attestation": {"artifact_id": None, "authority": None, "method": None},
+            "physical_identity": provenance_fact(False, "synthetic_fixture_identity_not_proven", False),
+            "identity_attestation": {"artifact_id": None, "authority": None, "method": None, "identity_scope": None},
             "assertions": [],
         },
         "producer": {
@@ -563,9 +562,29 @@ class HandoffEvidenceVerifierTests(unittest.TestCase):
                 report["readiness"]["first_hardware_execution"], "NOT_READY"
             )
             self.assertFalse(report["target"]["identity_proven"])
+            self.assertEqual(report["target"]["physical_identity_status"], "NOT_PROVEN")
+            self.assertFalse(report["target"]["technical_target_provenance_ready"])
+            self.assertEqual(
+                report["evidence_graph"]["nodes"]["target_metadata_provenance"]["proof_state"],
+                "PROVEN",
+            )
+            self.assertEqual(
+                report["evidence_graph"]["nodes"]["same_session_provenance"]["proof_state"],
+                "PROVEN",
+            )
+            self.assertEqual(
+                report["evidence_graph"]["nodes"]["physical_identity_provenance"]["proof_state"],
+                "NOT_PROVEN",
+            )
+            self.assertNotIn(
+                "physical_identity_provenance",
+                report["readiness"]["blocking_requirements"],
+            )
             human = human_report(report)
             self.assertIn("LOADER CONTRACT", human)
             self.assertIn("NOT_READY", human)
+            self.assertIn("PHYSICAL_IDENTITY_STATUS = NOT_PROVEN", human)
+            self.assertIn("TECHNICAL_TARGET_PROVENANCE_READY = false", human)
         finally:
             shutil.rmtree(directory, ignore_errors=True)
 

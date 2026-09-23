@@ -8,7 +8,7 @@ does not authenticate a Watch capture. The verifier never opens device memory,
 follows a supplied pointer, executes a payload, or writes hardware.
 
 Target identity and artifact provenance use the nested
-`dreyzeos.target_provenance_envelope.v1` schema described in
+`dreyzeos.target_provenance_envelope.v2` schema described in
 [docs/TARGET_PROVENANCE_ENVELOPE.md](../../docs/TARGET_PROVENANCE_ENVELOPE.md).
 It is validated by this same offline verifier and is not a second evidence
 pipeline.
@@ -87,7 +87,7 @@ never collide with each other in the verifier.
   "architecture": "aarch64",
   "target": { ... },
   "source": { "kind": "synthetic", "evidence_status": "DESIGN" },
-  "provenance_envelope": { "schema": "dreyzeos.target_provenance_envelope.v1" },
+  "provenance_envelope": { "schema": "dreyzeos.target_provenance_envelope.v2" },
   "image": { ... },
   "handoff_descriptor": { ... },
   "mmu_snapshot": { ... }
@@ -110,20 +110,22 @@ The expected project metadata is:
   "soc": "T8006",
   "firmware": "watchOS 10.6.1",
   "build": "21U580",
-  "architecture": "aarch64",
-  "identity_proven": false
+  "architecture": "aarch64"
 }
 ```
 
-Metadata matching and identity proof are separate results. Matching strings
-are not proof of capture identity. A synthetic bundle must leave
-`identity_proven` false.
+The nested provenance model separates target metadata consistency (A),
+same-session artifact provenance (B), and physical identity/cross-session
+continuity (C). Matching strings do not prove capture identity. A synthetic
+bundle cannot prove C.
 
 For a non-synthetic target-specific result, the manifest carries
-`provenance_envelope`, with independent facts for metadata match, identity,
-artifact presence, local hash verification, target binding, and runtime proof.
-The legacy `target_provenance` summary may remain for compatibility, but is
-checked against the envelope when supplied and is not sufficient by itself.
+`provenance_envelope`, with independent facts for metadata match, optional
+physical identity, artifact presence, local hash verification, per-artifact
+session relationships, target binding, and runtime proof. EV-000 requires A+B;
+C does not gate first technical bring-up. The legacy `target_provenance`
+summary may remain for compatibility, but is checked against the envelope
+when supplied and is not sufficient by itself.
 
 ```json
 {
@@ -214,8 +216,10 @@ This mode cannot close EV-027; the full `--bundle` mode owns the complete
 critical artifact graph.
 
 A target-specific result cannot be READY unless every critical dependency is
-PROVEN, the source status is `CONFIRMED`, and target identity is separately
-proven. This is a fail-closed policy, not a claim that the data is genuine.
+PROVEN, the source status is `CONFIRMED`, and both A (target metadata
+consistency) and B (same-session provenance) are proven. C is reported
+separately and remains NOT_PROVEN unless independently attested. This is a
+fail-closed policy, not a claim that the data is genuine.
 
 ## Safety boundary
 

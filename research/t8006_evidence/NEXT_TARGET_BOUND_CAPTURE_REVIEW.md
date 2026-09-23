@@ -3,6 +3,12 @@
 Phase 4 research review; no acquisition or device operation is authorized by
 this document.
 
+> Historical note: this review predates the EV-000A/B/C split. References here
+> to EV-000 identity or target binding describe the earlier aggregate and do
+> not make EV-000C a first-bring-up gate. Current technical provenance is
+> EV-000A + EV-000B; see
+> [the current feasibility audit](EV000_FEASIBILITY_AUDIT.md).
+
 ## Decision summary
 
 **Preferred next candidate:** inspect and, only if it already exists, export

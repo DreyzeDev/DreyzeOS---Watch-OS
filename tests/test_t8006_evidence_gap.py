@@ -29,7 +29,7 @@ def requirements_document() -> dict:
     return json.loads(REQUIREMENTS_PATH.read_text(encoding="utf-8"))
 
 
-def synthetic_report(status: str = "DESIGN", identity: bool = False) -> dict:
+def synthetic_report(status: str = "DESIGN", identity: bool = False, technical: bool | None = None) -> dict:
     document = requirements_document()
     node_names = {
         name
@@ -47,11 +47,25 @@ def synthetic_report(status: str = "DESIGN", identity: bool = False) -> dict:
         }
         for name in node_names
     }
+    if not identity and "physical_identity_provenance" in nodes:
+        nodes["physical_identity_provenance"].update(
+            status="UNKNOWN", proof_state="NOT_PROVEN", reason="physical identity intentionally absent"
+        )
+    if technical is None:
+        technical = status == "CONFIRMED"
     return {
         "ok": True,
         "schema": "dreyzeos.handoff_evidence.v1",
         "bundle": {"evidence_status": status},
-        "target": {"metadata_match": True, "identity_proven": identity},
+        "target": {
+            "metadata_match": True,
+            "metadata_status": "CONFIRMED" if status == "CONFIRMED" else status,
+            "same_session_provenance_status": "CONFIRMED" if status == "CONFIRMED" else status,
+            "physical_identity_status": "CONFIRMED" if identity else "NOT_PROVEN",
+            "physical_identity_proven": identity,
+            "identity_proven": identity,
+            "technical_target_provenance_ready": technical,
+        },
         "artifacts": {
             "image": {"status": status, "proof_state": "PROVEN"},
             "mmu_snapshot": {"status": status, "proof_state": "PROVEN"},
@@ -109,7 +123,7 @@ class T8006EvidenceGapTests(unittest.TestCase):
         result = verify_gap(synthetic_report(), requirements_document())
         self.assertEqual(result["offline_proven_requirements"], [
             item["id"] for item in requirements_document()["requirements"]
-            if item["verifier_requirements"]
+            if item["verifier_requirements"] and item["id"] != "EV-000C"
         ])
         self.assertEqual(result["proven_requirements"], [])
         self.assertEqual(result["hardware_status"]["offline_infrastructure"], "COMPLETE")
@@ -181,6 +195,56 @@ class T8006EvidenceGapTests(unittest.TestCase):
         self.assertFalse(result["target_identity_proven"])
         self.assertEqual(result["hardware_status"]["loader_contract"], "BLOCKED")
         self.assertEqual(result["hardware_status"]["first_hardware_execution"], "NOT READY")
+
+    def test_physical_identity_missing_does_not_block_technical_a_plus_b(self) -> None:
+        report = synthetic_report(status="CONFIRMED", identity=False, technical=True)
+        result = verify_gap(report, requirements_document())
+        by_id = {item["id"]: item for item in result["requirements"]}
+        self.assertTrue(by_id["EV-000A"]["target_proven"])
+        self.assertTrue(by_id["EV-000B"]["target_proven"])
+        self.assertFalse(by_id["EV-000C"]["target_proven"])
+        self.assertTrue(by_id["EV-000"]["target_proven"])
+        self.assertTrue(result["technical_target_provenance_ready"])
+        self.assertFalse(result["physical_identity_proven"])
+        self.assertNotIn("EV-000C", result["blocked_requirements"])
+
+    def test_a_satisfied_b_missing_c_missing_blocks_aggregate_only(self) -> None:
+        report = synthetic_report(status="CONFIRMED", identity=False, technical=False)
+        nodes = report["evidence_graph"]["nodes"]
+        nodes["same_session_provenance"].update(
+            status="BLOCKED", proof_state="NOT_PROVEN", reason="session binding absent"
+        )
+        result = verify_gap(report, requirements_document())
+        by_id = {item["id"]: item for item in result["requirements"]}
+        self.assertTrue(by_id["EV-000A"]["target_proven"])
+        self.assertFalse(by_id["EV-000B"]["target_proven"])
+        self.assertFalse(by_id["EV-000C"]["target_proven"])
+        self.assertFalse(by_id["EV-000"]["target_proven"])
+        self.assertIn("EV-000B", result["blocked_requirements"])
+        self.assertNotIn("EV-000C", result["blocked_requirements"])
+
+    def test_physical_identity_does_not_compensate_for_missing_a_or_b(self) -> None:
+        report = synthetic_report(status="CONFIRMED", identity=True, technical=False)
+        nodes = report["evidence_graph"]["nodes"]
+        nodes["target_metadata_provenance"].update(status="BLOCKED", proof_state="NOT_PROVEN")
+        nodes["same_session_provenance"].update(status="BLOCKED", proof_state="NOT_PROVEN")
+        result = verify_gap(report, requirements_document())
+        by_id = {item["id"]: item for item in result["requirements"]}
+        self.assertTrue(by_id["EV-000C"]["target_proven"])
+        self.assertFalse(by_id["EV-000A"]["target_proven"])
+        self.assertFalse(by_id["EV-000B"]["target_proven"])
+        self.assertFalse(by_id["EV-000"]["target_proven"])
+        self.assertFalse(result["technical_target_provenance_ready"])
+
+    def test_requirements_v1_keeps_legacy_identity_gate(self) -> None:
+        document = requirements_document()
+        document["schema"] = "dreyzeos.t8006_evidence_requirements.v1"
+        document["requirements"] = [item for item in document["requirements"] if item["id"] not in {"EV-000A", "EV-000B", "EV-000C"}]
+        report = synthetic_report(status="CONFIRMED", identity=False, technical=True)
+        result = verify_gap(report, document)
+        self.assertNotIn("EV-000", result["proven_requirements"])
+        requirement = next(item for item in result["requirements"] if item["id"] == "EV-000")
+        self.assertFalse(requirement["target_proven"])
 
     def test_incomplete_reserved_list_is_an_exact_blocker(self) -> None:
         report = synthetic_report(status="CONFIRMED", identity=True)

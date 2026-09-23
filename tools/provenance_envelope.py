@@ -14,7 +14,9 @@ from pathlib import Path
 from typing import Any, Callable, Dict, List, Optional
 
 
-SCHEMA = "dreyzeos.target_provenance_envelope.v1"
+SCHEMA = "dreyzeos.target_provenance_envelope.v2"
+LEGACY_SCHEMA = "dreyzeos.target_provenance_envelope.v1"
+SUPPORTED_SCHEMAS = {SCHEMA, LEGACY_SCHEMA}
 REQUIRED_EV000_ARTIFACTS = ("image", "handoff_descriptor", "mmu_snapshot")
 ARTIFACT_TYPES = {
     "DREYZEOS_ELF",
@@ -128,8 +130,10 @@ def validate_envelope(
             },
         }
 
-    if envelope.get("schema") != SCHEMA:
-        problem("ENVELOPE_SCHEMA_UNSUPPORTED", f"schema must be {SCHEMA}")
+    schema = envelope.get("schema")
+    if schema not in SUPPORTED_SCHEMAS:
+        problem("ENVELOPE_SCHEMA_UNSUPPORTED", f"schema must be {SCHEMA} or {LEGACY_SCHEMA}")
+    legacy_schema = schema == LEGACY_SCHEMA
 
     source = envelope.get("source")
     source = source if isinstance(source, dict) else {}
@@ -190,6 +194,7 @@ def validate_envelope(
 
     target = envelope.get("target")
     target = target if isinstance(target, dict) else {}
+    identity_issues: List[str] = []
     expected_metadata = target.get("expected_metadata")
     if not isinstance(expected_metadata, dict) or any(
         field not in expected_metadata or not _same_target_value(field, expected_metadata.get(field), value)
@@ -200,6 +205,7 @@ def validate_envelope(
     metadata = metadata if isinstance(metadata, dict) else {}
     metadata_values: Dict[str, Any] = {}
     metadata_sources: Dict[str, str] = {}
+    metadata_mismatch_fields: List[str] = []
     metadata_complete = True
     metadata_facts_proven = True
     for field, expected in expected_target.items():
@@ -217,10 +223,22 @@ def validate_envelope(
         metadata_values[field] = fact["value"]
         metadata_sources[field] = str(fact.get("source") or "unspecified")
         metadata_facts_proven = metadata_facts_proven and fact["value_proven"]
+        if not _same_target_value(field, fact["value"], expected):
+            metadata_mismatch_fields.append(field)
     computed_match = (
         metadata_complete
         and all(_same_target_value(field, metadata_values[field], expected) for field, expected in expected_target.items())
     )
+    if metadata_mismatch_fields:
+        mismatch_is_proven = any(
+            _is_fact(metadata.get(field)) and metadata[field].get("value_proven")
+            for field in metadata_mismatch_fields
+        )
+        problem(
+            "TARGET_METADATA_MISMATCH",
+            "target metadata fields disagree with the fixed project target: " + ", ".join(metadata_mismatch_fields),
+            conflict=mismatch_is_proven,
+        )
     metadata_match_fact = target.get("metadata_match")
     if not _is_fact(metadata_match_fact):
         problem("METADATA_MATCH_FACT_INVALID", "target.metadata_match must be an explicit boolean fact")
@@ -301,14 +319,31 @@ def validate_envelope(
                         conflict=True,
                     )
 
-    identity_fact = target.get("identity_proven")
-    if not _is_fact(identity_fact) or not identity_fact["value_present"] or type(identity_fact["value"]) is not bool:
-        problem("IDENTITY_PROOF_FACT_INVALID", "target.identity_proven must be an explicit boolean fact")
-        identity_value = False
-        identity_claim_proven = False
+    legacy_identity_fact = target.get("identity_proven") if legacy_schema else None
+    physical_identity_fact = target.get("physical_identity") if not legacy_schema else None
+    if legacy_schema:
+        if legacy_identity_fact is not None and (
+            not _is_fact(legacy_identity_fact)
+            or not legacy_identity_fact["value_present"]
+            or type(legacy_identity_fact["value"]) is not bool
+        ):
+            identity_issues.append("LEGACY_IDENTITY_FACT_INVALID")
+        physical_identity_value = False
+        physical_identity_claim_proven = False
     else:
-        identity_value = identity_fact["value"]
-        identity_claim_proven = identity_fact["value_proven"]
+        if "identity_proven" in target:
+            identity_issues.append("LEGACY_IDENTITY_FIELD_IGNORED_IN_V2")
+        if (
+            not _is_fact(physical_identity_fact)
+            or not physical_identity_fact["value_present"]
+            or type(physical_identity_fact["value"]) is not bool
+        ):
+            identity_issues.append("PHYSICAL_IDENTITY_FACT_MISSING_OR_INVALID")
+            physical_identity_value = False
+            physical_identity_claim_proven = False
+        else:
+            physical_identity_value = physical_identity_fact["value"]
+            physical_identity_claim_proven = physical_identity_fact["value_proven"]
 
     identity_attestation = target.get("identity_attestation")
     attestation_id = identity_attestation.get("artifact_id") if isinstance(identity_attestation, dict) else None
@@ -413,8 +448,16 @@ def validate_envelope(
         runtime_fact = entry.get("artifact_runtime_proven")
         target_bound = bool(_is_fact(target_bound_fact) and target_bound_fact.get("value") is True and target_bound_fact.get("value_proven") is True)
         runtime_proven = bool(_is_fact(runtime_fact) and runtime_fact.get("value") is True and runtime_fact.get("value_proven") is True)
-        if target_bound and (not identity_value or not identity_claim_proven or not relationship_ok):
-            problem("ARTIFACT_TARGET_BINDING_UNSUPPORTED", f"{artifact_id} target binding lacks proven identity/provenance relation")
+        if target_bound and not relationship_ok:
+            problem("ARTIFACT_TARGET_BINDING_UNSUPPORTED", f"{artifact_id} target binding lacks a proven same-session relationship")
+        if (
+            isinstance(relationship, dict)
+            and relationship.get("capture_id") != capture_id
+            and _is_fact(relationship.get("relationship_proven"))
+            and relationship["relationship_proven"].get("value") is True
+            and relationship["relationship_proven"].get("value_proven") is True
+        ):
+            problem("ARTIFACT_SESSION_CONFLICT", f"{artifact_id} declares a proven relationship to a different capture ID", conflict=True)
         if runtime_proven and (not target_bound or not source.get("runtime_evidence_source")):
             problem("ARTIFACT_RUNTIME_PROOF_UNSUPPORTED", f"{artifact_id} runtime proof lacks target binding or runtime source")
         bundle_ref = entry.get("bundle_ref")
@@ -433,6 +476,7 @@ def validate_envelope(
             "artifact_present": present_actual,
             "artifact_hash_verified": hash_ok,
             "artifact_target_bound": False,
+            "artifact_session_bound": bool(present_actual and hash_ok and relationship_ok),
             "artifact_runtime_proven": False,
             "artifact_target_bound_claimed": target_bound,
             "artifact_runtime_proven_claimed": runtime_proven,
@@ -505,50 +549,146 @@ def validate_envelope(
             and bool(identity_attestation.get("authority").strip())
             and isinstance(identity_attestation.get("method"), str)
             and bool(identity_attestation.get("method").strip())
+            and identity_attestation.get("identity_scope") == "PERSISTENT_PHYSICAL_DEVICE"
             and not attestation_artifact["artifact_target_bound"]
         )
-    if identity_value and (not identity_claim_proven or not attestation_valid or synthetic):
-        problem("IDENTITY_PROOF_UNSUPPORTED", "identity_proven=true requires a non-synthetic, hashed external identity attestation")
-    if bundle is not None:
-        root_identity = bundle.get("target", {}).get("identity_proven") if isinstance(bundle.get("target"), dict) else None
-        if root_identity is not None and type(root_identity) is bool and root_identity != identity_value:
-            problem("IDENTITY_DECLARATION_CONFLICT", "bundle.target.identity_proven disagrees with envelope", conflict=True)
-    identity_proven = bool(
-        identity_value
-        and identity_claim_proven
-        and attestation_valid
-        and not synthetic
-        and not conflicts
-        and not errors
-    )
-    for artifact_result in artifacts.values():
-        artifact_result["artifact_target_bound"] = bool(
-            artifact_result["artifact_target_bound_claimed"]
-            and identity_proven
-            and artifact_result["provenance_relationship_proven"]
+    if legacy_schema:
+        # A v1 identity claim was ambiguous between target/session binding and
+        # persistent physical identity. Keep accepting the file, but never
+        # migrate that claim into EV-000C without an explicit v2 scope.
+        legacy_identity_claim = legacy_identity_fact if _is_fact(legacy_identity_fact) else None
+        if isinstance(legacy_identity_claim, dict) and legacy_identity_claim.get("value") is True:
+            identity_issues.append("LEGACY_IDENTITY_CLAIM_NOT_MIGRATED_TO_PHYSICAL_IDENTITY")
+        physical_identity_proven = False
+        physical_identity_status = "NOT_PROVEN"
+    else:
+        legacy_identity_claim = None
+        if physical_identity_value and (
+            not physical_identity_claim_proven or not attestation_valid or synthetic
+        ):
+            identity_issues.append("PHYSICAL_IDENTITY_PROOF_UNSUPPORTED")
+        physical_identity_proven = bool(
+            physical_identity_value
+            and physical_identity_claim_proven
+            and attestation_valid
+            and not synthetic
+            and evidence_status == "CONFIRMED"
+            and not conflicts
+            and not errors
         )
-        artifact_result["artifact_runtime_proven"] = bool(
-            artifact_result["artifact_runtime_proven_claimed"]
-            and artifact_result["artifact_target_bound"]
-            and bool(source.get("runtime_evidence_source"))
+        physical_identity_status = (
+            "CONFIRMED" if physical_identity_proven else
+            "DESIGN" if synthetic and physical_identity_value else
+            "BLOCKED" if physical_identity_value and identity_issues else
+            "NOT_PROVEN"
         )
-    required_target_bound = all(
-        artifact_id in artifacts and artifacts[artifact_id]["artifact_target_bound"]
-        for artifact_id in REQUIRED_EV000_ARTIFACTS
+
+    metadata_conflict_codes = {
+        "METADATA_MATCH_CONFLICT",
+        "TARGET_METADATA_MISMATCH",
+        "PROVEN_TARGET_FACT_CONFLICT",
+        "ENVELOPE_BUNDLE_TARGET_CONFLICT",
+    }
+    metadata_conflict = (
+        any(item.get("code") in metadata_conflict_codes for item in conflicts)
+        or "TARGET_METADATA_MISMATCH" in errors
     )
-    if not required_target_bound:
-        blockers.append("REQUIRED_ARTIFACT_TARGET_BINDING_MISSING")
     metadata_proven = bool(
         computed_match
         and metadata_facts_proven
         and metadata_match_proven
         and isinstance(metadata_match_fact, dict)
         and metadata_match_fact.get("value") is True
+        and not metadata_conflict
     )
+    required_relations_proven = all(
+        artifact_id in artifacts and artifacts[artifact_id]["artifact_session_bound"]
+        for artifact_id in REQUIRED_EV000_ARTIFACTS
+    )
+    covered_relations_proven = all(
+        artifact_id in artifacts and artifacts[artifact_id]["artifact_session_bound"]
+        for artifact_id in covered_ids
+    )
+    session_conflict_codes = {
+        "ARTIFACT_SESSION_CONFLICT",
+        "ENVELOPE_SOURCE_CONFLICT",
+        "COVERAGE_DECLARATION_MISMATCH",
+        "COVERAGE_UNKNOWN_ARTIFACT",
+        "COVERAGE_COMPLETENESS_CONFLICT",
+        "ARTIFACT_ID_DUPLICATE",
+        "ARTIFACT_PATH_ALIAS",
+    }
+    session_conflict = any(item.get("code") in session_conflict_codes for item in conflicts)
+    session_error_prefixes = (
+        "CAPTURE_", "STARTED_AT_", "ENDED_AT_", "PRODUCER_", "SOURCE_INTERFACE_",
+        "ARTIFACT_", "COVERAGE_", "BUNDLE_ARTIFACT_",
+    )
+    session_errors = any(code.startswith(session_error_prefixes) or code == "BUNDLE_SOURCE_MISSING" for code in errors)
+    session_structure_proven = bool(
+        capture_id is not None
+        and capture_id_proven
+        and capture_times_proven
+        and producer_complete
+        and interface_complete
+        and coverage_complete
+        and required_artifacts_valid
+        and required_relations_proven
+        and covered_relations_proven
+        and not session_conflict
+        and not session_errors
+    )
+    same_session_proven = session_structure_proven and (synthetic or evidence_status == "CONFIRMED")
+    same_session_status = (
+        "CONFIRMED" if same_session_proven and not synthetic else
+        "DESIGN" if same_session_proven and synthetic else
+        "BLOCKED" if session_conflict else
+        "UNKNOWN"
+    )
+    metadata_status = (
+        "BLOCKED" if metadata_conflict or (computed_match is False and metadata_complete) else
+        "CONFIRMED" if metadata_proven and evidence_status == "CONFIRMED" and not synthetic else
+        "DESIGN" if metadata_proven and synthetic else
+        "LIKELY" if any(fact.get("value_present") for fact in metadata.values() if isinstance(fact, dict)) else
+        "UNKNOWN"
+    )
+    metadata_proof_state = "PROVEN" if metadata_proven else "NOT_PROVEN"
+    technical_target_provenance_ready = bool(
+        metadata_proven
+        and same_session_proven
+        and evidence_status == "CONFIRMED"
+        and not synthetic
+        and not conflicts
+        and not errors
+    )
+    for artifact_id, artifact_result in artifacts.items():
+        artifact_result["artifact_target_bound"] = bool(
+            metadata_proven
+            and same_session_proven
+            and evidence_status == "CONFIRMED"
+            and not synthetic
+        )
+        if artifact_result["artifact_target_bound_claimed"] and not artifact_result["artifact_target_bound"]:
+            if not legacy_schema:
+                problem("ARTIFACT_TARGET_BINDING_UNSUPPORTED", f"{artifact_id} claims target binding without proven target metadata and same-session provenance")
+        artifact_result["artifact_runtime_proven"] = bool(
+            artifact_result["artifact_runtime_proven_claimed"]
+            and artifact_result["artifact_target_bound"]
+            and bool(source.get("runtime_evidence_source"))
+        )
+    required_target_bound = all(
+        artifact_id in artifacts
+        and artifacts[artifact_id]["artifact_session_bound"]
+        and artifacts[artifact_id]["artifact_target_bound"]
+        and metadata_proven
+        and same_session_proven
+        for artifact_id in REQUIRED_EV000_ARTIFACTS
+    )
+    if not required_target_bound:
+        blockers.append("REQUIRED_ARTIFACT_TARGET_BINDING_MISSING")
     ev000_ok = (
         evidence_status == "CONFIRMED"
         and metadata_proven
-        and identity_proven
+        and same_session_proven
         and coverage_complete
         and capture_id is not None
         and capture_id_proven
@@ -567,8 +707,8 @@ def validate_envelope(
         ev000_reasons.append("source evidence status is not CONFIRMED")
     if not metadata_proven:
         ev000_reasons.append("target metadata comparison is absent, mismatched, or unproven")
-    if not identity_proven:
-        ev000_reasons.append("target identity lacks a proven external attestation")
+    if not same_session_proven:
+        ev000_reasons.append("required artifacts are not proven members of one complete capture session")
     if not coverage_complete:
         ev000_reasons.append("required artifact coverage is absent, partial, or unproven")
     if not required_artifacts_valid:
@@ -596,6 +736,7 @@ def validate_envelope(
     )
     return {
         "schema": SCHEMA,
+        "input_schema": schema,
         "status": report_status,
         "source_kind": source_kind,
         "evidence_status": evidence_status,
@@ -614,14 +755,22 @@ def validate_envelope(
         "target": {
             "metadata_match": computed_match if metadata_complete else None,
             "metadata_match_proven": metadata_proven,
+            "metadata_status": metadata_status,
+            "metadata_completeness": "COMPLETE" if metadata_complete else "PARTIAL",
             "metadata_facts_proven": metadata_facts_proven,
             "metadata_sources": metadata_sources,
             "metadata_facts": {field: metadata.get(field) for field in expected_target},
             "metadata_match_claim": metadata_match_fact,
-            "identity_proven": identity_proven,
-            "identity_claim": identity_fact,
+            "same_session_provenance": same_session_proven,
+            "same_session_provenance_status": same_session_status,
+            "physical_identity_proven": physical_identity_proven,
+            "physical_identity_status": physical_identity_status,
+            "identity_proven": physical_identity_proven,
+            "legacy_identity_claim": legacy_identity_claim,
+            "identity_claim": physical_identity_fact if not legacy_schema else legacy_identity_fact,
             "identity_attestation_valid": attestation_valid,
             "identity_attestation": identity_attestation,
+            "technical_target_provenance_ready": technical_target_provenance_ready,
         },
         "producer": producer,
         "source_interface": interface,
@@ -632,15 +781,37 @@ def validate_envelope(
             "coverage_complete_claimed_and_consistent": coverage_complete,
         },
         "artifacts": artifacts,
+        "identity_issues": identity_issues,
+        "schema_compatibility": "LEGACY_V1_ACCEPTED_WITHOUT_PHYSICAL_IDENTITY_MIGRATION" if legacy_schema else "CURRENT_V2",
         "conflicts": conflicts,
         "errors": errors,
-        "blockers": sorted(set(blockers + ([] if ev000_ok else ["EV-000"]) + ["EV-027"])),
+        "blockers": sorted(set(blockers + ([] if metadata_proven else ["EV-000A"]) + ([] if same_session_proven else ["EV-000B"]) + ([] if ev000_ok else ["EV-000"]) + ["EV-027"])),
         "requirements": {
             "EV-000": {
                 "status": ev000_status,
                 "proof_state": "PROVEN" if ev000_ok else "NOT_PROVEN",
-                "reason": "target identity, metadata match, and artifact coverage are independently declared and structurally consistent" if ev000_ok else "; ".join(ev000_reasons),
+                "reason": "target metadata and complete same-session artifact provenance are independently proven; physical identity is not a prerequisite" if ev000_ok else "; ".join(ev000_reasons),
                 "evidence_sources": ["provenance_envelope.target", "provenance_envelope.coverage", "provenance_envelope.artifacts"],
+            },
+            "EV-000A": {
+                "status": metadata_status,
+                "proof_state": metadata_proof_state,
+                "reason": "all expected target metadata fields match and are proven" if metadata_proven else "target metadata is partial, unproven, or conflicting",
+                "evidence_sources": ["provenance_envelope.target.metadata", "provenance_envelope.target.metadata_match"],
+            },
+            "EV-000B": {
+                "status": same_session_status,
+                "proof_state": "PROVEN" if same_session_proven else "NOT_PROVEN",
+                "reason": "all required and covered artifacts have verified bytes and proven relationships to one capture session" if same_session_proven else "capture/session provenance, artifact coverage, or per-artifact relationships are incomplete",
+                "evidence_sources": ["provenance_envelope.capture", "provenance_envelope.coverage", "provenance_envelope.artifacts[].provenance_relationship"],
+            },
+            "EV-000C": {
+                "status": "CONFIRMED" if physical_identity_proven else physical_identity_status,
+                "proof_state": "PROVEN" if physical_identity_proven else "NOT_PROVEN",
+                "critical": False,
+                "readiness_effect": "NONE_FOR_FIRST_TECHNICAL_BRINGUP",
+                "reason": "persistent physical-device identity is independently attested" if physical_identity_proven else "physical identity/cross-session continuity is not proven and is not required for first technical bring-up",
+                "evidence_sources": ["provenance_envelope.target.physical_identity", "provenance_envelope.target.identity_attestation"],
             },
             "EV-027": {
                 "status": "BLOCKED" if not ev027_ok else "CONFIRMED",

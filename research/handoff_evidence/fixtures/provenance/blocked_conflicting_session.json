@@ -1,0 +1,9 @@
+{
+  "case": "conflicting_proven_session_relationship",
+  "expected_requirement": "EV-000B",
+  "expected_proof_state": "NOT_PROVEN",
+  "operations": [
+    {"op": "set", "path": "artifacts[2].provenance_relationship.capture_id", "value": "00000000-0000-4000-8000-000000000299"}
+  ],
+  "expected_blocker": "ARTIFACT_SESSION_CONFLICT"
+}

@@ -61,23 +61,28 @@ but it does not replace independent byte files. The minimum logical set is:
 
 ### 1. Provenance envelope and bundle manifest
 
-IDs: `EV-000`, `EV-027`.
+IDs: `EV-000A`, `EV-000B`, `EV-000C`, `EV-000`, `EV-027`.
 
 Required fields are schema, exact model/board/SoC/firmware/build/architecture,
 source status, producer, capture ID/timestamp, a provenance relationship for
-every artifact, relative paths, SHA-256 values, and explicit boolean
-`metadata_match` and `identity_proven` facts. For a non-synthetic target
-bundle, `provenance_envelope.coverage.coverage_complete` must be proven and
-its per-artifact target-binding facts must cover at least `image`,
+every artifact, relative paths, SHA-256 values, and explicit metadata-match
+and per-artifact session-relationship facts. EV-000A checks target metadata;
+EV-000B checks that artifacts consumed together belong to one capture session;
+EV-000C separately tracks persistent physical identity and is not required for
+first technical bring-up. For a non-synthetic target bundle,
+`provenance_envelope.coverage.coverage_complete` must be proven and its
+per-artifact session relationships must cover at least `image`,
 `handoff_descriptor`, and `mmu_snapshot`. Declare the ELF, exact 128-byte
 descriptor, MMU manifest, all table blobs, and optional object copies.
 
-The host-only preparation schema is now
-`dreyzeos.target_provenance_envelope.v1`, embedded as
+The current host-only preparation schema is
+`dreyzeos.target_provenance_envelope.v2`, embedded as
 `bundle.provenance_envelope` or validated alone with
 `tools/handoff_evidence_verifier.py --provenance-envelope`. Its per-artifact
-presence, hash, target-binding, and runtime-proof facts are independent. The
-legacy `target_provenance` fields are compatibility summaries only. The
+presence, hash, session-binding, physical-identity, and runtime-proof facts
+are independent. V1 envelopes remain readable, but their ambiguous
+`identity_proven` claim is not migrated into physical identity. The legacy
+`target_provenance` fields are compatibility summaries only. The
 sanitized template and synthetic/blocked mutation fixtures live under
 `research/handoff_evidence/`; none contains target runtime evidence.
 

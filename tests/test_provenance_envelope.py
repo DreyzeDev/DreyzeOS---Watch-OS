@@ -109,6 +109,37 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         case, report = self.apply_case("conflicting_proven_facts")
         self.assertEqual(report["requirements"][case["expected_requirement"]]["proof_state"], case["expected_proof_state"])
         self.assertTrue(any(item["code"] == case["expected_blocker"] for item in report["conflicts"]))
+        self.assertEqual(report["requirements"]["EV-000A"]["status"], "BLOCKED")
+
+    def test_conflicting_session_facts_fixture(self) -> None:
+        case, report = self.apply_case("conflicting_session")
+        self.assertEqual(report["requirements"][case["expected_requirement"]]["proof_state"], case["expected_proof_state"])
+        self.assertTrue(any(item["code"] == case["expected_blocker"] for item in report["conflicts"]))
+        self.assertEqual(report["requirements"]["EV-000B"]["status"], "BLOCKED")
+
+    def test_synthetic_a_b_c_claim_is_never_physical_identity_proof(self) -> None:
+        case = json.loads((FIXTURES / "synthetic_a_b_c_model.json").read_text(encoding="utf-8"))
+        envelope = self.load_base()
+        for operation in case["operations"]:
+            set_path(envelope, operation["path"], operation["value"], append=operation["op"] == "append")
+        report = self.validate(envelope)
+        self.assertEqual(report["requirements"]["EV-000A"]["proof_state"], "PROVEN")
+        self.assertEqual(report["requirements"]["EV-000B"]["proof_state"], "PROVEN")
+        self.assertEqual(report["requirements"]["EV-000C"]["proof_state"], case["expected_proof_state"])
+        self.assertFalse(report["target"]["physical_identity_proven"])
+        self.assertIn(case["expected_blocker"], report["identity_issues"])
+
+    def test_c_claim_cannot_compensate_for_missing_a(self) -> None:
+        envelope = self.load_base()
+        envelope["target"]["metadata"]["board"] = {
+            "value": None, "value_present": False, "value_proven": False, "source": None
+        }
+        envelope["target"]["physical_identity"]["value"] = True
+        envelope["target"]["physical_identity"]["value_proven"] = True
+        report = self.validate(envelope)
+        self.assertEqual(report["requirements"]["EV-000A"]["proof_state"], "NOT_PROVEN")
+        self.assertEqual(report["requirements"]["EV-000C"]["proof_state"], "NOT_PROVEN")
+        self.assertEqual(report["requirements"]["EV-000"]["proof_state"], "NOT_PROVEN")
 
     def test_invalid_relative_path_fails_closed(self) -> None:
         envelope = self.load_base()
@@ -117,11 +148,14 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         self.assertIn("ARTIFACT_PATH_INVALID", report["errors"])
         self.assertEqual(report["requirements"]["EV-000"]["proof_state"], "NOT_PROVEN")
 
-    def test_boolean_string_is_not_accepted_as_fact(self) -> None:
+    def test_legacy_identity_field_is_not_reinterpreted_in_v2(self) -> None:
         envelope = self.load_base()
-        envelope["target"]["identity_proven"]["value"] = "false"
+        envelope["target"]["identity_proven"] = {
+            "value": "false", "value_present": True, "value_proven": True, "source": "legacy"
+        }
         report = self.validate(envelope)
-        self.assertIn("IDENTITY_PROOF_FACT_INVALID", report["errors"])
+        self.assertIn("LEGACY_IDENTITY_FIELD_IGNORED_IN_V2", report["identity_issues"])
+        self.assertFalse(report["target"]["physical_identity_proven"])
 
     def test_noncanonical_capture_uuid_is_rejected(self) -> None:
         envelope = self.load_base()
@@ -148,8 +182,8 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         template_path = ROOT / "research" / "handoff_evidence" / "provenance_envelope.template.json"
         template = json.loads(template_path.read_text(encoding="utf-8"))
         report = validate_envelope(template, template_path.parent, EXPECTED_TARGET)
-        self.assertFalse(template["target"]["identity_proven"]["value"])
-        self.assertFalse(template["target"]["identity_proven"]["value_proven"])
+        self.assertFalse(template["target"]["physical_identity"]["value"])
+        self.assertFalse(template["target"]["physical_identity"]["value_proven"])
         self.assertFalse(template["capture"]["capture_id"]["value_present"])
         self.assertTrue(all(item["path"] is None for item in template["artifacts"]))
         self.assertFalse(template["coverage"]["coverage_complete"]["value_proven"])
@@ -158,6 +192,27 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         self.assertNotIn("ARTIFACT_RUNTIME_PROVEN_FACT_INVALID", report["errors"])
         self.assertEqual(report["requirements"]["EV-000"]["proof_state"], "NOT_PROVEN")
 
+    def test_a_and_b_can_be_structurally_complete_without_c(self) -> None:
+        report = self.validate(self.load_base())
+        self.assertEqual(report["requirements"]["EV-000A"]["proof_state"], "PROVEN")
+        self.assertEqual(report["requirements"]["EV-000B"]["proof_state"], "PROVEN")
+        self.assertEqual(report["requirements"]["EV-000C"]["proof_state"], "NOT_PROVEN")
+        self.assertFalse(report["target"]["physical_identity_proven"])
+        self.assertTrue(report["target"]["same_session_provenance"])
+        self.assertTrue(report["target"]["metadata_match_proven"])
+        self.assertFalse(report["target"]["technical_target_provenance_ready"])
+
+    def test_v1_envelope_is_accepted_without_migrating_identity_claim_to_c(self) -> None:
+        envelope = self.load_base()
+        envelope["schema"] = "dreyzeos.target_provenance_envelope.v1"
+        envelope["target"]["identity_proven"] = envelope["target"].pop("physical_identity")
+        envelope["target"]["identity_attestation"].pop("identity_scope", None)
+        report = self.validate(envelope)
+        self.assertEqual(report["schema_compatibility"], "LEGACY_V1_ACCEPTED_WITHOUT_PHYSICAL_IDENTITY_MIGRATION")
+        self.assertEqual(report["requirements"]["EV-000C"]["proof_state"], "NOT_PROVEN")
+        self.assertEqual(report["requirements"]["EV-000A"]["proof_state"], "PROVEN")
+        self.assertEqual(report["requirements"]["EV-000B"]["proof_state"], "PROVEN")
+
     def test_sanitized_watch_report_record_does_not_prove_target_identity(self) -> None:
         envelope_path = ROOT / "research" / "t8006_evidence" / "watchos_report_provenance_envelope.json"
         envelope = json.loads(envelope_path.read_text(encoding="utf-8"))
@@ -165,9 +220,17 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
 
         self.assertEqual(report["status"], "UNKNOWN")
         self.assertIsNone(report["target"]["metadata_match"])
+        self.assertEqual(report["target"]["metadata_status"], "LIKELY")
+        self.assertEqual(report["target"]["metadata_completeness"], "PARTIAL")
+        self.assertEqual(report["target"]["same_session_provenance_status"], "UNKNOWN")
+        self.assertEqual(report["target"]["physical_identity_status"], "NOT_PROVEN")
+        self.assertFalse(report["target"]["technical_target_provenance_ready"])
         self.assertFalse(report["target"]["identity_proven"])
         self.assertEqual(report["requirements"]["EV-000"]["status"], "BLOCKED")
         self.assertEqual(report["requirements"]["EV-000"]["proof_state"], "NOT_PROVEN")
+        self.assertEqual(report["requirements"]["EV-000A"]["proof_state"], "NOT_PROVEN")
+        self.assertEqual(report["requirements"]["EV-000B"]["proof_state"], "NOT_PROVEN")
+        self.assertEqual(report["requirements"]["EV-000C"]["proof_state"], "NOT_PROVEN")
         artifact = report["artifacts"]["watchos_report_record"]
         self.assertTrue(artifact["artifact_present"])
         self.assertTrue(artifact["artifact_hash_verified"])
@@ -200,6 +263,9 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
             check=False,
         )
         self.assertEqual(strict.returncode, 1)
+        self.assertIn("EV-000A = DESIGN", strict.stdout)
+        self.assertIn("EV-000B = DESIGN", strict.stdout)
+        self.assertIn("EV-000C = NOT_PROVEN", strict.stdout)
         self.assertIn("FIRST HARDWARE EXECUTION = NOT READY", strict.stdout)
 
 

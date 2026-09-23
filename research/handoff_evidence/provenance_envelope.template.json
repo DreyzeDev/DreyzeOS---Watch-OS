@@ -1,5 +1,5 @@
 {
-  "schema": "dreyzeos.target_provenance_envelope.v1",
+  "schema": "dreyzeos.target_provenance_envelope.v2",
   "source": {
     "kind": "future_capture",
     "evidence_status": "UNKNOWN",
@@ -33,13 +33,13 @@
       "architecture": {"value": null, "value_present": false, "value_proven": false, "source": null}
     },
     "metadata_match": {"value": null, "value_present": false, "value_proven": false, "source": null},
-    "identity_proven": {
+    "physical_identity": {
       "value": false,
       "value_present": true,
       "value_proven": false,
-      "source": "template default; no external identity attestation supplied"
+      "source": "template default; no persistent physical-device identity attestation supplied"
     },
-    "identity_attestation": {"artifact_id": null, "authority": null, "method": null},
+    "identity_attestation": {"artifact_id": null, "authority": null, "method": null, "identity_scope": null},
     "assertions": []
   },
   "producer": {

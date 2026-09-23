@@ -3,6 +3,11 @@
 Phase 4 — EV-000 identity/correlation bridge research. This is host-only
 research; no Apple Watch or iPhone was queried or changed.
 
+> Historical note: this review predates the EV-000A/B/C split. Its references
+> to the old identity portion of EV-000 now apply only to EV-000C. Technical
+> target provenance is EV-000A + EV-000B; see
+> [the current feasibility audit](EV000_FEASIBILITY_AUDIT.md).
+
 ## Result
 
 | Item | Finding | Status |

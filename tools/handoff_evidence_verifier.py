@@ -87,6 +87,8 @@ CRITICAL_ORDER = (
     "bundle_integrity",
     "artifact_aliases",
     "target_metadata_match",
+    "target_metadata_provenance",
+    "same_session_provenance",
     "mmu_snapshot_target_match",
     "image_integrity",
     "image_shape",
@@ -549,6 +551,12 @@ class BundleVerifier:
         self.descriptor: Optional[Dict[str, Any]] = None
         self.target_match = False
         self.identity_proven = False
+        self.same_session_provenance_proven = False
+        self.technical_target_provenance_ready = False
+        self.metadata_status = "UNKNOWN"
+        self.same_session_status = "UNKNOWN"
+        self.physical_identity_status = "NOT_PROVEN"
+        self.legacy_identity_claim: Any = None
         self.target_provenance_proven = False
         self.provenance_envelope_report: Optional[Dict[str, Any]] = None
         self.ranges: Dict[str, Dict[str, Any]] = {}
@@ -753,23 +761,10 @@ class BundleVerifier:
             match=self.target_match,
             mismatches=mismatches,
         )
-        explicit_identity = strict_bool(target, "identity_proven", False, "bundle.target.identity_proven")
-        self.identity_proven = (
-            explicit_identity is True
-            and self.target_match
-            and self.evidence_status == "CONFIRMED"
-        )
-        self.add_node(
-            "target_identity_proven",
-            "CONFIRMED" if self.identity_proven else (
-                "DESIGN" if self.evidence_status == "DESIGN" else "UNKNOWN"
-            ),
-            "PROVEN" if self.identity_proven else "NOT_PROVEN",
-            "identity is an explicit external claim; matching strings alone are insufficient",
-            ("bundle.target.identity_proven",),
-            critical=False,
-            value=self.identity_proven,
-        )
+        # Legacy bundle.target.identity_proven is retained only as a hint for
+        # compatibility. It cannot prove persistent identity or technical
+        # target/session provenance; the v2 nested envelope owns those facts.
+        self.legacy_identity_claim = target.get("identity_proven")
 
     def verify_integrity(self) -> None:
         image_spec = self.root.get("image")
@@ -814,17 +809,6 @@ class BundleVerifier:
     def verify_provenance(self) -> None:
         source = self.root.get("source", {})
         source_kind = source.get("kind") if isinstance(source, dict) else None
-        target = self.root.get("target", {})
-        identity = (
-            strict_bool(
-                target,
-                "identity_proven",
-                False,
-                "bundle.target.identity_proven",
-            )
-            if isinstance(target, dict)
-            else None
-        )
         envelope = self.root.get("provenance_envelope")
         if isinstance(envelope, dict):
             self.provenance_envelope_report = validate_envelope(
@@ -839,8 +823,10 @@ class BundleVerifier:
             for conflict in self.provenance_envelope_report.get("conflicts", []):
                 self.conflicts.append(conflict)
             envelope_target = self.provenance_envelope_report.get("target", {})
-            envelope_identity = bool(envelope_target.get("identity_proven"))
-            envelope_ev000 = self.provenance_envelope_report.get("requirements", {}).get("EV-000", {})
+            envelope_requirements = self.provenance_envelope_report.get("requirements", {})
+            metadata_requirement = envelope_requirements.get("EV-000A", {})
+            session_requirement = envelope_requirements.get("EV-000B", {})
+            physical_requirement = envelope_requirements.get("EV-000C", {})
             envelope_status = self.provenance_envelope_report.get("status", "UNKNOWN")
             envelope_checked = (
                 envelope_status in {"CONFIRMED", "DESIGN"}
@@ -858,8 +844,11 @@ class BundleVerifier:
             )
         else:
             self.provenance_envelope_report = None
-            envelope_identity = False
-            envelope_ev000 = {}
+            envelope_target = {}
+            metadata_requirement = {}
+            session_requirement = {}
+            physical_requirement = {}
+            envelope_checked = False
             self.add_node(
                 "provenance_envelope",
                 "BLOCKED" if self.evidence_status == "CONFIRMED" else "UNKNOWN",
@@ -868,31 +857,67 @@ class BundleVerifier:
                 ("bundle.provenance_envelope",),
                 critical=False,
             )
-        identity_valid = bool(
-            envelope_identity
-            and identity is True
-            and self.target_match
-            and self.evidence_status == "CONFIRMED"
-            and self.provenance_envelope_report is not None
-            and envelope_checked
-            and envelope_ev000.get("proof_state") == "PROVEN"
+
+        self.metadata_status = str(metadata_requirement.get("status", envelope_target.get("metadata_status", "UNKNOWN")))
+        self.same_session_status = str(session_requirement.get("status", envelope_target.get("same_session_provenance_status", "UNKNOWN")))
+        metadata_proven = metadata_requirement.get("proof_state") == "PROVEN" and self.target_match
+        session_proven = session_requirement.get("proof_state") == "PROVEN"
+        self.same_session_provenance_proven = bool(session_proven)
+        physical_identity_proven = bool(envelope_target.get("physical_identity_proven"))
+        self.identity_proven = physical_identity_proven
+        self.physical_identity_status = str(
+            envelope_target.get("physical_identity_status", "NOT_PROVEN")
         )
-        self.identity_proven = identity_valid
+        self.technical_target_provenance_ready = bool(
+            metadata_proven
+            and session_proven
+            and self.evidence_status == "CONFIRMED"
+            and source_kind != "synthetic"
+            and envelope_checked
+            and not self.conflicts
+        )
+        self.add_node(
+            "target_metadata_provenance",
+            metadata_requirement.get("status", "BLOCKED" if self.evidence_status == "CONFIRMED" else "UNKNOWN"),
+            metadata_requirement.get("proof_state", "NOT_PROVEN"),
+            metadata_requirement.get("reason", "provenance envelope target metadata is absent"),
+            metadata_requirement.get("evidence_sources", ("bundle.provenance_envelope.target.metadata",)),
+            critical=True,
+            metadata_status=self.metadata_status,
+        )
+        self.add_node(
+            "same_session_provenance",
+            session_requirement.get("status", "BLOCKED" if self.evidence_status == "CONFIRMED" else "UNKNOWN"),
+            session_requirement.get("proof_state", "NOT_PROVEN"),
+            session_requirement.get("reason", "provenance envelope does not prove a common capture session"),
+            session_requirement.get("evidence_sources", ("bundle.provenance_envelope.capture", "bundle.provenance_envelope.artifacts")),
+            critical=True,
+            same_session_status=self.same_session_status,
+        )
+        self.add_node(
+            "physical_identity_provenance",
+            physical_requirement.get("status", "UNKNOWN"),
+            physical_requirement.get("proof_state", "NOT_PROVEN"),
+            physical_requirement.get("reason", "persistent physical-device identity is not proven"),
+            physical_requirement.get("evidence_sources", ("bundle.provenance_envelope.target.physical_identity",)),
+            critical=False,
+            readiness_effect="NONE_FOR_FIRST_TECHNICAL_BRINGUP",
+        )
         self.add_node(
             "target_identity_proven",
-            "CONFIRMED" if identity_valid else (
-                "DESIGN" if source_kind == "synthetic" else (
-                    "BLOCKED" if self.evidence_status == "CONFIRMED" else "UNKNOWN"
-                )
-            ),
-            "PROVEN" if identity_valid else "NOT_PROVEN",
-            "identity requires an explicit proven claim and a hashed external identity-attestation artifact; matching strings alone are insufficient",
-            ("bundle.provenance_envelope.target.identity_proven", "bundle.provenance_envelope.target.identity_attestation"),
+            "CONFIRMED" if physical_identity_proven else self.physical_identity_status,
+            "PROVEN" if physical_identity_proven else "NOT_PROVEN",
+            "deprecated compatibility node; physical identity is separate from technical target/session provenance",
+            ("bundle.provenance_envelope.target.physical_identity", "bundle.provenance_envelope.target.identity_attestation"),
             critical=False,
-            value=identity_valid,
+            value=physical_identity_proven,
         )
         if source_kind == "synthetic":
-            safe_synthetic = self.evidence_status == "DESIGN" and identity is not True and not identity_valid
+            safe_synthetic = (
+                self.evidence_status == "DESIGN"
+                and self.legacy_identity_claim is not True
+                and not physical_identity_proven
+            )
             covered = (
                 self.provenance_envelope_report.get("coverage", {}).get("covered_artifact_ids", [])
                 if self.provenance_envelope_report else []
@@ -901,7 +926,7 @@ class BundleVerifier:
                 "target_provenance",
                 "DESIGN",
                 "NOT_PROVEN",
-                "synthetic evidence is never target identity provenance",
+                "synthetic evidence models A+B only and is never target-bound hardware provenance",
                 ("bundle.source", "bundle.provenance_envelope"),
                 critical=False,
                 covered_artifacts=covered,
@@ -913,7 +938,7 @@ class BundleVerifier:
                 "synthetic source is explicitly DESIGN and identity is not proven"
                 if safe_synthetic
                 else "synthetic evidence cannot claim CONFIRMED status or target identity",
-                ("bundle.source.kind", "bundle.source.evidence_status", "bundle.target.identity_proven"),
+                ("bundle.source.kind", "bundle.source.evidence_status", "bundle.target.identity_proven", "bundle.provenance_envelope.target.physical_identity"),
                 critical=not safe_synthetic,
                 source_kind=source_kind,
             )
@@ -922,10 +947,13 @@ class BundleVerifier:
             source_kind
             and self.evidence_status == "CONFIRMED"
             and self.target_match
-            and identity_valid
-            and envelope_ev000.get("proof_state") == "PROVEN"
+            and metadata_proven
+            and session_proven
+            and envelope_checked
+            and not self.conflicts
         )
         self.target_provenance_proven = valid
+        self.technical_target_provenance_ready = valid
         covered = (
             self.provenance_envelope_report.get("coverage", {}).get("covered_artifact_ids", [])
             if self.provenance_envelope_report else []
@@ -933,12 +961,12 @@ class BundleVerifier:
         self.add_node(
             "target_provenance",
             "CONFIRMED" if valid else (
-                "BLOCKED" if self.evidence_status == "CONFIRMED" else "UNKNOWN"
+                "BLOCKED" if self.evidence_status == "CONFIRMED" or self.conflicts else "UNKNOWN"
             ),
             "PROVEN" if valid else "NOT_PROVEN",
             "provenance explicitly covers all required bundle artifacts"
             if valid
-            else "target-specific readiness requires externally supported identity and per-artifact proven coverage in provenance_envelope",
+            else "technical target provenance requires EV-000A metadata consistency and EV-000B same-session artifact provenance; EV-000C physical identity is optional",
             ("bundle.source", "bundle.provenance_envelope", "bundle.image", "bundle.handoff_descriptor", "bundle.mmu_snapshot"),
             critical=True,
             source_kind=source_kind,
@@ -2484,7 +2512,6 @@ class BundleVerifier:
         hardware_ready = (
             offline_ready
             and self.evidence_status == "CONFIRMED"
-            and self.identity_proven
             and self.target_provenance_proven
             and (
                 self.root.get("source", {}).get("kind")
@@ -2511,9 +2538,15 @@ class BundleVerifier:
             "provenance_envelope": self.nodes.get("provenance_envelope"),
             "target": {
                 "metadata_match": self.target_match,
+                "metadata_status": self.metadata_status,
+                "same_session_provenance_status": self.same_session_status,
+                "physical_identity_status": self.physical_identity_status,
+                "physical_identity_proven": self.identity_proven,
+                "technical_target_provenance_ready": self.technical_target_provenance_ready,
                 "identity_proven": self.identity_proven,
+                "legacy_identity_claim": self.legacy_identity_claim,
                 "node": self.nodes.get("target_metadata_match"),
-                "identity_node": self.nodes.get("target_identity_proven"),
+                "identity_node": self.nodes.get("physical_identity_provenance"),
                 "provenance_node": self.nodes.get("target_provenance"),
                 "provenance_envelope": self.provenance_envelope_report,
             },
@@ -2592,11 +2625,11 @@ class BundleVerifier:
                 "blocking_requirements": blockers,
                 "reason": (
                     "all offline dependencies are proven; hardware readiness still "
-                    "depends on target identity/evidence status"
+                    "depends on confirmed target metadata/session provenance and target evidence status"
                     if offline_ready and not hardware_ready
                     else "one or more critical evidence dependencies are not proven"
                     if not offline_ready
-                    else "target-specific identity and evidence are explicitly proven"
+                    else "target metadata consistency, same-session provenance, and all hardware evidence are proven"
                 ),
             },
             "control_transfer": self.nodes.get("control_transfer"),
@@ -2665,9 +2698,13 @@ def human_report(report: Dict[str, Any]) -> str:
     lines.extend(
         [
             "",
-            f"Offline contract result ...... {readiness.get('offline_contract_result', 'BLOCKED')}",
-            f"Hardware evidence status ..... {readiness.get('hardware_evidence_status', 'UNKNOWN')}",
-            f"LOADER CONTRACT .............. {readiness.get('loader_contract', 'BLOCKED')}",
+        f"Offline contract result ...... {readiness.get('offline_contract_result', 'BLOCKED')}",
+        f"Hardware evidence status ..... {readiness.get('hardware_evidence_status', 'UNKNOWN')}",
+        f"TARGET_METADATA_STATUS = {report.get('target', {}).get('metadata_status', 'UNKNOWN')}",
+        f"SAME_SESSION_PROVENANCE_STATUS = {report.get('target', {}).get('same_session_provenance_status', 'UNKNOWN')}",
+        f"PHYSICAL_IDENTITY_STATUS = {report.get('target', {}).get('physical_identity_status', 'NOT_PROVEN')}",
+        f"TECHNICAL_TARGET_PROVENANCE_READY = {str(report.get('target', {}).get('technical_target_provenance_ready', False)).lower()}",
+        f"LOADER CONTRACT .............. {readiness.get('loader_contract', 'BLOCKED')}",
             f"FIRST HARDWARE EXECUTION ..... {readiness.get('first_hardware_execution', 'NOT_READY')}",
         ]
     )
@@ -2688,12 +2725,19 @@ def provenance_human_report(report: Dict[str, Any]) -> str:
         "",
         f"Envelope ...................... {report.get('status', 'UNKNOWN')}",
         f"Metadata match ................ {target.get('metadata_match')}",
-        f"Target identity proven ........ {target.get('identity_proven')}",
+        f"TARGET_METADATA_STATUS = {target.get('metadata_status', 'UNKNOWN')}",
+        f"SAME_SESSION_PROVENANCE_STATUS = {target.get('same_session_provenance_status', 'UNKNOWN')}",
+        f"PHYSICAL_IDENTITY_STATUS = {target.get('physical_identity_status', 'NOT_PROVEN')}",
+        f"TECHNICAL_TARGET_PROVENANCE_READY = {str(target.get('technical_target_provenance_ready', False)).lower()}",
+        f"EV-000A = {requirements.get('EV-000A', {}).get('status', 'BLOCKED')}",
+        f"EV-000B = {requirements.get('EV-000B', {}).get('status', 'BLOCKED')}",
+        f"EV-000C = {requirements.get('EV-000C', {}).get('status', 'NOT_PROVEN')}",
         f"Artifact coverage complete .... {report.get('coverage', {}).get('coverage_complete_claimed_and_consistent')}",
         f"EV-000 ......................... {requirements.get('EV-000', {}).get('status', 'BLOCKED')}",
         f"EV-027 ......................... {requirements.get('EV-027', {}).get('status', 'BLOCKED')}",
         "",
         "SHA-256 proves local byte equality only; it does not authenticate a capture.",
+        "PHYSICAL DEVICE IDENTITY = " + ("PROVEN" if target.get("physical_identity_proven") else "NOT_PROVEN"),
         "LOADER CONTRACT = BLOCKED",
         "FIRST HARDWARE EXECUTION = NOT READY",
     ]

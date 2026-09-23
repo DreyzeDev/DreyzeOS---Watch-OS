@@ -1,5 +1,5 @@
 {
-  "schema": "dreyzeos.t8006_evidence_requirements.v1",
+  "schema": "dreyzeos.t8006_evidence_requirements.v2",
   "target": {
     "model": "Watch4,2",
     "board": "N131bAP",
@@ -13,15 +13,51 @@
   "requirements": [
     {
       "id": "EV-000",
-      "name": "target identity provenance",
+      "name": "technical target provenance (EV-000A + EV-000B)",
       "critical": true,
       "status": "BLOCKED",
       "evidence_group": "TARGET_PROVENANCE",
-      "evidence_sources": ["provenance_envelope.target.metadata_match", "provenance_envelope.target.identity_proven", "provenance_envelope.target.identity_attestation", "provenance_envelope.capture.capture_id and UTC timestamps", "provenance_envelope.artifacts[].artifact_target_bound", "provenance_envelope.artifacts[].artifact_hash_verified", "research/t8006_evidence/observed_watchos_report.json", "research/t8006_evidence/watchos_report_provenance_envelope.json"],
-      "missing": "The sanitized pre-existing report confirms report-content model/software fields and T8006-related symbols, but its source origin and physical identity are not independently attested. A non-synthetic identity attestation and provenance chain must still bind every required image, descriptor, and MMU artifact to Watch4,2/N131bAP/T8006/watchOS 10.6.1 build 21U580. Envelope preparation or local hashes alone do not close EV-000.",
-      "closure_conditions": ["target metadata values match the fixed project target and their sources are proven", "metadata_match is explicitly proven and true", "identity_proven is explicitly proven true and references a hashed external identity-attestation artifact with authority and method stated", "capture ID and UTC start/end timestamps are present and proven", "producer and source/interface provenance are present and proven", "image, handoff_descriptor, and mmu_snapshot artifacts are present and their declared local SHA-256 values verify", "required-artifact coverage is explicitly complete", "each required artifact has a separately proven target/session provenance relationship and target binding", "no conflicting proven target facts or artifact declarations exist", "SHA-256 equality is treated only as local byte integrity, not device authenticity"],
-      "verifier_requirements": ["target_metadata_match", "provenance_envelope", "target_identity_proven", "target_provenance"],
+      "evidence_sources": ["EV-000A target metadata consistency", "EV-000B same-session artifact provenance", "provenance_envelope.capture", "provenance_envelope.coverage", "provenance_envelope.artifacts[].provenance_relationship"],
+      "missing": "Both the full target metadata consistency proof (EV-000A) and one-session provenance for all artifacts used together (EV-000B) are required. Physical-device identity is tracked separately by EV-000C and is not a first-bring-up prerequisite.",
+      "closure_conditions": ["EV-000A is proven", "EV-000B is proven", "no conflicting proven target or session facts exist", "SHA-256 equality is treated only as local byte integrity, not device authenticity"],
+      "verifier_requirements": ["target_metadata_provenance", "same_session_provenance", "target_provenance"],
       "verifier_node": "target_provenance"
+    },
+    {
+      "id": "EV-000A",
+      "name": "target metadata consistency",
+      "critical": true,
+      "status": "BLOCKED",
+      "evidence_group": "TARGET_PROVENANCE",
+      "evidence_sources": ["provenance_envelope.target.metadata", "observed_watchos_report.json"],
+      "missing": "The existing IPS supports Watch4,2, watchOS 10.6.1, build 21U580, and T8006-consistent runtime markers, but does not independently provide N131bAP or the DreyzeOS-relevant AArch64 target architecture; its source origin also remains user-reported.",
+      "closure_conditions": ["model, SoC, watchOS version, and build match the fixed project target with explicit proven sources", "board N131bAP is recorded only when independently available and is never inferred from Watch4,2 without an explicit trusted mapping rule", "architecture is recorded only from an applicable target-bound source; watchOS process cpuType ARM64_32 is not treated as the DreyzeOS loader architecture", "metadata_match is explicitly proven true", "conflicting proven target facts block this requirement"],
+      "verifier_requirements": ["target_metadata_provenance"],
+      "verifier_node": "target_metadata_provenance"
+    },
+    {
+      "id": "EV-000B",
+      "name": "same-session artifact provenance",
+      "critical": true,
+      "status": "BLOCKED",
+      "evidence_group": "TARGET_PROVENANCE",
+      "evidence_sources": ["provenance_envelope.capture", "provenance_envelope.producer", "provenance_envelope.source_interface", "provenance_envelope.coverage", "provenance_envelope.artifacts[].provenance_relationship"],
+      "missing": "No complete capture session currently binds the DreyzeOS image, descriptor, MMU snapshot, and any other evidence consumed together.",
+      "closure_conditions": ["capture_id and bounded UTC start/end are present and proven", "producer and source/interface provenance are present and proven", "all required and covered artifacts exist and local SHA-256 checks pass", "coverage is explicitly complete for the artifacts used", "each required/covered artifact has a proven relationship to the same capture_id", "conflicting proven session/source declarations block this requirement"],
+      "verifier_requirements": ["same_session_provenance"],
+      "verifier_node": "same_session_provenance"
+    },
+    {
+      "id": "EV-000C",
+      "name": "physical identity and cross-session continuity",
+      "critical": false,
+      "status": "UNKNOWN",
+      "evidence_group": "TARGET_PROVENANCE",
+      "evidence_sources": ["provenance_envelope.target.physical_identity", "scoped identity-attestation artifact if available"],
+      "missing": "No persistent physical-device identity attestation exists. CrashReporter Key correlation may only support pseudonymous report correlation and is not serial-level identity or authenticity.",
+      "closure_conditions": ["an independent source explicitly attests persistent physical-device identity or continuity across sessions", "private identifiers remain local and are never committed", "an old v1 identity_proven claim is not silently migrated to this requirement"],
+      "verifier_requirements": ["physical_identity_provenance"],
+      "verifier_node": "physical_identity_provenance"
     },
     {
       "id": "EV-001",
@@ -341,9 +377,9 @@
       "critical": true,
       "status": "BLOCKED",
       "evidence_group": "BUNDLE_COMPLETENESS",
-      "evidence_sources": ["full dreyzeos.handoff_evidence.v1 bundle", "provenance_envelope EV-000 result", "all referenced local artifacts and verifier dependency nodes"],
-      "missing": "One internally consistent, target-bound bundle containing all critical artifacts, hashes, and the EV-000 provenance chain.",
-      "closure_conditions": ["bundle integrity is confirmed and the provenance envelope closes EV-000", "all critical artifacts and evidence-graph dependencies are present and proven", "conflicts are absent", "source status is CONFIRMED", "the full handoff verifier confirms CPU/MMU consistency, mappings, ranges, and collision completeness"],
+      "evidence_sources": ["full dreyzeos.handoff_evidence.v1 bundle", "EV-000A target metadata consistency", "EV-000B same-session provenance", "all referenced local artifacts and verifier dependency nodes"],
+      "missing": "One internally consistent bundle containing all critical artifacts, hashes, EV-000A, EV-000B, and the remaining runtime evidence graph.",
+      "closure_conditions": ["bundle integrity is confirmed and technical EV-000 (A+B) closes", "all critical artifacts and evidence-graph dependencies are present and proven", "conflicts are absent", "source status is CONFIRMED", "the full handoff verifier confirms CPU/MMU consistency, mappings, ranges, and collision completeness", "EV-000C is reported separately and is not used as an implicit gate"],
       "verifier_requirements": ["bundle_integrity", "provenance_envelope", "target_provenance", "cpu_consistency"],
       "verifier_node": "bundle_integrity"
     }

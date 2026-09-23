@@ -164,7 +164,7 @@ approved or executable from this commit.
 
 | Candidate | Intended output | Required state changes | Potential EVs | Decision |
 |---|---|---|---|---|
-| Target provenance envelope | Model/board/firmware record tied to one artifact | Live identity query semantics and provenance source are unresolved | EV-000, possibly EV-027 | BLOCKED; metadata alone is insufficient |
+| Target provenance envelope | Model/board/firmware consistency and same-session binding for consumed artifacts | Live identity query semantics and provenance source are unresolved | EV-000A + EV-000B, possibly EV-027 | BLOCKED; metadata alone is insufficient; EV-000C physical identity is separately tracked and optional for first technical bring-up |
 | CPU register snapshot | Initial EL, SP, DAIF, SCTLR/TCR/TTBR/MAIR/VBAR/CPACR | External capture/halt semantics and initial-state access are unproven | EV-006–010 | BLOCKED |
 | Bounded boot metadata copy | Runtime `boot_args`/DeviceTree bytes and ranges | Read path, complete-copy proof, and target bounds are unproven | EV-002, EV-014, EV-026 | BLOCKED |
 | Translation-table evidence | Table pages plus governing registers | Complete physical coverage and access method are unproven; exploit paths mutate state | EV-009, EV-011, EV-012, EV-021, EV-024, EV-025 | BLOCKED |

@@ -1,5 +1,5 @@
 {
-  "schema": "dreyzeos.target_provenance_envelope.v1",
+  "schema": "dreyzeos.target_provenance_envelope.v2",
   "source": {
     "kind": "synthetic",
     "evidence_status": "DESIGN",
@@ -23,8 +23,8 @@
       "architecture": {"value": "aarch64", "value_present": true, "value_proven": true, "source": "synthetic_fixture.target_metadata"}
     },
     "metadata_match": {"value": true, "value_present": true, "value_proven": true, "source": "synthetic_fixture.comparison"},
-    "identity_proven": {"value": false, "value_present": true, "value_proven": false, "source": "synthetic_fixture.no_target_attestation"},
-    "identity_attestation": {"artifact_id": null, "authority": null, "method": null},
+    "physical_identity": {"value": false, "value_present": true, "value_proven": false, "source": "synthetic_fixture.no_physical_identity_attestation"},
+    "identity_attestation": {"artifact_id": null, "authority": null, "method": null, "identity_scope": null},
     "assertions": []
   },
   "producer": {

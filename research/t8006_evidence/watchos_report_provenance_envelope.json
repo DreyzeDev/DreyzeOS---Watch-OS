@@ -1,5 +1,5 @@
 {
-  "schema": "dreyzeos.target_provenance_envelope.v1",
+  "schema": "dreyzeos.target_provenance_envelope.v2",
   "source": {
     "kind": "pre_existing_watchos_diagnostic_report",
     "evidence_status": "UNKNOWN",
@@ -41,17 +41,17 @@
         "value_proven": true,
         "source": "sanitized report record: IPS modelCode field"
       },
-      "board": {
-        "value": null,
-        "value_present": false,
-        "value_proven": false,
-        "source": null
-      },
-      "soc": {
-        "value": null,
-        "value_present": false,
-        "value_proven": false,
-        "source": null
+    "board": {
+      "value": null,
+      "value_present": false,
+      "value_proven": false,
+      "source": null
+    },
+    "soc": {
+      "value": "T8006",
+      "value_present": true,
+      "value_proven": true,
+      "source": "sanitized report record: AppleT8006CLPC, AppleT8006IO, and AppleT8006PMGR stackshot markers; consistency evidence, not hardware-register proof"
       },
       "firmware": {
         "value": "watchOS 10.6.1",
@@ -78,16 +78,17 @@
       "value_proven": false,
       "source": "Report lacks board, SoC, and DreyzeOS architecture evidence; no complete target metadata match is claimed"
     },
-    "identity_proven": {
+    "physical_identity": {
       "value": false,
       "value_present": true,
       "value_proven": false,
-      "source": "A report model string is not an external identity attestation"
+      "source": "A report model string and private correlation-field presence do not attest persistent physical identity"
     },
     "identity_attestation": {
       "artifact_id": null,
       "authority": null,
-      "method": null
+      "method": null,
+      "identity_scope": null
     },
     "assertions": []
   },

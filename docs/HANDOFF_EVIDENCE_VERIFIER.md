@@ -48,6 +48,11 @@ The verifier uses one deterministic sequence:
 11. require explicit control-transfer and no-persistent-write facts;
 12. emit dependency nodes, provenance, warnings, and exact blockers.
 
+The verifier exposes `TARGET_METADATA_STATUS` (EV-000A),
+`SAME_SESSION_PROVENANCE_STATUS` (EV-000B), `PHYSICAL_IDENTITY_STATUS`
+(EV-000C), and `TECHNICAL_TARGET_PROVENANCE_READY` (A+B). Physical identity
+does not gate first technical bring-up.
+
 No stage dereferences a pointer from the bundle. All address arithmetic is
 checked before it is used as an offline integer interval.
 
@@ -71,6 +76,7 @@ The graph deliberately separates facts from authority:
 | ELF interval | intended linked image bounds/permissions | hardware page-table permissions |
 | non-zero address | a numeric value exists | readable or executable memory |
 | target strings | metadata matches expected target | capture identity |
+| same-session artifact relationships | artifacts share one declared capture context | persistent identity or capture authenticity |
 | no known collision | supplied intervals are disjoint | completeness of the protected list |
 
 A conflict between two independently proven values is a hard
@@ -136,8 +142,10 @@ The report has two intentionally different outcomes:
 - `offline_contract_result`: whether every critical *local evidence*
   dependency in this bundle is proven;
 - `loader_contract` / `first_hardware_execution`: the target-facing gate,
-  which additionally requires `CONFIRMED` source evidence and separately
-  proven target identity.
+  which additionally requires `CONFIRMED` source evidence, EV-000A metadata
+  consistency, EV-000B same-session provenance, and every CPU/MMU/RAM/mapping/
+  ownership/collision/descriptor/transfer/persistence gate. EV-000C physical
+  identity is reported but does not gate first bring-up.
 
 A complete repository-owned synthetic fixture may therefore report:
 
@@ -170,4 +178,5 @@ transfer, persistence requirement, CLI exit behavior, and path traversal.
 
 This suite validates the verifier's logic only. It cannot prove that a future
 capture is genuine, that a mapping is live, or that any address is safe to
-access. No QEMU, USB, DFU, exploit, or hardware dependency is required.
+access. The provenance suite covers the A/B/C split and legacy v1 acceptance.
+No QEMU, USB, DFU, exploit, or hardware dependency is required.

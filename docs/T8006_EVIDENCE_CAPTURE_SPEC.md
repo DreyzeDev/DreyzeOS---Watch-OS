@@ -94,23 +94,28 @@ range.
 ## Target metadata and provenance
 
 The manifest records model, board, SoC, firmware, build, and architecture.
-The verifier reports two separate results:
+The verifier reports three separate provenance axes:
 
-* `TARGET_METADATA_MATCH`: strings agree with the expected project target;
-* `TARGET_IDENTITY_PROVEN`: an explicit, externally attested provenance claim
-  binds the artifact set to that target.
+* `TARGET_METADATA_STATUS`: how completely/provenly report metadata matches
+  the expected project target (EV-000A);
+* `SAME_SESSION_PROVENANCE_STATUS`: whether artifacts consumed together are
+  bound to the same capture session (EV-000B);
+* `PHYSICAL_IDENTITY_STATUS`: whether independent evidence establishes a
+  persistent physical Watch identity or cross-session continuity (EV-000C).
 
-Matching strings are not identity proof. A synthetic fixture must set
-`identity_proven` to `false`. The source evidence status must be `CONFIRMED`
-before a target-facing result can be considered, and even then the complete
-critical graph is required.
+Matching strings do not establish physical identity. EV-000A and EV-000B are
+required for technical target provenance; EV-000C is optional for first
+bring-up and required only for cross-session/persistent-device claims. The
+source evidence status must be `CONFIRMED` before a target-facing result can
+be considered, and even then the complete critical graph is required.
 
 For a non-synthetic target-facing bundle, add
-`provenance_envelope: {"schema":"dreyzeos.target_provenance_envelope.v1"}`.
+`provenance_envelope: {"schema":"dreyzeos.target_provenance_envelope.v2"}`.
 The exact schema is documented in
 [docs/TARGET_PROVENANCE_ENVELOPE.md](TARGET_PROVENANCE_ENVELOPE.md). It
-separately records metadata match, identity proof, local artifact presence/hash,
-target binding, and runtime proof. EV-000 coverage must include `image`,
+separately records metadata match, same-session relationships, optional
+physical identity, local artifact presence/hash, target binding, and runtime
+proof. EV-000 coverage must include `image`,
 `handoff_descriptor`, and `mmu_snapshot`; optional CPU, runtime-memory,
 boot_args, DeviceTree, and transfer artifacts need not exist yet.
 
