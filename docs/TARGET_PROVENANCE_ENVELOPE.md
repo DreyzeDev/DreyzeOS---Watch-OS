@@ -156,6 +156,10 @@ target identity or runtime capture. The repository's “synthetic complete”
 fixture contains small marker files solely to test envelope handling; they are
 not ELF, descriptor, or MMU data.
 
+The current EV-000B readiness audit, including the present artifact inventory
+and the existing validation command sequence, is documented in
+[`research/t8006_evidence/EV000B_SESSION_READINESS.md`](../research/t8006_evidence/EV000B_SESSION_READINESS.md).
+
 ## CLI
 
 Validate only an envelope:
