@@ -149,6 +149,11 @@ without changing any runtime safety gate.
 
 ## Step 2.16 implementation outcome
 
+Historical snapshot: the status bullets below describe the repository before
+the exact 21U580 kernelcache provenance was established and before EV-000A
+status was decoupled from capture-source provenance. Current EV-000A is
+CONFIRMED; EV-000B remains BLOCKED and EV-000 remains BLOCKED.
+
 - **EV-000A:** LIKELY / PARTIAL. The sanitized report contains proven report
   content for Watch4,2, watchOS 10.6.1, build 21U580, and T8006-consistent
   symbols. It does not provide N131bAP or DreyzeOS-relevant AArch64 target

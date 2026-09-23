@@ -76,6 +76,46 @@ def synthetic_report(status: str = "DESIGN", identity: bool = False, technical: 
 
 
 class T8006EvidenceGapTests(unittest.TestCase):
+    def test_unknown_global_source_does_not_demote_proven_metadata(self) -> None:
+        report = synthetic_report(status="UNKNOWN", technical=False)
+        report["evidence_graph"]["nodes"]["target_metadata_provenance"].update(
+            status="CONFIRMED", proof_state="PROVEN"
+        )
+
+        result = verify_gap(report, requirements_document())
+        metadata = next(item for item in result["requirements"] if item["id"] == "EV-000A")
+
+        self.assertEqual(metadata["observed_status"], "CONFIRMED")
+        self.assertTrue(metadata["target_proven"])
+
+    def test_proven_a_with_blocked_b_keeps_ev000_blocked(self) -> None:
+        report = synthetic_report(status="CONFIRMED", technical=False)
+        nodes = report["evidence_graph"]["nodes"]
+        nodes["same_session_provenance"].update(
+            status="BLOCKED", proof_state="NOT_PROVEN"
+        )
+        nodes["target_provenance"].update(
+            status="BLOCKED", proof_state="NOT_PROVEN"
+        )
+
+        result = verify_gap(report, requirements_document())
+        by_id = {item["id"]: item for item in result["requirements"]}
+
+        self.assertTrue(by_id["EV-000A"]["target_proven"])
+        self.assertEqual(by_id["EV-000B"]["observed_status"], "BLOCKED")
+        self.assertFalse(by_id["EV-000"]["target_proven"])
+        self.assertEqual(by_id["EV-000"]["observed_status"], "BLOCKED")
+
+    def test_unknown_ev000c_does_not_block_a_plus_b_provenance(self) -> None:
+        report = synthetic_report(status="CONFIRMED", identity=False, technical=True)
+        result = verify_gap(report, requirements_document())
+        by_id = {item["id"]: item for item in result["requirements"]}
+
+        self.assertTrue(by_id["EV-000A"]["target_proven"])
+        self.assertTrue(by_id["EV-000B"]["target_proven"])
+        self.assertTrue(by_id["EV-000"]["target_proven"])
+        self.assertFalse(by_id["EV-000C"]["target_proven"])
+
     def test_all_requirements_missing_are_fail_closed(self) -> None:
         report = synthetic_report()
         report["evidence_graph"]["nodes"] = {}

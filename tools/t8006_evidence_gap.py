@@ -231,7 +231,10 @@ def evaluate_requirement(
     elif requirement["id"] == "EV-000B":
         target_proven = nodes_proven and source_status == "CONFIRMED"
     elif requirement["id"] == "EV-000A":
-        target_proven = nodes_proven and source_status == "CONFIRMED" and metadata_match
+        # EV-000A is the independently proven target-profile comparison.
+        # Source/session attribution is evaluated by EV-000B and aggregate
+        # readiness, so it must not downgrade metadata consistency by itself.
+        target_proven = nodes_proven and metadata_match
     else:
         target_proven = (
             nodes_proven

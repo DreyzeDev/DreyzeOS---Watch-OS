@@ -126,8 +126,13 @@ separate sessions remains the producer's responsibility.
 ## Readiness mapping
 
 EV-000A can be reported proven only when all required metadata facts and their
-comparison are proven and matching. EV-000B additionally requires a confirmed
-source, capture ID/timestamps, producer/interface provenance, complete coverage,
+comparison are proven and matching, with no conflicting proven metadata. The
+envelope-wide `source.evidence_status` is not an EV-000A prerequisite: source
+attribution for a capture belongs to EV-000B and aggregate EV-000 readiness.
+Thus an UNKNOWN source status must remain UNKNOWN for session provenance but
+must not demote independently proven target-profile metadata. Synthetic/design
+metadata remains DESIGN. EV-000B additionally requires a confirmed source,
+capture ID/timestamps, producer/interface provenance, complete coverage,
 verified required artifact bytes, and a proven per-artifact relationship to
 that same capture ID. EV-000C requires its own scoped persistent-identity
 attestation. C is not a dependency of A, B, or technical EV-000 readiness.

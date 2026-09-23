@@ -105,9 +105,12 @@ The verifier reports three separate provenance axes:
 
 Matching strings do not establish physical identity. EV-000A and EV-000B are
 required for technical target provenance; EV-000C is optional for first
-bring-up and required only for cross-session/persistent-device claims. The
-source evidence status must be `CONFIRMED` before a target-facing result can
-be considered, and even then the complete critical graph is required.
+bring-up and required only for cross-session/persistent-device claims. EV-000A
+uses only its proven target metadata facts, comparison, and conflict state.
+The envelope-wide source status must be `CONFIRMED` for EV-000B and the
+aggregate target-facing result; an UNKNOWN capture source does not by itself
+demote independently proven EV-000A metadata. The complete critical graph is
+still required.
 
 For a non-synthetic target-facing bundle, add
 `provenance_envelope: {"schema":"dreyzeos.target_provenance_envelope.v2"}`.

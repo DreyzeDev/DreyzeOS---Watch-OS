@@ -644,10 +644,12 @@ def validate_envelope(
         "BLOCKED" if session_conflict else
         "UNKNOWN"
     )
+    # Overall source attribution governs session/aggregate provenance (EV-000B
+    # and EV-000), not independently proven target metadata (EV-000A).
     metadata_status = (
         "BLOCKED" if metadata_conflict or (computed_match is False and metadata_complete) else
-        "CONFIRMED" if metadata_proven and evidence_status == "CONFIRMED" and not synthetic else
         "DESIGN" if metadata_proven and synthetic else
+        "CONFIRMED" if metadata_proven else
         "LIKELY" if any(fact.get("value_present") for fact in metadata.values() if isinstance(fact, dict)) else
         "UNKNOWN"
     )

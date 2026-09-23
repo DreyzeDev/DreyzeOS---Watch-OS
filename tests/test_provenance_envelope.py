@@ -104,6 +104,7 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         self.assertEqual(report["requirements"][case["expected_requirement"]]["proof_state"], case["expected_proof_state"])
         self.assertIn(case["expected_blocker"], report["errors"])
         self.assertFalse(report["target"]["metadata_match"])
+        self.assertEqual(report["requirements"]["EV-000A"]["status"], "BLOCKED")
 
     def test_conflicting_proven_target_facts_fixture(self) -> None:
         case, report = self.apply_case("conflicting_proven_facts")
@@ -221,7 +222,9 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         self.assertEqual(report["status"], "UNKNOWN")
         self.assertTrue(report["target"]["metadata_match"])
         self.assertTrue(report["target"]["metadata_match_proven"])
-        self.assertEqual(report["target"]["metadata_status"], "LIKELY")
+        self.assertEqual(report["evidence_status"], "UNKNOWN")
+        self.assertTrue(report["target"]["metadata_facts_proven"])
+        self.assertEqual(report["target"]["metadata_status"], "CONFIRMED")
         self.assertEqual(report["target"]["metadata_completeness"], "COMPLETE")
         self.assertEqual(report["target"]["same_session_provenance_status"], "UNKNOWN")
         self.assertEqual(report["target"]["physical_identity_status"], "NOT_PROVEN")
@@ -230,7 +233,7 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         self.assertEqual(report["requirements"]["EV-000"]["status"], "BLOCKED")
         self.assertEqual(report["requirements"]["EV-000"]["proof_state"], "NOT_PROVEN")
         self.assertEqual(report["requirements"]["EV-000A"]["proof_state"], "PROVEN")
-        self.assertEqual(report["requirements"]["EV-000A"]["status"], "LIKELY")
+        self.assertEqual(report["requirements"]["EV-000A"]["status"], "CONFIRMED")
         self.assertEqual(report["requirements"]["EV-000B"]["proof_state"], "NOT_PROVEN")
         self.assertEqual(report["requirements"]["EV-000C"]["proof_state"], "NOT_PROVEN")
         artifact = report["artifacts"]["watchos_report_record"]
@@ -245,6 +248,39 @@ class ProvenanceEnvelopeTests(unittest.TestCase):
         self.assertTrue(record["report_facts"]["private_correlation_identifier_present"]["value"])
         self.assertFalse(record["provenance"]["private_identifiers_included"])
         self.assertFalse(record["provenance"]["target_identity_proven"])
+
+    def test_session_conflict_does_not_demote_target_metadata_proof(self) -> None:
+        envelope = self.load_base()
+        envelope["source"] = {
+            "kind": "captured_evidence",
+            "evidence_status": "UNKNOWN",
+            "runtime_evidence_source": None,
+        }
+        envelope["artifacts"][0]["provenance_relationship"]["capture_id"] = (
+            "00000000-0000-4000-8000-000000000999"
+        )
+        report = self.validate(envelope)
+
+        self.assertEqual(report["requirements"]["EV-000A"]["status"], "CONFIRMED")
+        self.assertEqual(report["requirements"]["EV-000A"]["proof_state"], "PROVEN")
+        self.assertEqual(report["requirements"]["EV-000B"]["status"], "BLOCKED")
+        self.assertEqual(report["requirements"]["EV-000"]["status"], "BLOCKED")
+
+    def test_unknown_physical_identity_does_not_gate_confirmed_a_and_b(self) -> None:
+        # Logic fixture only: this is not a device capture or hardware claim.
+        envelope = self.load_base()
+        envelope["source"] = {
+            "kind": "modeled_capture",
+            "evidence_status": "CONFIRMED",
+            "runtime_evidence_source": None,
+        }
+        report = self.validate(envelope)
+
+        self.assertEqual(report["requirements"]["EV-000A"]["status"], "CONFIRMED")
+        self.assertEqual(report["requirements"]["EV-000B"]["status"], "CONFIRMED")
+        self.assertEqual(report["requirements"]["EV-000C"]["proof_state"], "NOT_PROVEN")
+        self.assertEqual(report["requirements"]["EV-000"]["proof_state"], "PROVEN")
+        self.assertTrue(report["target"]["technical_target_provenance_ready"])
 
     def test_existing_verifier_cli_provenance_mode_exit_semantics(self) -> None:
         tool = ROOT / "tools" / "handoff_evidence_verifier.py"

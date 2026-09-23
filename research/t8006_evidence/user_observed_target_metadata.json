@@ -80,9 +80,9 @@
       "loader_contract_readiness"
     ],
     "requirements_impact": {
-      "EV-000": "Still BLOCKED: user-observed product/software metadata leaves EV-000A partial and does not prove EV-000B same-session artifact provenance. EV-000C physical identity remains separately NOT_PROVEN and is not a first-bring-up gate.",
+      "EV-000": "Still BLOCKED because EV-000B same-session provenance is absent. This user-observed metadata record alone does not prove EV-000A; separate exact 21U580 package and kernelcache evidence now closes EV-000A. EV-000C physical identity remains NOT_PROVEN and is not a first-bring-up gate.",
       "EV-024": "Still BLOCKED: no MMU snapshot is present to bind to target metadata.",
-      "other_requirements": "No EV requirement is closed by this metadata record alone; runtime and loader evidence remains unchanged."
+      "other_requirements": "No EV requirement is closed by this user-observed metadata record alone; separate exact package evidence closes EV-000A. Runtime and loader evidence remains unchanged."
     },
     "loader_contract": "BLOCKED",
     "first_hardware_execution": "NOT READY"

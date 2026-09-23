@@ -84,7 +84,7 @@ to one full SHA-256 in the source inventory immediately above.
 | watchOS | 10.6.1 | BuildManifest.plist (faa213…0093); Restore.plist (4ccfab…7e60); Info.plist (dccf56…36be); AssetData_Info.plist (43f60b…a656); IPS record (e1e12a…656e) | ProductVersion / OSVersion=10.6.1; IPS os_version=Watch OS 10.6.1 (21U580). | Exact package profile plus report content. | YES — metadata values | Direct fields agree. |
 | build | 21U580 | Same package sources above plus IPS record (e1e12a…656e) | ProductBuildVersion, Build, and IPS build substring are 21U580. | Exact package profile plus report content. | YES — metadata values | Direct fields agree. |
 | target/kernel architecture | AArch64 (ARM64E) | Exact OTA kernelcache component; see `target_kernel_architecture_21U580.json` | Mach-O magic `0xfeedfacf`, `cputype=0x0100000c` (`CPU_TYPE_ARM64`), subtype `2` (ARM64E); component SHA-384 matches BuildManifest digest. | Exact Watch4,2 / N131bAP / T8006 / 21U580 package component. | YES — exact target binary header | The process `ARM64_32` field is not used as kernel architecture evidence. This proves kernel ISA, not loader state or DreyzeOS handoff compatibility. |
-| metadata_match | true | Updated provenance envelope plus exact package/profile evidence above | Model, board, SoC, OS, build, and target-kernel architecture all match the fixed project target; explicit `metadata_match=true` fact is recorded. | Target metadata consistency only; no persistent-device identity claim. | YES — content/profile comparison | The envelope validator reports EV-000A proof state `PROVEN` but status `LIKELY` because its IPS source attribution remains `UNKNOWN`; physical identity and EV-000B remain separate. |
+| metadata_match | true | Updated provenance envelope plus exact package/profile evidence above | Model, board, SoC, OS, build, and target-kernel architecture all match the fixed project target; explicit `metadata_match=true` fact is recorded. | Target metadata consistency only; no persistent-device identity claim. | YES — content/profile comparison | EV-000A is `CONFIRMED`: its published closure conditions require proven matching metadata and no conflict, not authenticated IPS export provenance. The IPS source attribution remains `UNKNOWN` and separate from EV-000A. |
 
 ## Conclusion
 
@@ -92,7 +92,7 @@ The prior architecture gap is closed: the exact `kernelcache.release.watch4`
 component from the 21U580 Watch4,2 package matches the BuildManifest's declared
 SHA-384 and its inner Mach-O header is ARM64E/AArch64. The fixed target profile
 metadata comparison is now explicitly true and complete. The verifier reports
-EV-000A proof state `PROVEN` / status `LIKELY`, because the pre-existing IPS
+EV-000A proof state `PROVEN` / status `CONFIRMED`. The pre-existing IPS
 export's source attribution remains `UNKNOWN`; this does not make the IPS
 authentic, bind it to a physical unit, or satisfy EV-000B.
 
