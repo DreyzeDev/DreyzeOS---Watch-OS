@@ -47,22 +47,21 @@ Differences: case size, cellular modem, display resolution, materials.
 | Field | Value | Status |
 |-------|-------|--------|
 | Core count | 2 (dual-core) | CONFIRMED |
-| Instruction set | ARMv8-A (AArch64) | CONFIRMED |
-| Kernel execution mode | AArch64 (full 64-bit) | CONFIRMED |
-| Userspace ABI | **ARM64_32 (ILP32)** | CONFIRMED |
-| Pointer size in userspace | 32-bit (4 bytes) | CONFIRMED |
-| Pointer size in kernel | 64-bit (8 bytes) | CONFIRMED |
+| Target kernel instruction set | AArch64 | UNKNOWN/BLOCKED — exact 21U580 kernelcache bytes/Mach-O header are absent; see [EV000A static metadata audit](../research/t8006_evidence/EV000A_STATIC_METADATA_AUDIT.md) |
+| Target kernel execution mode | AArch64 (full 64-bit) | UNKNOWN/BLOCKED — not established by the currently present package metadata |
+| Observed NanoPhotos process ABI | ARM64_32 | CONFIRMED as the IPS cpuType field only; not proof of DreyzeOS loader/kernel architecture |
+| DreyzeOS image architecture | AArch64 | CONFIRMED as the project build/ELF target only; not target compatibility evidence |
 | Clock frequency | UNKNOWN | UNKNOWN |
 | Core type | Likely Tempest/Mistral class (2018 era) | LIKELY |
 
 ### 2.3 ARM64_32 (ILP32) Explanation
 
-> ARM64_32 is critically different from both ARM64 and ARM32:
+> The observed ARM64_32 process type is distinct from both ARM64 and ARM32:
 > - Uses the **AArch64 (64-bit) instruction set** — NOT Thumb/ARM32 instructions
 > - But pointers are **32-bit** (4 bytes, limited to 4GB virtual address space)
 > - Registers r0-r30 are 64-bit Xn registers, but addresses are truncated to 32 bits
-> - XNU kernel itself runs full AArch64 (64-bit pointers)
-> - DreyzeOS kernel code must be full AArch64
+> - This report does not establish the target kernel's architecture or pointer width.
+> - DreyzeOS is built for AArch64, but target execution compatibility remains blocked until exact-target kernel/architecture evidence is available.
 > - DreyzeOS apps (if ever built) would use ARM64_32 ABI
 
 ### 2.4 Memory

@@ -29,8 +29,8 @@
       "critical": true,
       "status": "BLOCKED",
       "evidence_group": "TARGET_PROVENANCE",
-      "evidence_sources": ["provenance_envelope.target.metadata", "observed_watchos_report.json"],
-      "missing": "The existing IPS supports Watch4,2, watchOS 10.6.1, build 21U580, and T8006-consistent runtime markers, but does not independently provide N131bAP or the DreyzeOS-relevant AArch64 target architecture; its source origin also remains user-reported.",
+      "evidence_sources": ["provenance_envelope.target.metadata", "observed_watchos_report.json", "research/ipsw/21U580/BuildManifest.plist", "research/ipsw/21U580/Restore.plist", "research/ipsw/21U580/Info.plist", "research/ipsw/21U580/AssetData_Info.plist", "research/ipsw/21U580/analysis_summary.txt", "research/ipsw/21U580/nodes_dump.txt", "research/t8006_evidence/EV000A_STATIC_METADATA_AUDIT.md"],
+      "missing": "Static 21U580 package metadata directly supports Watch4,2, N131bAP, T8006, watchOS 10.6.1, and build 21U580; board and SoC are no longer missing from the static profile. The DreyzeOS-relevant target/kernel AArch64 architecture remains unproven because the exact kernelcache bytes/Mach-O header are absent (the manifest only names the component and declares a digest); IPS cpuType ARM64_32 is process ABI data and the DreyzeOS ELF proves only its own image format. The existing IPS source origin is still user-reported, and the envelope has no proven complete metadata_match.",
       "closure_conditions": ["model, SoC, watchOS version, and build match the fixed project target with explicit proven sources", "board N131bAP is recorded only when independently available and is never inferred from Watch4,2 without an explicit trusted mapping rule", "architecture is recorded only from an applicable target-bound source; watchOS process cpuType ARM64_32 is not treated as the DreyzeOS loader architecture", "metadata_match is explicitly proven true", "conflicting proven target facts block this requirement"],
       "verifier_requirements": ["target_metadata_provenance"],
       "verifier_node": "target_metadata_provenance"

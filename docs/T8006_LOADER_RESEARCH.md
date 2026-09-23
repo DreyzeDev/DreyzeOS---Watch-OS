@@ -1,10 +1,15 @@
 # T8006 Loader Evidence Audit — Phase 4 Step 2.9
 
-**Target**: Apple Watch Series 4, 44mm GPS, `Watch4,2`, `N131bAP` / `n131bAP`
-**SoC**: Apple S4 / `T8006`, AArch64
+**Target profile**: Apple Watch Series 4, 44mm GPS, `Watch4,2`, `N131bAP` / `n131bAP` (static package metadata)
+**SoC**: Apple S4 / `T8006` (static package metadata)
+**DreyzeOS image architecture**: AArch64 build target; exact target/kernel architecture evidence is **UNKNOWN/BLOCKED**
 **Firmware artifact**: watchOS 10.6.1, `21U580`
 **Scope**: static source, firmware, DeviceTree, kernelcache and host-side contract review only
 **Safety boundary**: no Apple Watch, DFU, USB exploit, shellcode, payload delivery, hardware jump, MMIO access, flash write or recovery claim was attempted.
+
+For exact field-level metadata sources and the missing target-kernel
+architecture artifact, see
+[`EV000A_STATIC_METADATA_AUDIT.md`](../research/t8006_evidence/EV000A_STATIC_METADATA_AUDIT.md).
 
 ## Executive result
 

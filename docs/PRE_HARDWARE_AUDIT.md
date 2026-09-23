@@ -1,7 +1,9 @@
 # DreyzeOS — Pre-Hardware Boot Audit & Safety Report
 
-**Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)  
-**SoC**: Apple S4 / T8006, AArch64  
+**Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)
+**SoC**: Apple S4 / T8006 (static 21U580 package metadata)
+
+**DreyzeOS image architecture**: AArch64 build target; exact target/kernel AArch64 evidence remains UNKNOWN/BLOCKED
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
 **Phase**: 4 — Step 2.9: Loader Contract Closure & Safe Stage-0 Architecture
 **Canonical Branch**: `master`  
@@ -41,7 +43,8 @@
 
 | Fact | Evidence | Source |
 |:---|:---|:---|
-| **CPU Architecture** | AArch64 mode confirmed | Kernelcache Mach-O header `0x100000C` (ARM64) |
+| **DreyzeOS image architecture** | AArch64 build/image format; not target proof | DreyzeOS compiler/linker output |
+| **Watch4,2 target/kernel architecture** | **UNKNOWN/BLOCKED** | BuildManifest names kernelcache.release.watch4, but its bytes/Mach-O header are absent from this checkout; see [EV000A static metadata audit](../research/t8006_evidence/EV000A_STATIC_METADATA_AUDIT.md) |
 | **Static `/memory` entry** | `base=0,size=0` | Exact static ADT artifact `nodes_dump.txt`; not the live RAM map |
 | **Live DRAM base and size** | No exact value established | iBoot/runtime population is absent from the reviewed static artifact |
 | **UART0 Physical Base** | `0x2E500000` | Static ADT node `/arm-io/uart0` `reg` property |
