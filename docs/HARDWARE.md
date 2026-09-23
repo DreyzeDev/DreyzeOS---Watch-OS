@@ -47,8 +47,8 @@ Differences: case size, cellular modem, display resolution, materials.
 | Field | Value | Status |
 |-------|-------|--------|
 | Core count | 2 (dual-core) | CONFIRMED |
-| Target kernel instruction set | AArch64 | UNKNOWN/BLOCKED — exact 21U580 kernelcache bytes/Mach-O header are absent; see [EV000A static metadata audit](../research/t8006_evidence/EV000A_STATIC_METADATA_AUDIT.md) |
-| Target kernel execution mode | AArch64 (full 64-bit) | UNKNOWN/BLOCKED — not established by the currently present package metadata |
+| Target kernel instruction set | AArch64 (ARM64E subtype) | CONFIRMED — exact 21U580 `kernelcache.release.watch4` component digest-matches its BuildManifest; Mach-O `CPU_TYPE_ARM64`, subtype ARM64E; see [kernelcache evidence](../research/t8006_evidence/target_kernel_architecture_21U580.json) |
+| Target kernel execution mode | 64-bit AArch64 (ARM64E) | CONFIRMED by the exact 64-bit Mach-O header of the digest-verified 21U580 kernelcache |
 | Observed NanoPhotos process ABI | ARM64_32 | CONFIRMED as the IPS cpuType field only; not proof of DreyzeOS loader/kernel architecture |
 | DreyzeOS image architecture | AArch64 | CONFIRMED as the project build/ELF target only; not target compatibility evidence |
 | Clock frequency | UNKNOWN | UNKNOWN |
@@ -56,12 +56,12 @@ Differences: case size, cellular modem, display resolution, materials.
 
 ### 2.3 ARM64_32 (ILP32) Explanation
 
-> The observed ARM64_32 process type is distinct from both ARM64 and ARM32:
+> The observed ARM64_32 process type is a userspace ABI distinction; the exact 21U580 kernelcache is separately identified as ARM64E/AArch64:
 > - Uses the **AArch64 (64-bit) instruction set** — NOT Thumb/ARM32 instructions
 > - But pointers are **32-bit** (4 bytes, limited to 4GB virtual address space)
 > - Registers r0-r30 are 64-bit Xn registers, but addresses are truncated to 32 bits
-> - This report does not establish the target kernel's architecture or pointer width.
-> - DreyzeOS is built for AArch64, but target execution compatibility remains blocked until exact-target kernel/architecture evidence is available.
+> - The IPS process `cpuType=ARM64_32` does not establish kernel architecture or kernel pointer width.
+> - The exact 21U580 kernel Mach-O proves AArch64/ARM64E. It does not prove DreyzeOS loader state, mapping, entry compatibility, or control transfer; those remain blocked.
 > - DreyzeOS apps (if ever built) would use ARM64_32 ABI
 
 ### 2.4 Memory
@@ -105,7 +105,7 @@ iBoot
     │  [applies KASLR slide randomization]
     │  [XNU-specific boot metadata handoff; DreyzeOS semantics unknown]
     ▼
-XNU kernel (arm64_32 ABI, AArch64 instructions)
+XNU kernel (64-bit ARM64E/AArch64 Mach-O; watchOS userspace may use ARM64_32 ABI)
     │
     ▼
 launchd → watchOS userspace (ARM64_32)

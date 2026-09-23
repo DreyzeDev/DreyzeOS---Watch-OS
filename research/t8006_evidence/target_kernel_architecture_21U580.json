@@ -1,0 +1,98 @@
+{
+  "schema": "dreyzeos.t8006_target_kernel_architecture_evidence.v1",
+  "evidence_status": "CONFIRMED",
+  "scope": "Static target-kernel architecture and package-component provenance only; not runtime loader state.",
+  "target": {
+    "product_type": "Watch4,2",
+    "board": "N131bAP",
+    "soc": "T8006",
+    "firmware": "watchOS 10.6.1",
+    "build": "21U580"
+  },
+  "source": {
+    "type": "Apple CDN software-update ZIP",
+    "url": "https://updates.cdn-apple.com/2024SummerFCS/patches/062-51967/6C714E97-CD8D-42CF-B586-9015643A14CF/com_apple_MobileAsset_SoftwareUpdate/ea0b1ffe1a386549747807fb13cd889d91c36591.zip",
+    "archive_size_bytes": 2780878873,
+    "archive_sha256_advertised": "f331199e8415ecbc75df0c8a6e1974c4f54acfc5c2ea1555f6daefff92ddcc78",
+    "archive_sha256_locally_recomputed": false,
+    "notes": "Only the exact BuildManifest and kernelcache ZIP entries were fetched by HTTP byte range. The complete OTA was not downloaded or hashed locally. The CDN response advertised the same archive SHA-256 recorded in the repository OTA file list."
+  },
+  "build_manifest": {
+    "zip_entry": "AssetData/boot/BuildManifest.plist",
+    "zip_local_header_offset": "0x03cadea2",
+    "zip_compression": "deflate",
+    "zip_uncompressed_size": 86955,
+    "zip_crc32_verified": true,
+    "sha256": "faa2132c1d59a71b1ffff2326d1b0ee382b97a81dd614c9ef9e3468c0f830093",
+    "byte_identical_to_checked_in_manifest": true,
+    "build_identity_index": 0,
+    "build_identity_fields": {
+      "Ap,ProductType": "Watch4,2",
+      "Ap,Target": "N131bAP",
+      "ApChipID": "0x8006",
+      "Info.BuildNumber": "21U580",
+      "ProductVersion": "10.6.1",
+      "ProductBuildVersion": "21U580"
+    },
+    "kernelcache_component_path": "kernelcache.release.watch4",
+    "kernelcache_declared_digest_algorithm": "SHA-384",
+    "kernelcache_declared_digest": "fe8df14d2739b5be99e010c4573a95ea376efa9f46c66622974281405632780935df776b0a1c21775c4fbccfb8e95f5c"
+  },
+  "kernelcache_component": {
+    "zip_entry": "AssetData/boot/kernelcache.release.watch4",
+    "zip_local_header_offset": "0x02e2bdf2",
+    "zip_compression": "deflate",
+    "zip_compressed_size": 15212633,
+    "zip_uncompressed_size": 15221732,
+    "zip_crc32": "0xa4a9d4fe",
+    "zip_crc32_verified": true,
+    "local_analysis_copy": "/home/pc/.cache/dreyzeos-21u580-kernelcheck/kernelcache.release.watch4",
+    "container_format": "IM4P",
+    "im4p_type": "krnl",
+    "im4p_description": "KernelCacheBuilder_release-2674.140.2",
+    "sha256": "615c3706ed1480d79b68f5a307eb51dcf7e77fb80081de9b463f8ca78f758cde",
+    "sha384": "fe8df14d2739b5be99e010c4573a95ea376efa9f46c66622974281405632780935df776b0a1c21775c4fbccfb8e95f5c",
+    "matches_build_manifest_digest": true
+  },
+  "payload": {
+    "container_payload_size": 15221660,
+    "compression": "LZFSE",
+    "compression_signature": "bvx2",
+    "sha256": "2506b0329ae597aad4d1843febcea96cf8dd897663c73da479a78a1558864d27",
+    "sha384": "2537591affe8e7502ad208018f02fc6c2ee43866a13989bbe79e8e1af5e789580ccaf1cdf9320a2defcce6ece7732337"
+  },
+  "decompressed_kernel_macho": {
+    "local_analysis_copy": "/home/pc/.cache/dreyzeos-21u580-kernelcheck/kernelcache.macho",
+    "size_bytes": 46825472,
+    "sha256": "58d81041c5d452916b87ec0528e4ef84bd12a9bb70701bcc5d8ccbe1f69715e5",
+    "magic": "0xfeedfacf",
+    "magic_bytes": "cf fa ed fe",
+    "endianness": "little-endian",
+    "cputype": "0x0100000c",
+    "cputype_name": "CPU_TYPE_ARM64",
+    "cpusubtype": "0x00000002",
+    "cpusubtype_name": "ARM64E",
+    "filetype": "0x0000000c",
+    "filetype_name": "MH_FILESET",
+    "ncmds": 203,
+    "sizeofcmds": "0x3890",
+    "architecture": "AArch64 (ARM64E subtype)",
+    "aarch64_proven": true
+  },
+  "transformation_chain": [
+    "HTTP byte-range fetch of the BuildManifest ZIP entry and exact kernelcache ZIP entry from the listed Apple CDN URL",
+    "ZIP deflate decompression; entry names, sizes, and local-header CRC-32 values validated",
+    "Extract IM4P DER OCTET STRING payload from the krnl container",
+    "Decode LZFSE bvx2 payload offline",
+    "Parse the 32-byte little-endian 64-bit Mach-O header directly"
+  ],
+  "interpretation": {
+    "package_component_binding": "The fetched package BuildManifest is byte-identical to the checked-in 21U580 manifest, and SHA-384 of the exact kernelcache component equals its declared 48-byte digest.",
+    "architecture_result": "The exact target kernelcache header has CPU_TYPE_ARM64 and ARM64E subtype, establishing AArch64 kernel architecture for this 21U580 component.",
+    "limitations": [
+      "The complete OTA archive SHA-256 was not recomputed locally.",
+      "This is static package evidence, not live CPU state, loader state, page-table state, or proof of a particular physical Watch.",
+      "The kernel architecture does not prove DreyzeOS placement, mapping, entry EL, stack, ownership, or control transfer."
+    ]
+  }
+}

@@ -3,7 +3,7 @@
 **Target**: Apple Watch Series 4 (44mm GPS), Model A1978, Watch4,2 (N131bAP)
 **SoC**: Apple S4 / T8006 (static 21U580 package metadata)
 
-**DreyzeOS image architecture**: AArch64 build target; exact target/kernel AArch64 evidence remains UNKNOWN/BLOCKED
+**DreyzeOS image architecture**: AArch64 build target. Exact Watch4,2 / 21U580 kernelcache Mach-O is CONFIRMED ARM64E/AArch64; runtime handoff compatibility remains BLOCKED.
 **Firmware Baseline**: watchOS 10.6.1 (21U580)  
 **Phase**: 4 — Step 2.9: Loader Contract Closure & Safe Stage-0 Architecture
 **Canonical Branch**: `master`  
@@ -20,7 +20,7 @@
 - **Model Identifier**: `Watch4,2`
 - **Internal Board Identifier**: `N131bAP` / `n131bap`
 - **SoC Identifier**: Apple S4 / `T8006` (`0x8006`)
-- **CPU Architecture**: ARMv8-A AArch64 (64-bit kernel execution)
+- **CPU Architecture**: AArch64 / ARM64E kernel, directly confirmed from the digest-verified 21U580 Watch4,2 kernelcache Mach-O header
 - **Primary DRAM Physical Base**: UNKNOWN/BLOCKED; static `/memory` is `0x0+0x0`
 - **Primary DRAM Size**: UNKNOWN/BLOCKED at runtime; 1 GiB is a research quantity only
 - **Display Resolution**: 368 × 448 pixels (OLED scanout)
@@ -44,7 +44,7 @@
 | Fact | Evidence | Source |
 |:---|:---|:---|
 | **DreyzeOS image architecture** | AArch64 build/image format; not target proof | DreyzeOS compiler/linker output |
-| **Watch4,2 target/kernel architecture** | **UNKNOWN/BLOCKED** | BuildManifest names kernelcache.release.watch4, but its bytes/Mach-O header are absent from this checkout; see [EV000A static metadata audit](../research/t8006_evidence/EV000A_STATIC_METADATA_AUDIT.md) |
+| **Watch4,2 target/kernel architecture** | **CONFIRMED — AArch64 / ARM64E** | Exact `kernelcache.release.watch4` component matches the 21U580 BuildManifest SHA-384; inner Mach-O `CPU_TYPE_ARM64`, subtype ARM64E; see [kernelcache evidence](../research/t8006_evidence/target_kernel_architecture_21U580.json) |
 | **Static `/memory` entry** | `base=0,size=0` | Exact static ADT artifact `nodes_dump.txt`; not the live RAM map |
 | **Live DRAM base and size** | No exact value established | iBoot/runtime population is absent from the reviewed static artifact |
 | **UART0 Physical Base** | `0x2E500000` | Static ADT node `/arm-io/uart0` `reg` property |

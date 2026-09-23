@@ -39,44 +39,44 @@
         "value": "Watch4,2",
         "value_present": true,
         "value_proven": true,
-        "source": "sanitized report record: IPS modelCode field"
+        "source": "Exact 21U580 BuildManifest Ap,ProductType=Watch4,2; agrees with the sanitized IPS modelCode field, whose source attribution remains unverified"
       },
-    "board": {
-      "value": null,
-      "value_present": false,
-      "value_proven": false,
-      "source": null
-    },
-    "soc": {
-      "value": "T8006",
-      "value_present": true,
-      "value_proven": true,
-      "source": "sanitized report record: AppleT8006CLPC, AppleT8006IO, and AppleT8006PMGR stackshot markers; consistency evidence, not hardware-register proof"
+      "board": {
+        "value": "N131bAP",
+        "value_present": true,
+        "value_proven": true,
+        "source": "Exact 21U580 BuildManifest Ap,Target=N131bAP and Restore.plist BoardConfig=n131bap; independently explicit package metadata"
+      },
+      "soc": {
+        "value": "T8006",
+        "value_present": true,
+        "value_proven": true,
+        "source": "Exact 21U580 BuildManifest ApChipID=0x8006 and Restore.plist Platform=t8006; AppleT8006 report markers are corroborating content, not hardware-register proof"
       },
       "firmware": {
         "value": "watchOS 10.6.1",
         "value_present": true,
         "value_proven": true,
-        "source": "sanitized report record: version derived from IPS os_version"
+        "source": "Exact 21U580 BuildManifest ProductVersion=10.6.1; agrees with the sanitized IPS os_version field, whose source attribution remains unverified"
       },
       "build": {
         "value": "21U580",
         "value_present": true,
         "value_proven": true,
-        "source": "sanitized report record: build substring in IPS os_version"
+        "source": "Exact 21U580 BuildManifest ProductBuildVersion=21U580; agrees with the sanitized IPS os_version field, whose source attribution remains unverified"
       },
       "architecture": {
-        "value": null,
-        "value_present": false,
-        "value_proven": false,
-        "source": null
+        "value": "aarch64",
+        "value_present": true,
+        "value_proven": true,
+        "source": "Digest-verified kernelcache.release.watch4 from the exact 21U580 BuildManifest: Mach-O CPU_TYPE_ARM64, CPU_SUBTYPE_ARM64E"
       }
     },
     "metadata_match": {
-      "value": null,
-      "value_present": false,
-      "value_proven": false,
-      "source": "Report lacks board, SoC, and DreyzeOS architecture evidence; no complete target metadata match is claimed"
+      "value": true,
+      "value_present": true,
+      "value_proven": true,
+      "source": "All six target metadata fields match the fixed project target using the exact 21U580 package profile and digest-verified kernelcache; report-source authentication, same-session provenance, and physical identity remain separate"
     },
     "physical_identity": {
       "value": false,
