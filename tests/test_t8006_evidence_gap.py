@@ -300,6 +300,22 @@ class T8006EvidenceGapTests(unittest.TestCase):
         self.assertIn("EVIDENCE PIPELINE READY = YES", output)
         self.assertIn("LOADER CONTRACT = BLOCKED", output)
         self.assertIn("FIRST HARDWARE EXECUTION = NOT READY", output)
+        self.assertIn("PRE-STAGE0 GATE = BLOCKED", output)
+        self.assertIn("FIRST_STAGE0_EXECUTION = NOT READY", output)
+        self.assertIn("PRE-KERNEL-TRANSFER GATE = BLOCKED", output)
+        self.assertIn("FIRST_DREYZEOS_KERNEL_ENTRY = NOT READY", output)
+
+    def test_bootstrap_and_kernel_entry_readiness_are_distinct(self) -> None:
+        result = verify_gap(synthetic_report(), requirements_document())
+        status = result["hardware_status"]
+        self.assertEqual(status["pre_stage0_gate"], "BLOCKED")
+        self.assertEqual(status["first_stage0_execution"], "NOT READY")
+        self.assertEqual(status["pre_kernel_transfer_gate"], "BLOCKED")
+        self.assertEqual(status["first_dreyzeos_kernel_entry"], "NOT READY")
+        self.assertEqual(
+            status["first_hardware_execution"],
+            status["first_dreyzeos_kernel_entry"],
+        )
 
     def test_cli_returns_zero_for_blocked_report_by_default(self) -> None:
         with tempfile.TemporaryDirectory(prefix="dreyzeos-gap-") as directory:

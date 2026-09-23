@@ -141,11 +141,21 @@ The report has two intentionally different outcomes:
 
 - `offline_contract_result`: whether every critical *local evidence*
   dependency in this bundle is proven;
-- `loader_contract` / `first_hardware_execution`: the target-facing gate,
+- `loader_contract` / `pre_kernel_transfer_gate` /
+  `first_dreyzeos_kernel_entry`: the target-facing kernel-entry gate,
   which additionally requires `CONFIRMED` source evidence, EV-000A metadata
   consistency, EV-000B same-session provenance, and every CPU/MMU/RAM/mapping/
   ownership/collision/descriptor/transfer/persistence gate. EV-000C physical
   identity is reported but does not gate first bring-up.
+- `pre_stage0_gate` / `first_stage0_execution`: separate and currently
+  `BLOCKED` / `NOT_READY`. The bundle schema does not describe or prove the
+  independent initial execution conditions for a target-side stage-0. A
+  future stage-0 may produce runtime evidence before DreyzeOS kernel transfer,
+  but this verifier result is not authorization to start that stage-0.
+- `first_hardware_execution` remains as a compatibility alias for
+  `first_dreyzeos_kernel_entry`; it must not be interpreted as stage-0
+  readiness. Successful arrival at the kernel is a post-entry observation,
+  not a fact that can be inferred from an offline mapping report.
 
 A complete repository-owned synthetic fixture may therefore report:
 
@@ -154,7 +164,13 @@ OFFLINE CONTRACT RESULT = READY
 HARDWARE EVIDENCE STATUS = DESIGN
 LOADER CONTRACT = BLOCKED
 FIRST HARDWARE EXECUTION = NOT_READY
+PRE-STAGE0 GATE = BLOCKED
+FIRST_STAGE0_EXECUTION = NOT_READY
+FIRST_DREYZEOS_KERNEL_ENTRY = NOT_READY
 ```
+
+The phase distinction and bootstrap-cycle audit are documented in
+[`FIRST_EXECUTION_BOOTSTRAP_DEPENDENCY_AUDIT.md`](../research/t8006_evidence/FIRST_EXECUTION_BOOTSTRAP_DEPENDENCY_AUDIT.md).
 
 For the current Watch4,2 research state, the exact static `/memory` artifact
 still says `base=0,size=0`; runtime DRAM, a payload deposit, execution mapping,

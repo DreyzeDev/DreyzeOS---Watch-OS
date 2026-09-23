@@ -360,8 +360,18 @@ def verify_gap(report: Dict[str, Any], requirements_document: Dict[str, Any]) ->
             "offline_infrastructure": "COMPLETE" if pipeline_ready else "BLOCKED",
             "evidence_pipeline_ready": "YES" if pipeline_ready else "NO",
             "loader_contract": "BLOCKED",
+            "pre_stage0_gate": "BLOCKED",
+            "first_stage0_execution": "NOT READY",
+            "first_stage0_execution_reason": (
+                "the independent pre-stage0 launch contract and target-specific "
+                "producer are not represented or proven"
+            ),
+            "pre_kernel_transfer_gate": "BLOCKED",
+            "first_dreyzeos_kernel_entry": "NOT READY",
+            # Legacy label retained for consumers; it denotes kernel entry,
+            # not authorization to execute a bootstrap/stage-0.
             "first_hardware_execution": "NOT READY",
-            "reason": "offline mapping/provenance evidence is not target hardware readiness",
+            "reason": "offline mapping/provenance evidence is not target hardware readiness; stage-0 launch readiness is not modeled",
         },
     }
 
@@ -398,7 +408,11 @@ def human_report(result: Dict[str, Any]) -> str:
             "OFFLINE INFRASTRUCTURE = " + result["hardware_status"]["offline_infrastructure"],
             "EVIDENCE PIPELINE READY = " + result["hardware_status"]["evidence_pipeline_ready"],
             "LOADER CONTRACT = BLOCKED",
-            "FIRST HARDWARE EXECUTION = NOT READY",
+            "PRE-STAGE0 GATE = " + result["hardware_status"]["pre_stage0_gate"],
+            "FIRST_STAGE0_EXECUTION = " + result["hardware_status"]["first_stage0_execution"],
+            "PRE-KERNEL-TRANSFER GATE = " + result["hardware_status"]["pre_kernel_transfer_gate"],
+            "FIRST_DREYZEOS_KERNEL_ENTRY = " + result["hardware_status"]["first_dreyzeos_kernel_entry"],
+            "FIRST HARDWARE EXECUTION = " + result["hardware_status"]["first_hardware_execution"] + " (legacy kernel-entry alias)",
         ]
     )
     return "\n".join(lines)

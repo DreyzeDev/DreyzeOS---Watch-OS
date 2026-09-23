@@ -561,6 +561,20 @@ class HandoffEvidenceVerifierTests(unittest.TestCase):
             self.assertEqual(
                 report["readiness"]["first_hardware_execution"], "NOT_READY"
             )
+            self.assertEqual(report["readiness"]["pre_stage0_gate"], "BLOCKED")
+            self.assertEqual(
+                report["readiness"]["first_stage0_execution"], "NOT_READY"
+            )
+            self.assertEqual(
+                report["readiness"]["pre_kernel_transfer_gate"], "NOT_READY"
+            )
+            self.assertEqual(
+                report["readiness"]["first_dreyzeos_kernel_entry"], "NOT_READY"
+            )
+            self.assertEqual(
+                report["readiness"]["first_hardware_execution"],
+                report["readiness"]["first_dreyzeos_kernel_entry"],
+            )
             self.assertFalse(report["target"]["identity_proven"])
             self.assertEqual(report["target"]["physical_identity_status"], "NOT_PROVEN")
             self.assertFalse(report["target"]["technical_target_provenance_ready"])
@@ -583,6 +597,10 @@ class HandoffEvidenceVerifierTests(unittest.TestCase):
             human = human_report(report)
             self.assertIn("LOADER CONTRACT", human)
             self.assertIn("NOT_READY", human)
+            self.assertIn("PRE-STAGE0 GATE", human)
+            self.assertIn("FIRST_STAGE0_EXECUTION", human)
+            self.assertIn("FIRST_DREYZEOS_KERNEL_ENTRY", human)
+            self.assertIn("legacy kernel-entry alias", human)
             self.assertIn("PHYSICAL_IDENTITY_STATUS = NOT_PROVEN", human)
             self.assertIn("TECHNICAL_TARGET_PROVENANCE_READY = false", human)
         finally:

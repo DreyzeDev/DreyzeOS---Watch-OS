@@ -2519,6 +2519,7 @@ class BundleVerifier:
                 else None
             ) != "synthetic"
         )
+        kernel_entry_status = "READY" if hardware_ready else "NOT_READY"
         report: Dict[str, Any] = {
             "ok": True,
             "schema": SCHEMA,
@@ -2620,7 +2621,21 @@ class BundleVerifier:
                 "offline_contract_result": "READY" if offline_ready else "BLOCKED",
                 "hardware_evidence_status": self.evidence_status,
                 "loader_contract": "READY" if hardware_ready else "BLOCKED",
-                "first_hardware_execution": "READY" if hardware_ready else "NOT_READY",
+                # The current evidence graph is a pre-DreyzeOS-kernel-entry
+                # gate. It is not a safety authorization for the first
+                # target-side stage-0/bootstrap execution, whose independent
+                # launch conditions are not represented by this bundle schema.
+                "pre_stage0_gate": "BLOCKED",
+                "first_stage0_execution": "NOT_READY",
+                "first_stage0_execution_reason": (
+                    "the independent pre-stage0 launch contract and target-specific "
+                    "producer are not represented or proven"
+                ),
+                "pre_kernel_transfer_gate": kernel_entry_status,
+                "first_dreyzeos_kernel_entry": kernel_entry_status,
+                # Backward-compatible legacy field. Its meaning is narrowed to
+                # the DreyzeOS kernel-entry gate, never stage-0 authorization.
+                "first_hardware_execution": kernel_entry_status,
                 "requirements": requirements,
                 "blocking_requirements": blockers,
                 "reason": (
@@ -2705,7 +2720,11 @@ def human_report(report: Dict[str, Any]) -> str:
         f"PHYSICAL_IDENTITY_STATUS = {report.get('target', {}).get('physical_identity_status', 'NOT_PROVEN')}",
         f"TECHNICAL_TARGET_PROVENANCE_READY = {str(report.get('target', {}).get('technical_target_provenance_ready', False)).lower()}",
         f"LOADER CONTRACT .............. {readiness.get('loader_contract', 'BLOCKED')}",
-            f"FIRST HARDWARE EXECUTION ..... {readiness.get('first_hardware_execution', 'NOT_READY')}",
+        f"PRE-STAGE0 GATE ............... {readiness.get('pre_stage0_gate', 'BLOCKED')}",
+        f"FIRST_STAGE0_EXECUTION ........ {readiness.get('first_stage0_execution', 'NOT_READY')}",
+        f"PRE-KERNEL-TRANSFER GATE ...... {readiness.get('pre_kernel_transfer_gate', 'BLOCKED')}",
+        f"FIRST_DREYZEOS_KERNEL_ENTRY ... {readiness.get('first_dreyzeos_kernel_entry', 'NOT_READY')}",
+        f"FIRST HARDWARE EXECUTION ...... {readiness.get('first_hardware_execution', 'NOT_READY')} (legacy kernel-entry alias)",
         ]
     )
     blockers = readiness.get("blocking_requirements", [])
